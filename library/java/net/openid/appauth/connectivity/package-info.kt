@@ -11,8 +11,7 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 /**
  * Types and utilities related to direct communication with servers.
  */
-package net.openid.appauth.connectivity;
+package net.openid.appauth.connectivity

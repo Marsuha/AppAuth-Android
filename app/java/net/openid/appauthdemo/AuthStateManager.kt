@@ -11,157 +11,125 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package net.openid.appauthdemo
 
-package net.openid.appauthdemo;
-
-import android.content.Context;
-import android.content.SharedPreferences;
-import android.util.Log;
-import androidx.annotation.AnyThread;
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
-
-import net.openid.appauth.AuthState;
-import net.openid.appauth.AuthorizationException;
-import net.openid.appauth.AuthorizationResponse;
-import net.openid.appauth.RegistrationResponse;
-import net.openid.appauth.TokenResponse;
-import org.json.JSONException;
-
-import java.lang.ref.WeakReference;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.concurrent.locks.ReentrantLock;
+import android.content.Context
+import android.content.SharedPreferences
+import android.util.Log
+import androidx.annotation.AnyThread
+import androidx.core.content.edit
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+import net.openid.appauth.AuthState
+import net.openid.appauth.AuthState.Companion.jsonDeserialize
+import net.openid.appauth.AuthorizationException
+import net.openid.appauth.AuthorizationResponse
+import net.openid.appauth.RegistrationResponse
+import net.openid.appauth.TokenResponse
+import org.json.JSONException
 
 /**
- * An example persistence mechanism for an {@link AuthState} instance.
+ * An example persistence mechanism for an [AuthState] instance.
  * This stores the instance in a shared preferences file, and provides thread-safe access and
  * mutation.
  */
-public class AuthStateManager {
-
-    private static final AtomicReference<WeakReference<AuthStateManager>> INSTANCE_REF =
-            new AtomicReference<>(new WeakReference<>(null));
-
-    private static final String TAG = "AuthStateManager";
-
-    private static final String STORE_NAME = "AuthState";
-    private static final String KEY_STATE = "state";
-
-    private final SharedPreferences mPrefs;
-    private final ReentrantLock mPrefsLock;
-    private final AtomicReference<AuthState> mCurrentAuthState;
+class AuthStateManager private constructor(context: Context) {
+    private val prefs: SharedPreferences =
+        context.getSharedPreferences(STORE_NAME, Context.MODE_PRIVATE)
+    private val mutex = Mutex()
+    private var currentAuthState: AuthState? = null
 
     @AnyThread
-    public static AuthStateManager getInstance(@NonNull Context context) {
-        AuthStateManager manager = INSTANCE_REF.get().get();
-        if (manager == null) {
-            manager = new AuthStateManager(context.getApplicationContext());
-            INSTANCE_REF.set(new WeakReference<>(manager));
-        }
+    suspend fun getCurrent(): AuthState {
+        currentAuthState?.let { return it }
 
-        return manager;
-    }
-
-    private AuthStateManager(Context context) {
-        mPrefs = context.getSharedPreferences(STORE_NAME, Context.MODE_PRIVATE);
-        mPrefsLock = new ReentrantLock();
-        mCurrentAuthState = new AtomicReference<>();
-    }
-
-    @AnyThread
-    @NonNull
-    public AuthState getCurrent() {
-        if (mCurrentAuthState.get() != null) {
-            return mCurrentAuthState.get();
-        }
-
-        AuthState state = readState();
-        if (mCurrentAuthState.compareAndSet(null, state)) {
-            return state;
-        } else {
-            return mCurrentAuthState.get();
+        return mutex.withLock {
+            // check again in case another coroutine initialized it while we were waiting
+            currentAuthState?.let { return@withLock it }
+            val state = withContext(Dispatchers.IO) { readState() }
+            currentAuthState = state
+            state
         }
     }
 
     @AnyThread
-    @NonNull
-    public AuthState replace(@NonNull AuthState state) {
-        writeState(state);
-        mCurrentAuthState.set(state);
-        return state;
+    suspend fun replace(state: AuthState) = mutex.withLock {
+        withContext(Dispatchers.IO) { writeState(state) }
+        currentAuthState = state
+        state
     }
 
     @AnyThread
-    @NonNull
-    public AuthState updateAfterAuthorization(
-            @Nullable AuthorizationResponse response,
-            @Nullable AuthorizationException ex) {
-        AuthState current = getCurrent();
-        current.update(response, ex);
-        return replace(current);
+    suspend fun updateAfterAuthorization(
+        response: AuthorizationResponse?,
+        ex: AuthorizationException?
+    ): AuthState {
+        val current = getCurrent()
+        current.update(response, ex)
+        return replace(current)
     }
 
     @AnyThread
-    @NonNull
-    public AuthState updateAfterTokenResponse(
-            @Nullable TokenResponse response,
-            @Nullable AuthorizationException ex) {
-        AuthState current = getCurrent();
-        current.update(response, ex);
-        return replace(current);
+    suspend fun updateAfterTokenResponse(
+        response: TokenResponse?,
+        ex: AuthorizationException?
+    ): AuthState {
+        val current = getCurrent()
+        current.update(response, ex)
+        return replace(current)
     }
 
     @AnyThread
-    @NonNull
-    public AuthState updateAfterRegistration(
-            RegistrationResponse response,
-            AuthorizationException ex) {
-        AuthState current = getCurrent();
-        if (ex != null) {
-            return current;
-        }
-
-        current.update(response);
-        return replace(current);
+    suspend fun updateAfterRegistration(
+        response: RegistrationResponse?,
+        ex: AuthorizationException?
+    ): AuthState {
+        val current = getCurrent()
+        if (ex != null) return current
+        current.update(response)
+        return replace(current)
     }
 
-    @AnyThread
-    @NonNull
-    private AuthState readState() {
-        mPrefsLock.lock();
+    private fun readState(): AuthState {
+        val currentState = prefs.getString(KEY_STATE, null) ?: return AuthState()
+
         try {
-            String currentState = mPrefs.getString(KEY_STATE, null);
-            if (currentState == null) {
-                return new AuthState();
-            }
-
-            try {
-                return AuthState.jsonDeserialize(currentState);
-            } catch (JSONException ex) {
-                Log.w(TAG, "Failed to deserialize stored auth state - discarding");
-                return new AuthState();
-            }
-        } finally {
-            mPrefsLock.unlock();
+            return jsonDeserialize(currentState)
+        } catch (_: JSONException) {
+            Log.w(TAG, "Failed to deserialize stored auth state - discarding")
+            return AuthState()
         }
     }
 
-    @AnyThread
-    private void writeState(@Nullable AuthState state) {
-        mPrefsLock.lock();
-        try {
-            SharedPreferences.Editor editor = mPrefs.edit();
+    private fun writeState(state: AuthState?) {
+        prefs.edit(commit = true) {
             if (state == null) {
-                editor.remove(KEY_STATE);
+                remove(KEY_STATE)
             } else {
-                editor.putString(KEY_STATE, state.jsonSerializeString());
+                putString(KEY_STATE, state.jsonSerializeString())
             }
+        }
+    }
 
-            if (!editor.commit()) {
-                throw new IllegalStateException("Failed to write state to shared prefs");
+    companion object {
+        @Volatile
+        private var INSTANCE: AuthStateManager? = null
+
+        private const val TAG = "AuthStateManager"
+
+        private const val STORE_NAME = "AuthState"
+        private const val KEY_STATE = "state"
+
+        @JvmStatic
+        @AnyThread
+        fun getInstance(context: Context): AuthStateManager {
+            return INSTANCE ?: synchronized(this) {
+                INSTANCE ?: AuthStateManager(context.applicationContext).also {
+                    INSTANCE = it
+                }
             }
-        } finally {
-            mPrefsLock.unlock();
         }
     }
 }

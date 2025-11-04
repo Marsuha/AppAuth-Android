@@ -11,410 +11,249 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package net.openid.appauth
 
-package net.openid.appauth;
-
-import static net.openid.appauth.Preconditions.checkArgument;
-import static net.openid.appauth.Preconditions.checkNotNull;
-
-import android.net.Uri;
-import android.os.AsyncTask;
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
-
-import net.openid.appauth.AuthorizationException.GeneralErrors;
-import net.openid.appauth.connectivity.ConnectionBuilder;
-import net.openid.appauth.connectivity.DefaultConnectionBuilder;
-import net.openid.appauth.internal.Logger;
-import org.json.JSONException;
-import org.json.JSONObject;
-
-import java.io.IOException;
-import java.io.InputStream;
-import java.net.HttpURLConnection;
+import android.annotation.SuppressLint
+import android.net.Uri
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import net.openid.appauth.connectivity.ConnectionBuilder
+import net.openid.appauth.connectivity.DefaultConnectionBuilder
+import net.openid.appauth.internal.Logger
+import org.json.JSONException
+import org.json.JSONObject
+import java.io.IOException
+import java.io.InputStream
 
 /**
  * Configuration details required to interact with an authorization service.
  */
-public class AuthorizationServiceConfiguration {
-
-    /**
-     * The standard base path for well-known resources on domains.
-     *
-     * @see "Defining Well-Known Uniform Resource Identifiers (RFC 5785)
-     * <https://tools.ietf.org/html/rfc5785>"
-     */
-    public static final String WELL_KNOWN_PATH =
-            ".well-known";
-
-    /**
-     * The standard resource under {@link #WELL_KNOWN_PATH .well-known} at which an OpenID Connect
-     * discovery document can be found under an issuer's base URI.
-     *
-     * @see "OpenID Connect discovery 1.0
-     * <https://openid.net/specs/openid-connect-discovery-1_0.html>"
-     */
-    public static final String OPENID_CONFIGURATION_RESOURCE =
-            "openid-configuration";
-
-    private static final String KEY_AUTHORIZATION_ENDPOINT = "authorizationEndpoint";
-    private static final String KEY_TOKEN_ENDPOINT = "tokenEndpoint";
-    private static final String KEY_REGISTRATION_ENDPOINT = "registrationEndpoint";
-    private static final String KEY_DISCOVERY_DOC = "discoveryDoc";
-    private static final String KEY_END_SESSION_ENPOINT = "endSessionEndpoint";
-
+class AuthorizationServiceConfiguration {
     /**
      * The authorization service's endpoint.
      */
-    @NonNull
-    public final Uri authorizationEndpoint;
+    @JvmField
+    val authorizationEndpoint: Uri
 
     /**
      * The authorization service's token exchange and refresh endpoint.
      */
-    @NonNull
-    public final Uri tokenEndpoint;
+    @JvmField
+    val tokenEndpoint: Uri
 
     /**
      * The end session service's endpoint;
      */
-    @Nullable
-    public final Uri endSessionEndpoint;
+    @JvmField
+    val endSessionEndpoint: Uri?
 
     /**
      * The authorization service's client registration endpoint.
      */
-    @Nullable
-    public final Uri registrationEndpoint;
+    @JvmField
+    val registrationEndpoint: Uri?
 
 
     /**
      * The discovery document describing the service, if it is an OpenID Connect provider.
      */
-    @Nullable
-    public final AuthorizationServiceDiscovery discoveryDoc;
+    @JvmField
+    val discoveryDoc: AuthorizationServiceDiscovery?
 
     /**
      * Creates a service configuration for a basic OAuth2 provider.
      * @param authorizationEndpoint The
-     *     [authorization endpoint URI](https://tools.ietf.org/html/rfc6749#section-3.1)
-     *     for the service.
+     * [authorization endpoint URI](https://tools.ietf.org/html/rfc6749#section-3.1)
+     * for the service.
      * @param tokenEndpoint The
-     *     [token endpoint URI](https://tools.ietf.org/html/rfc6749#section-3.2)
-     *     for the service.
-     */
-    public AuthorizationServiceConfiguration(
-            @NonNull Uri authorizationEndpoint,
-            @NonNull Uri tokenEndpoint) {
-        this(authorizationEndpoint, tokenEndpoint, null);
-    }
-
-    /**
-     * Creates a service configuration for a basic OAuth2 provider.
-     * @param authorizationEndpoint The
-     *     [authorization endpoint URI](https://tools.ietf.org/html/rfc6749#section-3.1)
-     *     for the service.
-     * @param tokenEndpoint The
-     *     [token endpoint URI](https://tools.ietf.org/html/rfc6749#section-3.2)
-     *     for the service.
+     * [token endpoint URI](https://tools.ietf.org/html/rfc6749#section-3.2)
+     * for the service.
      * @param registrationEndpoint The optional
-     *     [client registration endpoint URI](https://tools.ietf.org/html/rfc7591#section-3)
-     */
-    public AuthorizationServiceConfiguration(
-            @NonNull Uri authorizationEndpoint,
-            @NonNull Uri tokenEndpoint,
-            @Nullable Uri registrationEndpoint) {
-        this(authorizationEndpoint, tokenEndpoint, registrationEndpoint, null);
-    }
-
-    /**
-     * Creates a service configuration for a basic OAuth2 provider.
-     * @param authorizationEndpoint The
-     *     [authorization endpoint URI](https://tools.ietf.org/html/rfc6749#section-3.1)
-     *     for the service.
-     * @param tokenEndpoint The
-     *     [token endpoint URI](https://tools.ietf.org/html/rfc6749#section-3.2)
-     *     for the service.
-     * @param registrationEndpoint The optional
-     *     [client registration endpoint URI](https://tools.ietf.org/html/rfc7591#section-3)
+     * [client registration endpoint URI](https://tools.ietf.org/html/rfc7591#section-3)
      * @param endSessionEndpoint The optional
-     *     [end session endpoint URI](https://tools.ietf.org/html/rfc6749#section-2.2)
-     *     for the service.
+     * [end session endpoint URI](https://tools.ietf.org/html/rfc6749#section-2.2)
+     * for the service.
      */
-    public AuthorizationServiceConfiguration(
-            @NonNull Uri authorizationEndpoint,
-            @NonNull Uri tokenEndpoint,
-            @Nullable Uri registrationEndpoint,
-            @Nullable Uri endSessionEndpoint) {
-        this.authorizationEndpoint = checkNotNull(authorizationEndpoint);
-        this.tokenEndpoint = checkNotNull(tokenEndpoint);
-        this.registrationEndpoint = registrationEndpoint;
-        this.endSessionEndpoint = endSessionEndpoint;
-        this.discoveryDoc = null;
+    @JvmOverloads
+    constructor(
+        authorizationEndpoint: Uri,
+        tokenEndpoint: Uri,
+        registrationEndpoint: Uri? = null,
+        endSessionEndpoint: Uri? = null
+    ) {
+        this.authorizationEndpoint = authorizationEndpoint
+        this.tokenEndpoint = tokenEndpoint
+        this.registrationEndpoint = registrationEndpoint
+        this.endSessionEndpoint = endSessionEndpoint
+        this.discoveryDoc = null
     }
 
     /**
      * Creates an service configuration for an OpenID Connect provider, based on its
-     * {@link AuthorizationServiceDiscovery discovery document}.
+     * [discovery document][AuthorizationServiceDiscovery].
      *
      * @param discoveryDoc The OpenID Connect discovery document which describes this service.
      */
-    public AuthorizationServiceConfiguration(
-            @NonNull AuthorizationServiceDiscovery discoveryDoc) {
-        checkNotNull(discoveryDoc, "docJson cannot be null");
-        this.discoveryDoc = discoveryDoc;
-        this.authorizationEndpoint = discoveryDoc.getAuthorizationEndpoint();
-        this.tokenEndpoint = discoveryDoc.getTokenEndpoint();
-        this.registrationEndpoint = discoveryDoc.getRegistrationEndpoint();
-        this.endSessionEndpoint = discoveryDoc.getEndSessionEndpoint();
+    constructor(discoveryDoc: AuthorizationServiceDiscovery) {
+        this.discoveryDoc = discoveryDoc
+        this.authorizationEndpoint = discoveryDoc.authorizationEndpoint
+        this.tokenEndpoint = checkNotNull(discoveryDoc.tokenEndpoint)
+        this.registrationEndpoint = discoveryDoc.registrationEndpoint
+        this.endSessionEndpoint = discoveryDoc.endSessionEndpoint
     }
 
     /**
      * Converts the authorization service configuration to JSON for storage or transmission.
      */
-    @NonNull
-    public JSONObject toJson() {
-        JSONObject json = new JSONObject();
-        JsonUtil.put(json, KEY_AUTHORIZATION_ENDPOINT, authorizationEndpoint.toString());
-        JsonUtil.put(json, KEY_TOKEN_ENDPOINT, tokenEndpoint.toString());
-        if (registrationEndpoint != null) {
-            JsonUtil.put(json, KEY_REGISTRATION_ENDPOINT, registrationEndpoint.toString());
-        }
-        if (endSessionEndpoint != null) {
-            JsonUtil.put(json, KEY_END_SESSION_ENPOINT, endSessionEndpoint.toString());
-        }
-        if (discoveryDoc != null) {
-            JsonUtil.put(json, KEY_DISCOVERY_DOC, discoveryDoc.docJson);
-        }
-        return json;
+    @SuppressLint("VisibleForTests")
+    fun toJson() = JSONObject().apply {
+        put(KEY_AUTHORIZATION_ENDPOINT, authorizationEndpoint.toString())
+        put(KEY_TOKEN_ENDPOINT, tokenEndpoint.toString())
+        registrationEndpoint?.let { put(KEY_REGISTRATION_ENDPOINT, it.toString()) }
+        endSessionEndpoint?.let { put(KEY_END_SESSION_ENDPOINT, it.toString()) }
+        discoveryDoc?.let { put(KEY_DISCOVERY_DOC, it.discoveryDoc) }
     }
 
     /**
      * Converts the authorization service configuration to a JSON string for storage or
      * transmission.
      */
-    public String toJsonString() {
-        return toJson().toString();
-    }
+    fun toJsonString() = toJson().toString()
 
-    /**
-     * Reads an Authorization service configuration from a JSON representation produced by the
-     * {@link #toJson()} method or some other equivalent producer.
-     *
-     * @throws JSONException if the provided JSON does not match the expected structure.
-     */
-    @NonNull
-    public static AuthorizationServiceConfiguration fromJson(@NonNull JSONObject json)
-            throws JSONException {
-        checkNotNull(json, "json object cannot be null");
+    companion object {
+        /**
+         * The standard base path for well-known resources on domains.
+         *
+         * @see "Defining Well-Known Uniform Resource Identifiers
+         */
+        const val WELL_KNOWN_PATH: String = ".well-known"
 
-        if (json.has(KEY_DISCOVERY_DOC)) {
-            try {
-                AuthorizationServiceDiscovery discoveryDoc =
-                        new AuthorizationServiceDiscovery(json.optJSONObject(KEY_DISCOVERY_DOC));
-                return new AuthorizationServiceConfiguration(discoveryDoc);
-            } catch (AuthorizationServiceDiscovery.MissingArgumentException ex) {
-                throw new JSONException("Missing required field in discovery doc: "
-                        + ex.getMissingField());
+        /**
+         * The standard resource under [.well-known][.WELL_KNOWN_PATH] at which an OpenID Connect
+         * discovery document can be found under an issuer's base URI.
+         *
+         * @see "OpenID Connect discovery 1.0
+         * <https:></https:>//openid.net/specs/openid-connect-discovery-1_0.html>"
+         */
+        const val OPENID_CONFIGURATION_RESOURCE: String = "openid-configuration"
+
+        private const val KEY_AUTHORIZATION_ENDPOINT = "authorizationEndpoint"
+        private const val KEY_TOKEN_ENDPOINT = "tokenEndpoint"
+        private const val KEY_REGISTRATION_ENDPOINT = "registrationEndpoint"
+        private const val KEY_DISCOVERY_DOC = "discoveryDoc"
+        private const val KEY_END_SESSION_ENDPOINT = "endSessionEndpoint"
+
+        /**
+         * Reads an Authorization service configuration from a JSON representation produced by the
+         * [.toJson] method or some other equivalent producer.
+         *
+         * @throws JSONException if the provided JSON does not match the expected structure.
+         */
+        @JvmStatic
+        @Throws(JSONException::class)
+        fun fromJson(json: JSONObject): AuthorizationServiceConfiguration {
+            if (json.has(KEY_DISCOVERY_DOC)) {
+                try {
+                    val discoveryDoc = AuthorizationServiceDiscovery(
+                        discoveryDoc = json.optJSONObject(KEY_DISCOVERY_DOC)!!
+                    )
+
+                    return AuthorizationServiceConfiguration(discoveryDoc)
+                } catch (ex: AuthorizationServiceDiscovery.MissingArgumentException) {
+                    throw JSONException("Missing required field in discovery doc: ${ex.missingField}")
+                }
+            } else {
+                require(json.has(KEY_AUTHORIZATION_ENDPOINT)) { "missing authorizationEndpoint" }
+                require(json.has(KEY_TOKEN_ENDPOINT)) { "missing tokenEndpoint" }
+                return AuthorizationServiceConfiguration(
+                    authorizationEndpoint = json.getUri(KEY_AUTHORIZATION_ENDPOINT),
+                    tokenEndpoint = json.getUri(KEY_TOKEN_ENDPOINT),
+                    registrationEndpoint = json.getUriIfDefined(KEY_REGISTRATION_ENDPOINT),
+                    endSessionEndpoint = json.getUriIfDefined(KEY_END_SESSION_ENDPOINT)
+                )
             }
-        } else {
-            checkArgument(json.has(KEY_AUTHORIZATION_ENDPOINT), "missing authorizationEndpoint");
-            checkArgument(json.has(KEY_TOKEN_ENDPOINT), "missing tokenEndpoint");
-            return new AuthorizationServiceConfiguration(
-                    JsonUtil.getUri(json, KEY_AUTHORIZATION_ENDPOINT),
-                    JsonUtil.getUri(json, KEY_TOKEN_ENDPOINT),
-                    JsonUtil.getUriIfDefined(json, KEY_REGISTRATION_ENDPOINT),
-                    JsonUtil.getUriIfDefined(json, KEY_END_SESSION_ENPOINT));
         }
-    }
 
-    /**
-     * Reads an Authorization service configuration from a JSON representation produced by the
-     * {@link #toJson()} method or some other equivalent producer.
-     *
-     * @throws JSONException if the provided JSON does not match the expected structure.
-     */
-    public static AuthorizationServiceConfiguration fromJson(@NonNull String jsonStr)
-            throws JSONException {
-        checkNotNull(jsonStr, "json cannot be null");
-        return AuthorizationServiceConfiguration.fromJson(new JSONObject(jsonStr));
-    }
+        /**
+         * Reads an Authorization service configuration from a JSON representation produced by the
+         * [.toJson] method or some other equivalent producer.
+         *
+         * @throws JSONException if the provided JSON does not match the expected structure.
+         */
+        @Throws(JSONException::class)
+        fun fromJson(jsonStr: String) = fromJson(JSONObject(jsonStr))
 
-    /**
-     * Fetch an AuthorizationServiceConfiguration from an OpenID Connect issuer URI.
-     * This method is equivalent to {@link #fetchFromUrl(Uri, RetrieveConfigurationCallback)},
-     * but automatically appends the OpenID connect well-known configuration path to the
-     * URI.
-     *
-     * @param openIdConnectIssuerUri The issuer URI, e.g. "https://accounts.google.com"
-     * @param callback The callback to invoke upon completion.
-     *
-     * @see "OpenID Connect discovery 1.0
-     * <https://openid.net/specs/openid-connect-discovery-1_0.html>"
-     */
-    public static void fetchFromIssuer(@NonNull Uri openIdConnectIssuerUri,
-            @NonNull RetrieveConfigurationCallback callback) {
-        fetchFromUrl(buildConfigurationUriFromIssuer(openIdConnectIssuerUri), callback);
-    }
+        @JvmStatic
+        suspend fun fetchFromIssuer(
+            openIdConnectIssuerUri: Uri,
+            connectionBuilder: ConnectionBuilder = DefaultConnectionBuilder
+        ) = fetchFromUrl(
+            buildConfigurationUriFromIssuer(openIdConnectIssuerUri),
+            connectionBuilder
+        )
 
-    /**
-     * Fetch an AuthorizationServiceConfiguration from an OpenID Connect issuer URI, using
-     * the {@link DefaultConnectionBuilder default connection builder}.
-     * This method is equivalent to {@link #fetchFromUrl(Uri, RetrieveConfigurationCallback,
-     * ConnectionBuilder)}, but automatically appends the OpenID connect well-known
-     * configuration path to the URI.
-     *
-     * @param openIdConnectIssuerUri The issuer URI, e.g. "https://accounts.google.com"
-     * @param connectionBuilder      The connection builder that is used to establish a connection
-     *                               to the resource server.
-     * @param callback               The callback to invoke upon completion.
-     * @see "OpenID Connect discovery 1.0
-     * <https://openid.net/specs/openid-connect-discovery-1_0.html>"
-     */
-    public static void fetchFromIssuer(@NonNull Uri openIdConnectIssuerUri,
-                                       @NonNull RetrieveConfigurationCallback callback,
-                                       @NonNull ConnectionBuilder connectionBuilder) {
-        fetchFromUrl(buildConfigurationUriFromIssuer(openIdConnectIssuerUri),
-                callback,
-                connectionBuilder);
-    }
-
-    static Uri buildConfigurationUriFromIssuer(Uri openIdConnectIssuerUri) {
-        return openIdConnectIssuerUri.buildUpon()
+        @JvmStatic
+        fun buildConfigurationUriFromIssuer(openIdConnectIssuerUri: Uri): Uri {
+            return openIdConnectIssuerUri.buildUpon()
                 .appendPath(WELL_KNOWN_PATH)
                 .appendPath(OPENID_CONFIGURATION_RESOURCE)
-                .build();
-    }
+                .build()
+        }
 
-    /**
-     * Fetch a AuthorizationServiceConfiguration from an OpenID Connect discovery URI, using
-     * the {@link DefaultConnectionBuilder default connection builder}.
-     *
-     * @param openIdConnectDiscoveryUri The OpenID Connect discovery URI
-     * @param callback A callback to invoke upon completion
-     *
-     * @see "OpenID Connect discovery 1.0
-     * <https://openid.net/specs/openid-connect-discovery-1_0.html>"
-     */
-    public static void fetchFromUrl(@NonNull Uri openIdConnectDiscoveryUri,
-            @NonNull RetrieveConfigurationCallback callback) {
-        fetchFromUrl(openIdConnectDiscoveryUri,
-                callback,
-                DefaultConnectionBuilder.INSTANCE);
-    }
-
-    /**
-     * Fetch a AuthorizationServiceConfiguration from an OpenID Connect discovery URI.
-     *
-     * @param openIdConnectDiscoveryUri The OpenID Connect discovery URI
-     * @param connectionBuilder The connection builder that is used to establish a connection
-     *     to the resource server.
-     * @param callback A callback to invoke upon completion
-     *
-     * @see "OpenID Connect discovery 1.0
-     * <https://openid.net/specs/openid-connect-discovery-1_0.html>"
-     */
-    public static void fetchFromUrl(
-            @NonNull Uri openIdConnectDiscoveryUri,
-            @NonNull RetrieveConfigurationCallback callback,
-            @NonNull ConnectionBuilder connectionBuilder) {
-        checkNotNull(openIdConnectDiscoveryUri, "openIDConnectDiscoveryUri cannot be null");
-        checkNotNull(callback, "callback cannot be null");
-        checkNotNull(connectionBuilder, "connectionBuilder must not be null");
-        new ConfigurationRetrievalAsyncTask(
-                openIdConnectDiscoveryUri,
-                connectionBuilder,
-                callback)
-                .execute();
-    }
-
-    /**
-     * Callback interface for configuration retrieval.
-     * @see AuthorizationServiceConfiguration#fetchFromUrl(Uri,RetrieveConfigurationCallback)
-     */
-    public interface RetrieveConfigurationCallback {
         /**
-         * Invoked when the retrieval of the discovery doc completes successfully or fails.
+         * Fetch a AuthorizationServiceConfiguration from an OpenID Connect discovery URI.
          *
-         * <p>Exactly one of `serviceConfiguration` or `ex` will be non-null. If
-         * `serviceConfiguration` is `null`, a failure occurred during the request. This
-         * can happen if a bad URL was provided, no connection to the server could be established,
-         * or the retrieved JSON is incomplete or badly formatted.
+         * @param openIdConnectDiscoveryUri The OpenID Connect discovery URI
+         * @param connectionBuilder The connection builder that is used to establish a connection
+         * to the resource server, [default connection builder][DefaultConnectionBuilder]
+         * is used by default
+         * @return AuthorizationServiceConfiguration
+         * @throws AuthorizationException
          *
-         * @param serviceConfiguration the service configuration that can be used to initialize
-         *     the {@link AuthorizationService}, if retrieval was successful; `null` otherwise.
-         * @param ex the exception that caused an error.
+         * @see <a href="https://openid.net/specs/openid-connect-discovery-1_0.html">
+         *     OpenID Connect discovery 1.0</a>
          */
-        void onFetchConfigurationCompleted(
-                @Nullable AuthorizationServiceConfiguration serviceConfiguration,
-                @Nullable AuthorizationException ex);
-    }
+        @JvmStatic
+        suspend fun fetchFromUrl(
+            openIdConnectDiscoveryUri: Uri,
+            connectionBuilder: ConnectionBuilder = DefaultConnectionBuilder
+        ): AuthorizationServiceConfiguration {
+            var `is`: InputStream? = null
 
-    /**
-     * ASyncTask that tries to retrieve the discover document and gives the callback with the
-     * values retrieved from the discovery document. In case of retrieval error, the exception
-     * is handed back to the callback.
-     */
-    private static class ConfigurationRetrievalAsyncTask
-            extends AsyncTask<Void, Void, AuthorizationServiceConfiguration> {
+            return withContext(Dispatchers.IO) {
+                try {
+                    val connection = connectionBuilder.openConnection(openIdConnectDiscoveryUri)
+                    connection.requestMethod = "GET"
+                    connection.doInput = true
+                    //connection.connect()
+                    `is` = connection.inputStream
+                    val json = JSONObject(`is`.readString())
+                    val discovery = AuthorizationServiceDiscovery(json)
+                    AuthorizationServiceConfiguration(discovery)
+                } catch (ex: IOException) {
+                    Logger.errorWithStack(ex, "Network error when retrieving discovery document")
 
-        private Uri mUri;
-        private ConnectionBuilder mConnectionBuilder;
-        private RetrieveConfigurationCallback mCallback;
-        private AuthorizationException mException;
+                    throw AuthorizationException.fromTemplate(
+                        AuthorizationException.GeneralErrors.NETWORK_ERROR,
+                        ex
+                    )
+                } catch (ex: JSONException) {
+                    Logger.errorWithStack(ex, "Error parsing discovery document")
 
-        ConfigurationRetrievalAsyncTask(
-                Uri uri,
-                ConnectionBuilder connectionBuilder,
-                RetrieveConfigurationCallback callback) {
-            mUri = uri;
-            mConnectionBuilder = connectionBuilder;
-            mCallback = callback;
-            mException = null;
-        }
+                    throw AuthorizationException.fromTemplate(
+                        AuthorizationException.GeneralErrors.JSON_DESERIALIZATION_ERROR,
+                        ex
+                    )
+                } catch (ex: AuthorizationServiceDiscovery.MissingArgumentException) {
+                    Logger.errorWithStack(ex, "Malformed discovery document")
 
-        @Override
-        protected AuthorizationServiceConfiguration doInBackground(Void... voids) {
-            InputStream is = null;
-            try {
-                HttpURLConnection conn = mConnectionBuilder.openConnection(mUri);
-                conn.setRequestMethod("GET");
-                conn.setDoInput(true);
-                conn.connect();
-
-                is = conn.getInputStream();
-                JSONObject json = new JSONObject(Utils.readInputStream(is));
-
-                AuthorizationServiceDiscovery discovery =
-                        new AuthorizationServiceDiscovery(json);
-                return new AuthorizationServiceConfiguration(discovery);
-            } catch (IOException ex) {
-                Logger.errorWithStack(ex, "Network error when retrieving discovery document");
-                mException = AuthorizationException.fromTemplate(
-                        GeneralErrors.NETWORK_ERROR,
-                        ex);
-            } catch (JSONException ex) {
-                Logger.errorWithStack(ex, "Error parsing discovery document");
-                mException = AuthorizationException.fromTemplate(
-                        GeneralErrors.JSON_DESERIALIZATION_ERROR,
-                        ex);
-            } catch (AuthorizationServiceDiscovery.MissingArgumentException ex) {
-                Logger.errorWithStack(ex, "Malformed discovery document");
-                mException = AuthorizationException.fromTemplate(
-                        GeneralErrors.INVALID_DISCOVERY_DOCUMENT,
-                        ex);
-            } finally {
-                Utils.closeQuietly(is);
-            }
-            return null;
-        }
-
-        @Override
-        protected void onPostExecute(AuthorizationServiceConfiguration configuration) {
-            if (mException != null) {
-                mCallback.onFetchConfigurationCompleted(null, mException);
-            } else {
-                mCallback.onFetchConfigurationCompleted(configuration, null);
+                    throw AuthorizationException.fromTemplate(
+                        AuthorizationException.GeneralErrors.INVALID_DISCOVERY_DOCUMENT,
+                        ex
+                    )
+                } finally {
+                    `is`.closeQuietly()
+                }
             }
         }
     }

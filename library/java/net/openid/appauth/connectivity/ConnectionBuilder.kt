@@ -11,25 +11,21 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package net.openid.appauth.connectivity
 
-package net.openid.appauth.connectivity;
-
-import android.net.Uri;
-import androidx.annotation.NonNull;
-
-import java.io.IOException;
-import java.net.HttpURLConnection;
+import android.net.Uri
+import java.io.IOException
+import java.net.HttpURLConnection
 
 /**
- * Creates {@link java.net.HttpURLConnection} instances for use in direct interactions
+ * Creates [HttpURLConnection] instances for use in direct interactions
  * with the authorization service, i.e. those not performed via a browser.
  */
-public interface ConnectionBuilder {
-
+interface ConnectionBuilder {
     /**
      * Creates a connection to the specified URL.
      * @throws IOException if an error occurs while attempting to establish the connection.
      */
-    @NonNull
-    HttpURLConnection openConnection(@NonNull Uri uri) throws IOException;
+    @Throws(IOException::class)
+    fun openConnection(uri: Uri): HttpURLConnection
 }

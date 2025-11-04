@@ -11,8 +11,7 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 /**
  * Test classes for the AppAuth for Android library.
  */
-package net.openid.appauth;
+package net.openid.appauth

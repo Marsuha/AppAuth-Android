@@ -11,27 +11,18 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-package net.openid.appauth.browser;
-
-import androidx.annotation.NonNull;
+package net.openid.appauth.browser
 
 /**
  * Matches only the specified browser.
  */
-public class ExactBrowserMatcher implements BrowserMatcher {
-
-    private BrowserDescriptor mBrowser;
-
+class ExactBrowserMatcher(
     /**
      * Creates a browser matcher that will only match the specified browser.
      */
-    public ExactBrowserMatcher(BrowserDescriptor browser) {
-        mBrowser = browser;
-    }
-
-    @Override
-    public boolean matches(@NonNull BrowserDescriptor descriptor) {
-        return mBrowser.equals(descriptor);
+    private val mBrowser: BrowserDescriptor
+) : BrowserMatcher {
+    override fun matches(descriptor: BrowserDescriptor): Boolean {
+        return mBrowser == descriptor
     }
 }

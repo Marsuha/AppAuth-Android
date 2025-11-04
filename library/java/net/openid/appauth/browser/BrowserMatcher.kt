@@ -11,21 +11,16 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-package net.openid.appauth.browser;
-
-import androidx.annotation.NonNull;
+package net.openid.appauth.browser
 
 /**
- * Determines whether a {@link BrowserDescriptor} matches some set of criteria.
+ * Determines whether a [BrowserDescriptor] matches some set of criteria.
  * Implementations of this type can be used to control the set of browsers used by AppAuth
  * for authorization.
  */
-public interface BrowserMatcher {
-
+sealed interface BrowserMatcher {
     /**
      * @return true if the browser matches some set of criteria.
      */
-    boolean matches(@NonNull BrowserDescriptor descriptor);
-
+    fun matches(descriptor: BrowserDescriptor): Boolean
 }

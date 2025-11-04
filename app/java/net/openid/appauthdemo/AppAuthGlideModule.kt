@@ -11,13 +11,10 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package net.openid.appauthdemo
 
-package net.openid.appauthdemo;
-
-import com.bumptech.glide.annotation.GlideModule;
-import com.bumptech.glide.module.AppGlideModule;
+import com.bumptech.glide.annotation.GlideModule
+import com.bumptech.glide.module.AppGlideModule
 
 @GlideModule
-public final class AppAuthGlideModule extends AppGlideModule {
-
-}
+class AppAuthGlideModule : AppGlideModule()

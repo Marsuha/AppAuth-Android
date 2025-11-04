@@ -11,55 +11,31 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-package net.openid.appauth;
-
-import static net.openid.appauth.Preconditions.checkNotNull;
-
-import androidx.annotation.NonNull;
-
-import java.util.HashMap;
-import java.util.Map;
-
+package net.openid.appauth
 
 /**
  * Implementation of the client authentication method 'client_secret_post'.
  *
  * @see "OpenID Connect Core 1.0, Section 9
- * <https://openid.net/specs/openid-connect-core-1_0.html#rfc.section.9>"
+ * <https:></https:>//openid.net/specs/openid-connect-core-1_0.html.rfc.section.9>"
  */
-public class ClientSecretPost implements ClientAuthentication {
-    /**
-     * Name of this authentication method.
-     *
-     * @see "OpenID Connect Core 1.0, Section 9
-     * <https://openid.net/specs/openid-connect-core-1_0.html#rfc.section.9>"
-     */
-    public static final String NAME = "client_secret_post";
-    static final String PARAM_CLIENT_ID = "client_id";
-    static final String PARAM_CLIENT_SECRET = "client_secret";
+class ClientSecretPost(private val clientSecret: String) : ClientAuthentication {
+    override fun getRequestParameters(clientId: String) = mapOf(
+        PARAM_CLIENT_ID to clientId,
+        PARAM_CLIENT_SECRET to clientSecret
+    )
 
-    @NonNull
-    private String mClientSecret;
+    override fun getRequestHeaders(clientId: String): Map<String, String>? = null
 
-    /**
-     * Creates a {@link ClientAuthentication} which will use the client authentication method
-     * `client_secret_post`.
-     */
-    public ClientSecretPost(@NonNull String clientSecret) {
-        mClientSecret = checkNotNull(clientSecret, "clientSecret cannot be null");
-    }
-
-    @Override
-    public final Map<String, String> getRequestParameters(@NonNull String clientId) {
-        Map<String, String> additionalParameters = new HashMap<>();
-        additionalParameters.put(PARAM_CLIENT_ID, clientId);
-        additionalParameters.put(PARAM_CLIENT_SECRET, mClientSecret);
-        return additionalParameters;
-    }
-
-    @Override
-    public final Map<String, String> getRequestHeaders(@NonNull String clientId) {
-        return null;
+    companion object {
+        /**
+         * Name of this authentication method.
+         *
+         * @see "OpenID Connect Core 1.0, Section 9
+         * <https:></https:>//openid.net/specs/openid-connect-core-1_0.html.rfc.section.9>"
+         */
+        const val NAME: String = "client_secret_post"
+        const val PARAM_CLIENT_ID: String = "client_id"
+        const val PARAM_CLIENT_SECRET: String = "client_secret"
     }
 }

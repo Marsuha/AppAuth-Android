@@ -11,16 +11,14 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-package net.openid.appauth;
+package net.openid.appauth
 
 /**
  * Simple time interface used for deterministic testing.
  */
 interface Clock {
-
     /**
      * The current time, in milliseconds since the UNIX epoch.
      */
-    long getCurrentTimeMillis();
+    val currentTimeMillis: Long
 }

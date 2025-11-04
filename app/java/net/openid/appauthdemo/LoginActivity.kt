@@ -11,58 +11,51 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package net.openid.appauthdemo
 
-package net.openid.appauthdemo;
-
-import android.annotation.TargetApi;
-import android.app.PendingIntent;
-import android.content.Intent;
-import android.os.Build;
-import android.os.Bundle;
-import android.os.Handler;
-import android.os.Looper;
-import android.text.Editable;
-import android.text.TextUtils;
-import android.text.TextWatcher;
-import android.util.Log;
-import android.view.View;
-import android.widget.AdapterView;
-import android.widget.AdapterView.OnItemSelectedListener;
-import android.widget.CheckBox;
-import android.widget.EditText;
-import android.widget.Spinner;
-import android.widget.TextView;
-import androidx.annotation.AnyThread;
-import androidx.annotation.ColorRes;
-import androidx.annotation.MainThread;
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
-import androidx.annotation.WorkerThread;
-import androidx.appcompat.app.AppCompatActivity;
-import androidx.browser.customtabs.CustomTabsIntent;
-import com.google.android.material.snackbar.Snackbar;
-
-import net.openid.appauth.AppAuthConfiguration;
-import net.openid.appauth.AuthState;
-import net.openid.appauth.AuthorizationException;
-import net.openid.appauth.AuthorizationRequest;
-import net.openid.appauth.AuthorizationService;
-import net.openid.appauth.AuthorizationServiceConfiguration;
-import net.openid.appauth.ClientSecretBasic;
-import net.openid.appauth.RegistrationRequest;
-import net.openid.appauth.RegistrationResponse;
-import net.openid.appauth.ResponseTypeValues;
-import net.openid.appauth.browser.AnyBrowserMatcher;
-import net.openid.appauth.browser.BrowserMatcher;
-import net.openid.appauth.browser.ExactBrowserMatcher;
-import net.openid.appauthdemo.BrowserSelectionAdapter.BrowserInfo;
-
-import java.util.Collections;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
+import android.app.PendingIntent
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
+import android.os.Bundle
+import android.text.Editable
+import android.text.TextWatcher
+import android.util.Log
+import android.view.View
+import android.widget.AdapterView
+import android.widget.Button
+import android.widget.CheckBox
+import android.widget.EditText
+import android.widget.Spinner
+import android.widget.TextView
+import androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult
+import androidx.annotation.ColorRes
+import androidx.annotation.MainThread
+import androidx.appcompat.app.AppCompatActivity
+import androidx.browser.customtabs.CustomTabColorSchemeParams
+import androidx.browser.customtabs.CustomTabsIntent
+import androidx.lifecycle.lifecycleScope
+import com.google.android.material.snackbar.Snackbar
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import net.openid.appauth.AppAuthConfiguration
+import net.openid.appauth.AuthState
+import net.openid.appauth.AuthorizationException
+import net.openid.appauth.AuthorizationRequest
+import net.openid.appauth.AuthorizationService
+import net.openid.appauth.AuthorizationServiceConfiguration
+import net.openid.appauth.ClientSecretBasic
+import net.openid.appauth.RegistrationRequest
+import net.openid.appauth.ResponseTypeValues
+import net.openid.appauth.browser.AnyBrowserMatcher
+import net.openid.appauth.browser.BrowserMatcher
+import net.openid.appauth.browser.BrowserSelector.getAllBrowsers
+import net.openid.appauth.browser.ExactBrowserMatcher
+import net.openid.appauthdemo.BrowserSelectionAdapter.BrowserInfo
 
 /**
  * Demonstrates the usage of the AppAuth to authorize a user with an OAuth2 / OpenID Connect
@@ -70,7 +63,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * contained here will:
  *
  * - Retrieve an OpenID Connect discovery document for the provider, or use a local static
- *   configuration.
+ * configuration.
  * - Utilize dynamic client registration, if no static client id is specified.
  * - Initiate the authorization request using the built-in heuristics or a user-selected browser.
  *
@@ -79,230 +72,176 @@ import java.util.concurrent.atomic.AtomicReference;
  * README.md in the app/ directory for configuration instructions, and the adjacent IDP-specific
  * instructions.
  */
-public final class LoginActivity extends AppCompatActivity {
+class LoginActivity : AppCompatActivity() {
+    private var authService: AuthorizationService? = null
+    private val authStateManager by lazy { AuthStateManager.getInstance(this) }
+    private val configuration by lazy { Configuration.getInstance(this) }
 
-    private static final String TAG = "LoginActivity";
-    private static final String EXTRA_FAILED = "failed";
-    private static final int RC_AUTH = 100;
+    private lateinit var clientId: String
+    private var authRequest: AuthorizationRequest? = null
+    private var authCustomTabsIntent = CompletableDeferred<CustomTabsIntent>()
 
-    private AuthorizationService mAuthService;
-    private AuthStateManager mAuthStateManager;
-    private Configuration mConfiguration;
+    private var isPendingIntentMode = false
 
-    private final AtomicReference<String> mClientId = new AtomicReference<>();
-    private final AtomicReference<AuthorizationRequest> mAuthRequest = new AtomicReference<>();
-    private final AtomicReference<CustomTabsIntent> mAuthIntent = new AtomicReference<>();
-    private CountDownLatch mAuthIntentLatch = new CountDownLatch(1);
-    private ExecutorService mExecutor;
+    private var browserMatcher: BrowserMatcher = AnyBrowserMatcher
 
-    private boolean mUsePendingIntents;
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
 
-    @NonNull
-    private BrowserMatcher mBrowserMatcher = AnyBrowserMatcher.INSTANCE;
+        lifecycleScope.launch {
+            if (authStateManager.getCurrent().isAuthorized && !configuration.hasConfigurationChanged()) {
+                Log.i(TAG, "User is already authenticated, proceeding to token activity")
+                startActivity(Intent(this@LoginActivity, TokenActivity::class.java))
+                finish()
+                return@launch
+            }
 
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
+            setContentView(R.layout.activity_login)
 
-        mExecutor = Executors.newSingleThreadExecutor();
-        mAuthStateManager = AuthStateManager.getInstance(this);
-        mConfiguration = Configuration.getInstance(this);
+            findViewById<Button>(R.id.retry).setOnClickListener {
+                lifecycleScope.launch { initializeAppAuth() }
+            }
 
-        if (mAuthStateManager.getCurrent().isAuthorized()
-                && !mConfiguration.hasConfigurationChanged()) {
-            Log.i(TAG, "User is already authenticated, proceeding to token activity");
-            startActivity(new Intent(this, TokenActivity.class));
-            finish();
-            return;
-        }
+            findViewById<Button>(R.id.start_auth).setOnClickListener { startAuth() }
 
-        setContentView(R.layout.activity_login);
+            findViewById<EditText>(R.id.login_hint_value).addTextChangedListener(
+                DebouncedLoginHintWatcher()
+            )
 
-        findViewById(R.id.retry).setOnClickListener((View view) ->
-                mExecutor.submit(this::initializeAppAuth));
-        findViewById(R.id.start_auth).setOnClickListener((View view) -> startAuth());
+            if (!configuration.isValid) {
+                displayError(configuration.configurationError, false)
+                return@launch
+            }
 
-        ((EditText)findViewById(R.id.login_hint_value)).addTextChangedListener(
-                new LoginHintChangeHandler());
+            configureBrowserSelector()
 
-        if (!mConfiguration.isValid()) {
-            displayError(mConfiguration.getConfigurationError(), false);
-            return;
-        }
+            if (configuration.hasConfigurationChanged()) {
+                // discard any existing authorization state due to the change of configuration
+                Log.i(TAG, "Configuration change detected, discarding old state")
+                authStateManager.replace(AuthState())
+                configuration.acceptConfiguration()
+            }
 
-        configureBrowserSelector();
-        if (mConfiguration.hasConfigurationChanged()) {
-            // discard any existing authorization state due to the change of configuration
-            Log.i(TAG, "Configuration change detected, discarding old state");
-            mAuthStateManager.replace(new AuthState());
-            mConfiguration.acceptConfiguration();
-        }
+            if (intent.getBooleanExtra(EXTRA_FAILED, false)) {
+                displayAuthCancelled()
+            }
 
-        if (getIntent().getBooleanExtra(EXTRA_FAILED, false)) {
-            displayAuthCancelled();
-        }
-
-        displayLoading("Initializing");
-        mExecutor.submit(this::initializeAppAuth);
-    }
-
-    @Override
-    protected void onStart() {
-        super.onStart();
-        if (mExecutor.isShutdown()) {
-            mExecutor = Executors.newSingleThreadExecutor();
+            displayLoading("Initializing")
+            initializeAppAuth()
         }
     }
 
-    @Override
-    protected void onStop() {
-        super.onStop();
-        mExecutor.shutdownNow();
-    }
-
-    @Override
-    protected void onDestroy() {
-        super.onDestroy();
-
-        if (mAuthService != null) {
-            mAuthService.dispose();
-        }
-    }
-
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-        displayAuthOptions();
-        if (resultCode == RESULT_CANCELED) {
-            displayAuthCancelled();
-        } else {
-            Intent intent = new Intent(this, TokenActivity.class);
-            intent.putExtras(data.getExtras());
-            startActivity(intent);
-        }
+    override fun onDestroy() {
+        super.onDestroy()
+        authService?.dispose()
     }
 
     @MainThread
-    void startAuth() {
-        displayLoading("Making authorization request");
-
-        mUsePendingIntents = ((CheckBox) findViewById(R.id.pending_intents_checkbox)).isChecked();
+    fun startAuth() {
+        displayLoading("Making authorization request")
+        isPendingIntentMode = findViewById<CheckBox>(R.id.pending_intents_checkbox).isChecked
 
         // WrongThread inference is incorrect for lambdas
         // noinspection WrongThread
-        mExecutor.submit(this::doAuth);
+        lifecycleScope.launch { doAuth() }
     }
 
     /**
      * Initializes the authorization service configuration if necessary, either from the local
      * static values or by retrieving an OpenID discovery document.
      */
-    @WorkerThread
-    private void initializeAppAuth() {
-        Log.i(TAG, "Initializing AppAuth");
-        recreateAuthorizationService();
+    private suspend fun initializeAppAuth() {
+        Log.i(TAG, "Initializing AppAuth")
+        recreateAuthorizationService()
 
-        if (mAuthStateManager.getCurrent().getAuthorizationServiceConfiguration() != null) {
+        authStateManager.getCurrent().authorizationServiceConfiguration?.let  {
             // configuration is already created, skip to client initialization
-            Log.i(TAG, "auth config already established");
-            initializeClient();
-            return;
+            Log.i(TAG, "auth config already established")
+            initializeClient()
+            return
         }
 
         // if we are not using discovery, build the authorization service configuration directly
         // from the static configuration values.
-        if (mConfiguration.getDiscoveryUri() == null) {
-            Log.i(TAG, "Creating auth config from res/raw/auth_config.json");
-            AuthorizationServiceConfiguration config = new AuthorizationServiceConfiguration(
-                    mConfiguration.getAuthEndpointUri(),
-                    mConfiguration.getTokenEndpointUri(),
-                    mConfiguration.getRegistrationEndpointUri(),
-                    mConfiguration.getEndSessionEndpoint());
+        if (configuration.discoveryUri == null) {
+            Log.i(TAG, "Creating auth config from res/raw/auth_config.json")
+            val config = AuthorizationServiceConfiguration(
+                configuration.authEndpointUri!!,
+                configuration.tokenEndpointUri!!,
+                configuration.registrationEndpointUri,
+                configuration.endSessionEndpoint
+            )
 
-            mAuthStateManager.replace(new AuthState(config));
-            initializeClient();
-            return;
+            authStateManager.replace(AuthState(config))
+            initializeClient()
+            return
         }
 
         // WrongThread inference is incorrect for lambdas
         // noinspection WrongThread
-        runOnUiThread(() -> displayLoading("Retrieving discovery document"));
-        Log.i(TAG, "Retrieving OpenID discovery doc");
-        AuthorizationServiceConfiguration.fetchFromUrl(
-                mConfiguration.getDiscoveryUri(),
-                this::handleConfigurationRetrievalResult,
-                mConfiguration.getConnectionBuilder());
-    }
+        displayLoading("Retrieving discovery document")
+        Log.i(TAG, "Retrieving OpenID discovery doc")
 
-    @MainThread
-    private void handleConfigurationRetrievalResult(
-            AuthorizationServiceConfiguration config,
-            AuthorizationException ex) {
-        if (config == null) {
-            Log.i(TAG, "Failed to retrieve discovery document", ex);
-            displayError("Failed to retrieve discovery document: " + ex.getMessage(), true);
-            return;
+        try {
+            val config = AuthorizationServiceConfiguration.fetchFromUrl(
+                configuration.discoveryUri!!,
+                configuration.connectionBuilder
+            )
+
+            Log.i(TAG, "Discovery document retrieved")
+            authStateManager.replace(AuthState(config))
+            initializeClient()
+        } catch (ex: AuthorizationException) {
+            Log.i(TAG, "Failed to retrieve discovery document", ex)
+            displayError("Failed to retrieve discovery document: " + ex.message, true)
+            return
         }
-
-        Log.i(TAG, "Discovery document retrieved");
-        mAuthStateManager.replace(new AuthState(config));
-        mExecutor.submit(this::initializeClient);
     }
 
     /**
      * Initiates a dynamic registration request if a client ID is not provided by the static
      * configuration.
      */
-    @WorkerThread
-    private void initializeClient() {
-        if (mConfiguration.getClientId() != null) {
-            Log.i(TAG, "Using static client ID: " + mConfiguration.getClientId());
+    private suspend fun initializeClient() {
+        configuration.clientId?.let {
+            Log.i(TAG, "Using static client ID: $it")
             // use a statically configured client ID
-            mClientId.set(mConfiguration.getClientId());
-            runOnUiThread(this::initializeAuthRequest);
-            return;
+            clientId = it
+            initializeAuthRequest()
+            return
         }
 
-        RegistrationResponse lastResponse =
-                mAuthStateManager.getCurrent().getLastRegistrationResponse();
-        if (lastResponse != null) {
-            Log.i(TAG, "Using dynamic client ID: " + lastResponse.clientId);
+        authStateManager.getCurrent().lastRegistrationResponse?.let {
+            Log.i(TAG, "Using dynamic client ID: ${it.clientId}")
             // already dynamically registered a client ID
-            mClientId.set(lastResponse.clientId);
-            runOnUiThread(this::initializeAuthRequest);
-            return;
+            clientId = it.clientId
+            initializeAuthRequest()
+            return
         }
 
         // WrongThread inference is incorrect for lambdas
         // noinspection WrongThread
-        runOnUiThread(() -> displayLoading("Dynamically registering client"));
-        Log.i(TAG, "Dynamically registering client");
+        displayLoading("Dynamically registering client")
+        Log.i(TAG, "Dynamically registering client")
 
-        RegistrationRequest registrationRequest = new RegistrationRequest.Builder(
-                mAuthStateManager.getCurrent().getAuthorizationServiceConfiguration(),
-                Collections.singletonList(mConfiguration.getRedirectUri()))
-                .setTokenEndpointAuthenticationMethod(ClientSecretBasic.NAME)
-                .build();
+        val registrationRequest = RegistrationRequest.Builder(
+            authStateManager.getCurrent().authorizationServiceConfiguration!!,
+            listOf(configuration.redirectUri)
+        ).setTokenEndpointAuthenticationMethod(ClientSecretBasic.NAME).build()
 
-        mAuthService.performRegistrationRequest(
-                registrationRequest,
-                this::handleRegistrationResponse);
-    }
 
-    @MainThread
-    private void handleRegistrationResponse(
-            RegistrationResponse response,
-            AuthorizationException ex) {
-        mAuthStateManager.updateAfterRegistration(response, ex);
-        if (response == null) {
-            Log.i(TAG, "Failed to dynamically register client", ex);
-            displayErrorLater("Failed to register client: " + ex.getMessage(), true);
-            return;
+        try {
+            val response = authService!!.performRegistrationRequest(registrationRequest)
+            authStateManager.updateAfterRegistration(response, null)
+            Log.i(TAG, "Dynamically registered client: ${response.clientId}")
+            clientId = response.clientId
+            initializeAuthRequest()
+        } catch (ex: AuthorizationException) {
+            authStateManager.updateAfterRegistration(null, ex)
+            Log.i(TAG, "Failed to dynamically register client", ex)
+            displayErrorLater("Failed to register client: ${ex.message}")
+            return
         }
-
-        Log.i(TAG, "Dynamically registered client: " + response.clientId);
-        mClientId.set(response.clientId);
-        initializeAuthRequest();
     }
 
     /**
@@ -311,198 +250,231 @@ public final class LoginActivity extends AppCompatActivity {
      * tab configurations.
      */
     @MainThread
-    private void configureBrowserSelector() {
-        Spinner spinner = (Spinner) findViewById(R.id.browser_selector);
-        final BrowserSelectionAdapter adapter = new BrowserSelectionAdapter(this);
-        spinner.setAdapter(adapter);
-        spinner.setOnItemSelectedListener(new OnItemSelectedListener() {
-            @Override
-            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-                BrowserInfo info = adapter.getItem(position);
+    private fun configureBrowserSelector() {
+        val spinner = findViewById<Spinner>(R.id.browser_selector)
+        val adapter = BrowserSelectionAdapter(this)
+        spinner.setAdapter(adapter)
+
+        spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(
+                parent: AdapterView<*>?,
+                view: View?,
+                position: Int,
+                id: Long
+            ) {
+                val info = adapter.getItem(position)
                 if (info == null) {
-                    mBrowserMatcher = AnyBrowserMatcher.INSTANCE;
-                    return;
+                    browserMatcher = AnyBrowserMatcher
+                    return
                 } else {
-                    mBrowserMatcher = new ExactBrowserMatcher(info.mDescriptor);
+                    browserMatcher = ExactBrowserMatcher(info.descriptor)
                 }
 
-                recreateAuthorizationService();
-                createAuthRequest(getLoginHint());
-                warmUpBrowser();
+                recreateAuthorizationService()
+                createAuthRequest(loginHint)
+                warmUpBrowser()
             }
 
-            @Override
-            public void onNothingSelected(AdapterView<?> parent) {
-                mBrowserMatcher = AnyBrowserMatcher.INSTANCE;
+            override fun onNothingSelected(parent: AdapterView<*>?) {
+                browserMatcher = AnyBrowserMatcher
             }
-        });
+        }
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            val descriptors = getAllBrowsers(this@LoginActivity)
+
+            val browserInfoList = descriptors.mapNotNull { descriptor ->
+                try {
+                    val appInfo = packageManager.getApplicationInfo(descriptor.packageName, 0)
+
+                    BrowserInfo(
+                        descriptor = descriptor,
+                        label = packageManager.getApplicationLabel(appInfo),
+                        icon = packageManager.getApplicationIcon(descriptor.packageName)
+                    )
+                } catch (e: PackageManager.NameNotFoundException) {
+                    Log.e(
+                        TAG,
+                        "Browser package not found: ${descriptor.packageName}",
+                        e
+                    )
+
+                    null
+                }
+            }
+
+            withContext(Dispatchers.Main) {
+                adapter.updateBrowsers(browserInfoList)
+            }
+        }
     }
 
     /**
      * Performs the authorization request, using the browser selected in the spinner,
      * and a user-provided `login_hint` if available.
      */
-    @WorkerThread
-    private void doAuth() {
-        try {
-            mAuthIntentLatch.await();
-        } catch (InterruptedException ex) {
-            Log.w(TAG, "Interrupted while waiting for auth intent");
-        }
+    private suspend fun doAuth() {
+        val authIntent = authCustomTabsIntent.await()
 
-        if (mUsePendingIntents) {
-            final Intent completionIntent = new Intent(this, TokenActivity.class);
-            final Intent cancelIntent = new Intent(this, LoginActivity.class);
-            cancelIntent.putExtra(EXTRA_FAILED, true);
-            cancelIntent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        if (isPendingIntentMode) {
+            val completionIntent = Intent(this, TokenActivity::class.java)
+            val cancelIntent = Intent(this, LoginActivity::class.java)
+            cancelIntent.putExtra(EXTRA_FAILED, true)
+            cancelIntent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
 
-            int flags = 0;
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                flags |= PendingIntent.FLAG_MUTABLE;
-            }
+            val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                PendingIntent.FLAG_MUTABLE
+            } else 0
 
-            mAuthService.performAuthorizationRequest(
-                    mAuthRequest.get(),
-                    PendingIntent.getActivity(this, 0, completionIntent, flags),
-                    PendingIntent.getActivity(this, 0, cancelIntent, flags),
-                    mAuthIntent.get());
+            authService!!.performAuthorizationRequest(
+                request = authRequest!!,
+                completedIntent = PendingIntent.getActivity(this, 0, completionIntent, flags),
+                canceledIntent = PendingIntent.getActivity(this, 0, cancelIntent, flags),
+                customTabsIntent = authIntent
+            )
         } else {
-            Intent intent = mAuthService.getAuthorizationRequestIntent(
-                    mAuthRequest.get(),
-                    mAuthIntent.get());
-            startActivityForResult(intent, RC_AUTH);
+            val intent = authService!!.getAuthorizationRequestIntent(
+                request = authRequest!!,
+                customTabsIntent = authIntent
+            )
+
+            registerForActivityResult(StartActivityForResult()) { result ->
+                displayAuthOptions()
+
+                if (result.resultCode == RESULT_CANCELED) {
+                    displayAuthCancelled()
+                } else {
+                    val intent = Intent(this, TokenActivity::class.java)
+                    intent.putExtras(result.data!!.extras!!)
+                    startActivity(intent)
+                }
+            }.launch(intent)
         }
     }
 
-    private void recreateAuthorizationService() {
-        if (mAuthService != null) {
-            Log.i(TAG, "Discarding existing AuthService instance");
-            mAuthService.dispose();
+    private fun recreateAuthorizationService() {
+        authService?.let {
+            Log.i(TAG, "Discarding existing AuthService instance")
+            it.dispose()
         }
-        mAuthService = createAuthorizationService();
-        mAuthRequest.set(null);
-        mAuthIntent.set(null);
+
+        authService = createAuthorizationService()
+        authRequest = null
     }
 
-    private AuthorizationService createAuthorizationService() {
-        Log.i(TAG, "Creating authorization service");
-        AppAuthConfiguration.Builder builder = new AppAuthConfiguration.Builder();
-        builder.setBrowserMatcher(mBrowserMatcher);
-        builder.setConnectionBuilder(mConfiguration.getConnectionBuilder());
+    private fun createAuthorizationService(): AuthorizationService {
+        Log.i(TAG, "Creating authorization service")
+        val builder = AppAuthConfiguration.Builder()
+        builder.setBrowserMatcher(browserMatcher)
+        builder.setConnectionBuilder(configuration.connectionBuilder)
 
-        return new AuthorizationService(this, builder.build());
-    }
-
-    @MainThread
-    private void displayLoading(String loadingMessage) {
-        findViewById(R.id.loading_container).setVisibility(View.VISIBLE);
-        findViewById(R.id.auth_container).setVisibility(View.GONE);
-        findViewById(R.id.error_container).setVisibility(View.GONE);
-
-        ((TextView)findViewById(R.id.loading_description)).setText(loadingMessage);
+        return AuthorizationService(this, builder.build())
     }
 
     @MainThread
-    private void displayError(String error, boolean recoverable) {
-        findViewById(R.id.error_container).setVisibility(View.VISIBLE);
-        findViewById(R.id.loading_container).setVisibility(View.GONE);
-        findViewById(R.id.auth_container).setVisibility(View.GONE);
+    private fun displayLoading(loadingMessage: String) {
+        findViewById<View>(R.id.loading_container).visibility = View.VISIBLE
+        findViewById<View>(R.id.auth_container).visibility = View.GONE
+        findViewById<View>(R.id.error_container).visibility = View.GONE
+        findViewById<TextView>(R.id.loading_description).text = loadingMessage
+    }
 
-        ((TextView)findViewById(R.id.error_description)).setText(error);
-        findViewById(R.id.retry).setVisibility(recoverable ? View.VISIBLE : View.GONE);
+    @MainThread
+    private fun displayError(error: String?, recoverable: Boolean) {
+        findViewById<View>(R.id.error_container).visibility = View.VISIBLE
+        findViewById<View>(R.id.loading_container).visibility = View.GONE
+        findViewById<View>(R.id.auth_container).visibility = View.GONE
+        findViewById<TextView>(R.id.error_description).text = error
+        findViewById<View>(R.id.retry).visibility = if (recoverable) View.VISIBLE else View.GONE
     }
 
     // WrongThread inference is incorrect in this case
-    @SuppressWarnings("WrongThread")
-    @AnyThread
-    private void displayErrorLater(final String error, final boolean recoverable) {
-        runOnUiThread(() -> displayError(error, recoverable));
+    @MainThread
+    private fun displayErrorLater(error: String, recoverable: Boolean = true) {
+        displayError(error, recoverable)
     }
 
     @MainThread
-    private void initializeAuthRequest() {
-        createAuthRequest(getLoginHint());
-        warmUpBrowser();
-        displayAuthOptions();
+    private fun initializeAuthRequest() {
+        createAuthRequest(loginHint)
+        warmUpBrowser()
+        displayAuthOptions()
     }
 
+    /**
+     * Displays the authorization options screen.
+     */
     @MainThread
-    private void displayAuthOptions() {
-        findViewById(R.id.auth_container).setVisibility(View.VISIBLE);
-        findViewById(R.id.loading_container).setVisibility(View.GONE);
-        findViewById(R.id.error_container).setVisibility(View.GONE);
+    private fun displayAuthOptions() = lifecycleScope.launch{
+        findViewById<View>(R.id.auth_container).visibility = View.VISIBLE
+        findViewById<View>(R.id.loading_container).visibility = View.GONE
+        findViewById<View>(R.id.error_container).visibility = View.GONE
 
-        AuthState state = mAuthStateManager.getCurrent();
-        AuthorizationServiceConfiguration config = state.getAuthorizationServiceConfiguration();
+        val state = authStateManager.getCurrent()
+        val config = state.authorizationServiceConfiguration
 
-        String authEndpointStr;
-        if (config.discoveryDoc != null) {
-            authEndpointStr = "Discovered auth endpoint: \n";
+        val authEndpointStr = if (config?.discoveryDoc != null) {
+            "Discovered auth endpoint: \n${config.authorizationEndpoint}"
         } else {
-            authEndpointStr = "Static auth endpoint: \n";
-        }
-        authEndpointStr += config.authorizationEndpoint;
-        ((TextView)findViewById(R.id.auth_endpoint)).setText(authEndpointStr);
-
-        String clientIdStr;
-        if (state.getLastRegistrationResponse() != null) {
-            clientIdStr = "Dynamic client ID: \n";
-        } else {
-            clientIdStr = "Static client ID: \n";
-        }
-        clientIdStr += mClientId;
-        ((TextView)findViewById(R.id.client_id)).setText(clientIdStr);
-    }
-
-    private void displayAuthCancelled() {
-        Snackbar.make(findViewById(R.id.coordinator),
-                "Authorization canceled",
-                Snackbar.LENGTH_SHORT)
-                .show();
-    }
-
-    private void warmUpBrowser() {
-        mAuthIntentLatch = new CountDownLatch(1);
-        mExecutor.execute(() -> {
-            Log.i(TAG, "Warming up browser instance for auth request");
-            CustomTabsIntent.Builder intentBuilder =
-                    mAuthService.createCustomTabsIntentBuilder(mAuthRequest.get().toUri());
-            intentBuilder.setToolbarColor(getColorCompat(R.color.colorPrimary));
-            mAuthIntent.set(intentBuilder.build());
-            mAuthIntentLatch.countDown();
-        });
-    }
-
-    private void createAuthRequest(@Nullable String loginHint) {
-        Log.i(TAG, "Creating auth request for login hint: " + loginHint);
-        AuthorizationRequest.Builder authRequestBuilder = new AuthorizationRequest.Builder(
-                mAuthStateManager.getCurrent().getAuthorizationServiceConfiguration(),
-                mClientId.get(),
-                ResponseTypeValues.CODE,
-                mConfiguration.getRedirectUri())
-                .setScope(mConfiguration.getScope());
-
-        if (!TextUtils.isEmpty(loginHint)) {
-            authRequestBuilder.setLoginHint(loginHint);
+            "Static auth endpoint: \n${config?.authorizationEndpoint}"
         }
 
-        mAuthRequest.set(authRequestBuilder.build());
-    }
+        findViewById<TextView>(R.id.auth_endpoint).text = authEndpointStr
 
-    private String getLoginHint() {
-        return ((EditText)findViewById(R.id.login_hint_value))
-                .getText()
-                .toString()
-                .trim();
-    }
-
-    @TargetApi(Build.VERSION_CODES.M)
-    @SuppressWarnings("deprecation")
-    private int getColorCompat(@ColorRes int color) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            return getColor(color);
+        val clientIdStr = if (state.lastRegistrationResponse != null) {
+            "Dynamic client ID: \n$clientId"
         } else {
-            return getResources().getColor(color);
+            "Static client ID: \n$clientId"
+        }
+
+        findViewById<TextView>(R.id.client_id).text = clientIdStr
+    }
+
+    private fun displayAuthCancelled() {
+        Snackbar.make(
+            findViewById(R.id.coordinator),
+            "Authorization canceled",
+            Snackbar.LENGTH_SHORT
+        ).show()
+    }
+
+    private fun warmUpBrowser() {
+        authCustomTabsIntent = CompletableDeferred()
+        Log.i(TAG, "Warming up browser instance for auth request")
+
+        lifecycleScope.launch {
+            val intentBuilder = authService!!.createCustomTabsIntentBuilder(authRequest!!.toUri())
+            val colorScheme = CustomTabColorSchemeParams.Builder()
+                .setToolbarColor(getColorCompat(R.color.colorPrimary))
+                .build()
+            intentBuilder.setDefaultColorSchemeParams(colorScheme)
+            authCustomTabsIntent.complete(intentBuilder.build())
+        }
+    }
+
+    private fun createAuthRequest(loginHint: String?) = lifecycleScope.launch {
+        Log.i(TAG, "Creating auth request for login hint: $loginHint")
+
+        val authRequestBuilder = AuthorizationRequest.Builder(
+            configuration = authStateManager.getCurrent().authorizationServiceConfiguration!!,
+            clientId = clientId,
+            responseType = ResponseTypeValues.CODE,
+            redirectUri = configuration.redirectUri
+        ).setScope(configuration.scope)
+
+        if (!loginHint.isNullOrEmpty()) authRequestBuilder.setLoginHint(loginHint)
+        authRequest = authRequestBuilder.build()
+    }
+
+    private val loginHint: String
+        get() = findViewById<EditText>(R.id.login_hint_value).text.toString().trim()
+
+    @Suppress("deprecation")
+    private fun getColorCompat(@ColorRes color: Int): Int {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            getColor(color)
+        } else {
+            resources.getColor(color)
         }
     }
 
@@ -511,48 +483,28 @@ public final class LoginActivity extends AppCompatActivity {
      * for a request with the new login hint; this avoids constantly re-initializing the
      * browser while the user is typing.
      */
-    private final class LoginHintChangeHandler implements TextWatcher {
+    private inner class DebouncedLoginHintWatcher : TextWatcher {
+        private val debounceDelay = 500L
+        private var debounceJob: Job? = null
 
-        private static final int DEBOUNCE_DELAY_MS = 500;
+        override fun beforeTextChanged(cs: CharSequence?, start: Int, count: Int, after: Int) {}
 
-        private Handler mHandler;
-        private RecreateAuthRequestTask mTask;
-
-        LoginHintChangeHandler() {
-            mHandler = new Handler(Looper.getMainLooper());
-            mTask = new RecreateAuthRequestTask();
+        override fun onTextChanged(cs: CharSequence?, start: Int, before: Int, count: Int) {
+            debounceJob?.cancel()
+            debounceJob = lifecycleScope.launch {
+                delay(debounceDelay)
+                createAuthRequest(loginHint)
+                warmUpBrowser()
+            }
         }
 
-        @Override
-        public void beforeTextChanged(CharSequence cs, int start, int count, int after) {}
-
-        @Override
-        public void onTextChanged(CharSequence cs, int start, int before, int count) {
-            mTask.cancel();
-            mTask = new RecreateAuthRequestTask();
-            mHandler.postDelayed(mTask, DEBOUNCE_DELAY_MS);
-        }
-
-        @Override
-        public void afterTextChanged(Editable ed) {}
+        override fun afterTextChanged(ed: Editable?) {}
     }
 
-    private final class RecreateAuthRequestTask implements Runnable {
-
-        private final AtomicBoolean mCanceled = new AtomicBoolean();
-
-        @Override
-        public void run() {
-            if (mCanceled.get()) {
-                return;
-            }
-
-            createAuthRequest(getLoginHint());
-            warmUpBrowser();
-        }
-
-        public void cancel() {
-            mCanceled.set(true);
-        }
+    @Suppress("unused")
+    companion object {
+        private const val TAG = "LoginActivity"
+        private const val EXTRA_FAILED = "failed"
+        private const val RC_AUTH = 100
     }
 }

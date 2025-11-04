@@ -11,27 +11,13 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-package net.openid.appauth.browser;
-
-import androidx.annotation.NonNull;
+package net.openid.appauth.browser
 
 /**
  * Matches any browser.
  */
-public final class AnyBrowserMatcher implements BrowserMatcher {
-
-    /**
-     * The singleton instance.
-     */
-    public static final AnyBrowserMatcher INSTANCE = new AnyBrowserMatcher();
-
-    private AnyBrowserMatcher() {
-        // no need to construct separate instances
-    }
-
-    @Override
-    public boolean matches(@NonNull BrowserDescriptor descriptor) {
-        return true;
+object AnyBrowserMatcher : BrowserMatcher {
+    override fun matches(descriptor: BrowserDescriptor): Boolean {
+        return true
     }
 }

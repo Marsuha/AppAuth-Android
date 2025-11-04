@@ -11,10 +11,7 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-package net.openid.appauth.browser;
-
-import androidx.annotation.NonNull;
+package net.openid.appauth.browser
 
 /**
  * Represents a delimited version number for an application. This can parse common version number
@@ -22,125 +19,53 @@ import androidx.annotation.NonNull;
  * to retain just the numeric content for comparison. Trailing zeroes in a version number
  * are discarded to produce a compact, canonical representation. Empty versions are equivalent to
  * "0". Each numeric part is expected to fit within a 64-bit integer.
+ *
+ * Creates a version with the specified parts, ordered from major to minor.
  */
-public class DelimitedVersion implements Comparable<DelimitedVersion> {
-
-    // See: http://stackoverflow.com/a/2816747
-    private static final int PRIME_HASH_FACTOR = 92821;
-
-    private static final long BIT_MASK_32 = 0xFFFFFFFF;
-
-    private final long[] mNumericParts;
-
-    /**
-     * Creates a version with the specified parts, ordered from major to minor.
-     */
-    public DelimitedVersion(long[] numericParts) {
-        mNumericParts = numericParts;
+class DelimitedVersion(private val numericParts: LongArray) : Comparable<DelimitedVersion> {
+    override fun toString(): String {
+        if (numericParts.isEmpty()) return "0"
+        return numericParts.joinToString(separator = ".")
     }
 
-    @Override
-    public String toString() {
-        if (mNumericParts.length == 0) {
-            return "0";
-        }
-
-        StringBuilder builder = new StringBuilder();
-        builder.append(mNumericParts[0]);
-
-        int index = 1;
-        while (index < mNumericParts.length) {
-            builder.append('.');
-            builder.append(mNumericParts[index]);
-            index++;
-        }
-
-        return builder.toString();
+    override fun equals(other: Any?): Boolean {
+        return other is DelimitedVersion && this.compareTo(other) == 0
     }
 
-    @Override
-    public boolean equals(Object obj) {
-        if (this == obj) {
-            return true;
+    override fun hashCode(): Int {
+        return numericParts.fold(0) { result, numericPart ->
+            result * PRIME_HASH_FACTOR + (numericPart and BIT_MASK_32).toInt()
         }
-
-        if (obj == null || !(obj instanceof DelimitedVersion)) {
-            return false;
-        }
-
-        return this.compareTo((DelimitedVersion) obj) == 0;
     }
 
-    @Override
-    public int hashCode() {
-        int result = 0;
-
-        for (long numericPart : mNumericParts) {
-            result = result * PRIME_HASH_FACTOR + (int)(numericPart & BIT_MASK_32);
+    override fun compareTo(other: DelimitedVersion): Int {
+        for (index in numericParts.indices) {
+            if (index >= other.numericParts.size) break
+            val currentPartOrder = numericParts[index].compareTo(other.numericParts[index])
+            if (currentPartOrder != 0) return currentPartOrder
         }
 
-        return result;
+        return numericParts.size.compareTo(other.numericParts.size)
     }
 
-    @Override
-    public int compareTo(@NonNull DelimitedVersion other) {
-        int index = 0;
+    companion object {
+        // See: http://stackoverflow.com/a/2816747
+        private const val PRIME_HASH_FACTOR = 92821
 
-        while (index < this.mNumericParts.length && index < other.mNumericParts.length) {
-            int currentPartOrder =
-                    compareLongs(this.mNumericParts[index], other.mNumericParts[index]);
-            if (currentPartOrder != 0) {
-                return currentPartOrder;
-            }
-            index++;
+        private const val BIT_MASK_32: Long = -0x1
+
+        /**
+         * Parses a delimited version number from the provided string.
+         */
+        @JvmStatic
+        fun parse(versionString: String): DelimitedVersion {
+            if (versionString.isEmpty()) return DelimitedVersion(LongArray(0))
+
+            val stringParts = versionString.split("[^0-9]+".toRegex())
+            val parsedParts = stringParts.mapNotNull { it.toLongOrNull() }
+
+            val trimmedParts = parsedParts.dropLastWhile { it == 0L }.toLongArray()
+            return DelimitedVersion(trimmedParts)
         }
-
-        return compareLongs(this.mNumericParts.length, other.mNumericParts.length);
-    }
-
-    private int compareLongs(long l1, long l2) {
-        if (l1 < l2) {
-            return -1;
-        } else if (l1 > l2) {
-            return 1;
-        }
-        return 0;
-    }
-
-    /**
-     * Parses a delimited version number from the provided string.
-     */
-    public static DelimitedVersion parse(String versionString) {
-
-        if (versionString == null) {
-            return new DelimitedVersion(new long[0]);
-        }
-
-        String[] stringParts = versionString.split("[^0-9]+");
-
-        long[] parsedParts = new long[stringParts.length];
-        int index = 0;
-        for (String numericPart : stringParts) {
-            if (numericPart.isEmpty()) {
-                continue;
-            }
-
-            parsedParts[index] = Long.parseLong(numericPart);
-            index++;
-        }
-
-        // discard all trailing zeroes
-        index--;
-        while (index >= 0) {
-            if (parsedParts[index] > 0) {
-                break;
-            }
-            index--;
-        }
-
-        int length = index + 1;
-        long[] onlyParsedParts = new long[length];
-        System.arraycopy(parsedParts, 0, onlyParsedParts, 0, length);
-        return new DelimitedVersion(onlyParsedParts);
     }
 }

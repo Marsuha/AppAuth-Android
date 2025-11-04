@@ -11,42 +11,44 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package net.openid.appauth
 
-package net.openid.appauth;
+import android.app.Application
+import android.content.Intent
+import android.net.Uri
+import androidx.test.core.app.ActivityScenario
+import androidx.test.core.app.ApplicationProvider
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.google.common.truth.Truth.assertWithMessage
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.Shadows
+import org.robolectric.annotation.Config
 
-import static androidx.test.ext.truth.content.IntentSubject.assertThat;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.robolectric.Shadows.shadowOf;
-
-import android.content.Intent;
-import android.net.Uri;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.robolectric.Robolectric;
-import org.robolectric.RobolectricTestRunner;
-import org.robolectric.android.controller.ActivityController;
-import org.robolectric.annotation.Config;
-
-@RunWith(RobolectricTestRunner.class)
-@Config(sdk = 16)
-public class RedirectUriReceiverActivityTest {
-
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [16])
+class RedirectUriReceiverActivityTest {
     @Test
-    public void testForwardsRedirectToManagementActivity() {
-        Uri redirectUri = Uri.parse("https://www.example.com/oauth2redirect");
-        Intent redirectIntent = new Intent();
-        redirectIntent.setData(redirectUri);
+    fun testForwardsRedirectToManagementActivity() {
+        val redirectUri = Uri.parse("https://www.example.com/oauth2redirect")
+        val redirectIntent = Intent(
+            ApplicationProvider.getApplicationContext<Application>(),
+            RedirectUriReceiverActivity::class.java
+        ).apply { data = redirectUri }
 
-        ActivityController redirectController =
-                Robolectric.buildActivity(RedirectUriReceiverActivity.class, redirectIntent)
-                        .create();
+        val scenario = ActivityScenario.launch<RedirectUriReceiverActivity>(redirectIntent)
 
-        RedirectUriReceiverActivity redirectActivity =
-                (RedirectUriReceiverActivity) redirectController.get();
+        scenario.onActivity { activity ->
+            assertWithMessage("Activity should be finishing after forwarding the intent")
+                .that(activity.isFinishing).isTrue()
+        }
 
-        Intent nextIntent = shadowOf(redirectActivity).getNextStartedActivity();
-        assertThat(nextIntent).hasData(redirectUri);
-        assertThat(redirectActivity.isFinishing()).isTrue();
+        val shadowApplication = Shadows.shadowOf(ApplicationProvider.getApplicationContext<Application>())
+        val nextIntent = shadowApplication.nextStartedActivity
+
+        assertWithMessage("An activity should have been started").that(nextIntent).isNotNull()
+        assertWithMessage("The forwarded intent should have the correct data URI")
+            .that(nextIntent.data)
+            .isEqualTo(redirectUri)
     }
-
 }

@@ -11,13 +11,7 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-package net.openid.appauth.browser;
-
-import androidx.annotation.NonNull;
-
-import java.util.Arrays;
-import java.util.List;
+package net.openid.appauth.browser
 
 /**
  * A allowList of browsers which can be used as part of an authorization flows. Examples:
@@ -28,37 +22,23 @@ import java.util.List;
  *
  * // allow Chrome custom tabs only, but exclude a version range
  * new BrowserAllowList(
- *     new VersionedBrowserMatcher(
- *         Browsers.Chrome.PACKAGE_NAME,
- *         Browsers.Chrome.SIGNATURE_SET,
- *         true,
- *         VersionRange.atMost("45.1")),
- *     new VersionedBrowserMatcher(
- *         Browsers.Chrome.PACKAGE_NAME,
- *         Browsers.Chrome.SIGNATURE_SET,
- *         true,
- *         VersionRange.atLeast("45.3"));
+ * new VersionedBrowserMatcher(
+ * Browsers.Chrome.PACKAGE_NAME,
+ * Browsers.Chrome.SIGNATURE_SET,
+ * true,
+ * VersionRange.atMost("45.1")),
+ * new VersionedBrowserMatcher(
+ * Browsers.Chrome.PACKAGE_NAME,
+ * Browsers.Chrome.SIGNATURE_SET,
+ * true,
+ * VersionRange.atLeast("45.3"));
  * ```
  */
-public class BrowserAllowList implements BrowserMatcher {
+class BrowserAllowList(vararg matchers: BrowserMatcher) : BrowserMatcher {
+    private val mBrowserMatchers: List<BrowserMatcher> = listOf(*matchers)
 
-    private List<BrowserMatcher> mBrowserMatchers;
-
-    /**
-     * Creates a browser allowList, which will match if any of the provided matchers do.
-     */
-    public BrowserAllowList(BrowserMatcher... matchers) {
-        mBrowserMatchers = Arrays.asList(matchers);
-    }
-
-    @Override
-    public boolean matches(@NonNull BrowserDescriptor descriptor) {
-        for (BrowserMatcher matcher : mBrowserMatchers) {
-            if (matcher.matches(descriptor)) {
-                return true;
-            }
-        }
-
-        return false;
+    override fun matches(descriptor: BrowserDescriptor): Boolean {
+        mBrowserMatchers.forEach { if (it.matches(descriptor)) return true }
+        return false
     }
 }

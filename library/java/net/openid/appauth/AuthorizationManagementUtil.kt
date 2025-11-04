@@ -11,105 +11,104 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package net.openid.appauth
 
-package net.openid.appauth;
+import android.annotation.SuppressLint
+import android.content.Intent
+import android.net.Uri
+import android.util.Base64
+import net.openid.appauth.AuthorizationManagementUtil.RequestType.AUTHORIZATION
+import net.openid.appauth.AuthorizationManagementUtil.RequestType.END_SESSION
+import net.openid.appauth.AuthorizationResponse.Companion.containsAuthorizationResponse
+import net.openid.appauth.EndSessionResponse.Companion.containsEndSessionResponse
+import org.json.JSONException
+import org.json.JSONObject
+import java.security.SecureRandom
 
-import static net.openid.appauth.Preconditions.checkNotNull;
+/**
+ * An internal utility class for storing and retrieving authorization and end session requests
+ * and responses.
+ */
+internal object AuthorizationManagementUtil {
+    private const val STATE_LENGTH = 16
 
-import android.annotation.SuppressLint;
-import android.content.Intent;
-import android.net.Uri;
-import android.util.Base64;
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
-
-import org.json.JSONException;
-import org.json.JSONObject;
-
-import java.security.SecureRandom;
-
-class AuthorizationManagementUtil {
-    private static final int STATE_LENGTH = 16;
-    public static final String REQUEST_TYPE_AUTHORIZATION = "authorization";
-    public static final String REQUEST_TYPE_END_SESSION = "end_session";
-
-    static String generateRandomState() {
-        SecureRandom sr = new SecureRandom();
-        byte[] random = new byte[STATE_LENGTH];
-        sr.nextBytes(random);
-        return Base64.encodeToString(random, Base64.NO_WRAP | Base64.NO_PADDING | Base64.URL_SAFE);
+    enum class RequestType(val type: String) {
+        AUTHORIZATION("authorization"),
+        END_SESSION("end_session")
     }
 
-    @Nullable
-    static String requestTypeFor(AuthorizationManagementRequest request) {
-        if (request instanceof AuthorizationRequest) {
-            return REQUEST_TYPE_AUTHORIZATION;
+    /**
+     * Generates a random, base64-encoded string for use as a state parameter in an
+     * authorization or end session request. This is used to associate a client session with the
+     * request and to mitigate CSRF attacks.
+     */
+    val randomState: String
+        get() {
+            val sr = SecureRandom()
+            val random = ByteArray(STATE_LENGTH)
+            sr.nextBytes(random)
+            return Base64.encodeToString(
+                random,
+                Base64.NO_WRAP or Base64.NO_PADDING or Base64.URL_SAFE
+            )
         }
-        if (request instanceof EndSessionRequest) {
-            return REQUEST_TYPE_END_SESSION;
-        }
-        return null;
+
+    /**
+     * Returns the request type for a given [AuthorizationManagementRequest].
+     */
+    fun requestTypeFor(request: AuthorizationManagementRequest) = when (request) {
+        is AuthorizationRequest -> AUTHORIZATION
+        is EndSessionRequest -> END_SESSION
     }
 
     /**
      * Reads an authorization request from a JSON string representation produced by either
-     * {@link AuthorizationRequest#jsonSerialize()} or {@link EndSessionRequest#jsonSerialize()}.
+     * [AuthorizationRequest.jsonSerialize] or [EndSessionRequest.jsonSerialize].
      * @throws JSONException if the provided JSON does not match the expected structure.
      */
-    static AuthorizationManagementRequest requestFrom(String jsonStr, String type)
-            throws JSONException {
-        checkNotNull(jsonStr, "jsonStr can not be null");
-
-        JSONObject json = new JSONObject(jsonStr);
-        if (REQUEST_TYPE_AUTHORIZATION.equals(type)) {
-            return AuthorizationRequest.jsonDeserialize(json);
+    @Throws(JSONException::class)
+    fun requestFrom(jsonStr: String, type: RequestType): AuthorizationManagementRequest {
+        val json = JSONObject(jsonStr)
+        return when (type) {
+            AUTHORIZATION -> AuthorizationRequest.jsonDeserialize(json)
+            END_SESSION -> EndSessionRequest.jsonDeserialize(json)
         }
-
-        if (REQUEST_TYPE_END_SESSION.equals(type)) {
-            return EndSessionRequest.jsonDeserialize(json);
-        }
-
-        throw new IllegalArgumentException(
-            "No AuthorizationManagementRequest found matching to this json schema");
     }
 
     /**
      * Builds an AuthorizationManagementResponse from
-     * {@link AuthorizationManagementRequest} and {@link Uri}
+     * [AuthorizationManagementRequest] and [Uri]
      */
     @SuppressLint("VisibleForTests")
-    static AuthorizationManagementResponse responseWith(
-            AuthorizationManagementRequest request, Uri uri) {
-        if (request instanceof AuthorizationRequest) {
-            return new AuthorizationResponse.Builder((AuthorizationRequest) request)
+    fun responseWith(request: AuthorizationManagementRequest, uri: Uri) = when (request) {
+        is AuthorizationRequest -> {
+            AuthorizationResponse.Builder(request)
                 .fromUri(uri)
-                .build();
+                .build()
         }
-        if (request instanceof EndSessionRequest) {
-            return new EndSessionResponse.Builder((EndSessionRequest) request)
+
+        is EndSessionRequest -> {
+            EndSessionResponse.Builder(request)
                 .fromUri(uri)
-                .build();
+                .build()
         }
-        throw new IllegalArgumentException("Malformed request or uri");
     }
 
     /**
-     * Extracts response from an intent produced by {@link #toIntent()}. This is
+     * Extracts response from an intent produced by [.toIntent]. This is
      * used to extract the response from the intent data passed to an activity registered as the
-     * handler for {@link AuthorizationService#performEndSessionRequest}
-     * or {@link AuthorizationService#performAuthorizationRequest}.
+     * handler for [AuthorizationService.performEndSessionRequest]
+     * or [AuthorizationService.performAuthorizationRequest].
      */
-    @Nullable
-    static AuthorizationManagementResponse responseFrom(@NonNull Intent dataIntent) {
-
-        if (EndSessionResponse.containsEndSessionResponse(dataIntent)) {
-            return EndSessionResponse.fromIntent(dataIntent);
+    fun responseFrom(dataIntent: Intent): AuthorizationManagementResponse {
+        if (containsEndSessionResponse(dataIntent)) {
+            return EndSessionResponse.fromIntent(dataIntent)!!
         }
 
-        if (AuthorizationResponse.containsAuthorizationResponse(dataIntent)) {
-            return AuthorizationResponse.fromIntent(dataIntent);
+        if (containsAuthorizationResponse(dataIntent)) {
+            return AuthorizationResponse.fromIntent(dataIntent)!!
         }
 
-        throw new IllegalArgumentException("Malformed intent");
+        throw IllegalArgumentException("Malformed intent")
     }
 }

@@ -11,29 +11,26 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package net.openid.appauth.browser
 
-package net.openid.appauth.browser;
+import net.openid.appauth.browser.AnyBrowserMatcher.matches
+import net.openid.appauth.browser.Browsers.Chrome
+import net.openid.appauth.browser.Browsers.Firefox
+import net.openid.appauth.browser.Browsers.SBrowser
+import org.assertj.core.api.Assertions.assertThat
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
-import static org.assertj.core.api.Assertions.assertThat;
-
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.robolectric.RobolectricTestRunner;
-import org.robolectric.annotation.Config;
-
-@RunWith(RobolectricTestRunner.class)
-@Config(sdk = 16)
-public class AnyBrowserMatcherTest {
-
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [16])
+class AnyBrowserMatcherTest {
     @Test
-    public void testMatches() {
-        assertThat(AnyBrowserMatcher.INSTANCE.matches(Browsers.Chrome.customTab("46")))
-                .isTrue();
-        assertThat(AnyBrowserMatcher.INSTANCE.matches(Browsers.Firefox.standaloneBrowser("53")))
-                .isTrue();
-        assertThat(AnyBrowserMatcher.INSTANCE.matches(Browsers.SBrowser.standaloneBrowser("2.1")))
-                .isTrue();
-        assertThat(AnyBrowserMatcher.INSTANCE.matches(Browsers.SBrowser.customTab("4.0")))
-                .isTrue();
+    fun testMatches() {
+        assertThat(matches(Chrome.customTab("46"))).isTrue()
+        assertThat(matches(Firefox.standaloneBrowser("53"))).isTrue()
+        assertThat(matches(SBrowser.standaloneBrowser("2.1"))).isTrue()
+        assertThat(matches(SBrowser.customTab("4.0"))).isTrue()
     }
 }

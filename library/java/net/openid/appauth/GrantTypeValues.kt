@@ -11,40 +11,33 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-package net.openid.appauth;
+package net.openid.appauth
 
 /**
  * The grant type values defined by the [OAuth2 spec](https://tools.ietf.org/html/rfc6749), and
- * used in {@link AuthorizationRequest authorization} and
- * {@link RegistrationRequest dynamic client registration} requests.
+ * used in [authorization][AuthorizationRequest] and
+ * [dynamic client registration][RegistrationRequest] requests.
  */
-public final class GrantTypeValues {
+object GrantTypeValues {
     /**
      * The grant type used for exchanging an authorization code for one or more tokens.
      *
-     * @see "The OAuth 2.0 Authorization Framework (RFC 6749), Section 4.1.3
-     * <https://tools.ietf.org/html/rfc6749#section-4.1.3>"
+     * @see "The OAuth 2.0 Authorization Framework
      */
-    public static final String AUTHORIZATION_CODE = "authorization_code";
+    const val AUTHORIZATION_CODE: String = "authorization_code"
 
     /**
      * The grant type used when obtaining an access token.
      *
-     * @see "The OAuth 2.0 Authorization Framework (RFC 6749), Section 4.2
-     * <https://tools.ietf.org/html/rfc6749#section-4.2>"
+     * @see "The OAuth 2.0 Authorization Framework
      */
-    public static final String IMPLICIT = "implicit";
+    const val IMPLICIT: String = "implicit"
 
     /**
      * The grant type used when exchanging a refresh token for a new token.
      *
-     * @see "The OAuth 2.0 Authorization Framework (RFC 6749), Section 6
-     * <https://tools.ietf.org/html/rfc6749#section-6>"
+     * @see "The OAuth 2.0 Authorization Framework
      */
-    public static final String REFRESH_TOKEN = "refresh_token";
 
-    private GrantTypeValues() {
-        throw new IllegalStateException("This type is not intended to be instantiated");
-    }
+    const val REFRESH_TOKEN: String = "refresh_token"
 }

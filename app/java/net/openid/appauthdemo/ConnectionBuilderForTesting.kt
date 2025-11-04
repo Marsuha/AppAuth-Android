@@ -11,116 +11,88 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package net.openid.appauthdemo
 
-package net.openid.appauthdemo;
-
-import android.annotation.SuppressLint;
-import android.net.Uri;
-import android.util.Log;
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
-
-import net.openid.appauth.Preconditions;
-import net.openid.appauth.connectivity.ConnectionBuilder;
-
-import java.io.IOException;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.security.KeyManagementException;
-import java.security.NoSuchAlgorithmException;
-import java.security.cert.X509Certificate;
-import java.util.concurrent.TimeUnit;
-import javax.net.ssl.HostnameVerifier;
-import javax.net.ssl.HttpsURLConnection;
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.SSLSession;
-import javax.net.ssl.TrustManager;
-import javax.net.ssl.X509TrustManager;
+import android.annotation.SuppressLint
+import android.net.Uri
+import android.util.Log
+import net.openid.appauth.connectivity.ConnectionBuilder
+import java.io.IOException
+import java.net.HttpURLConnection
+import java.net.URL
+import java.security.NoSuchAlgorithmException
+import java.security.SecureRandom
+import java.security.cert.X509Certificate
+import javax.net.ssl.HostnameVerifier
+import javax.net.ssl.HttpsURLConnection
+import javax.net.ssl.SSLContext
+import javax.net.ssl.TrustManager
+import javax.net.ssl.X509TrustManager
+import kotlin.time.Duration.Companion.seconds
+import kotlin.time.DurationUnit.MILLISECONDS
 
 /**
- * An example implementation of {@link ConnectionBuilder} that permits connecting to http
+ * An example implementation of [ConnectionBuilder] that permits connecting to http
  * links, and ignores certificates for https connections. *THIS SHOULD NOT BE USED IN PRODUCTION
  * CODE*. It is intended to facilitate easier testing of AppAuth against development servers
  * only.
  */
-public final class ConnectionBuilderForTesting implements ConnectionBuilder {
+object ConnectionBuilderForTesting : ConnectionBuilder {
+    private const val TAG = "ConnBuilder"
 
-    public static final ConnectionBuilderForTesting INSTANCE = new ConnectionBuilderForTesting();
+    private val CONNECTION_TIMEOUT_MS = 15.seconds.toInt(MILLISECONDS)
+    private val READ_TIMEOUT_MS = 10.seconds.toInt(MILLISECONDS)
 
-    private static final String TAG = "ConnBuilder";
+    private const val HTTP = "http"
+    private const val HTTPS = "https"
 
-    private static final int CONNECTION_TIMEOUT_MS = (int) TimeUnit.SECONDS.toMillis(15);
-    private static final int READ_TIMEOUT_MS = (int) TimeUnit.SECONDS.toMillis(10);
-
-    private static final String HTTP = "http";
-    private static final String HTTPS = "https";
-
-    @SuppressLint({"TrustAllX509TrustManager", "CustomX509TrustManager"})
-    private static final TrustManager[] ANY_CERT_MANAGER = new TrustManager[] {
-            new X509TrustManager() {
-                public X509Certificate[] getAcceptedIssuers() {
-                    return null;
-                }
-
-                public void checkClientTrusted(X509Certificate[] certs, String authType) {}
-
-                public void checkServerTrusted(X509Certificate[] certs, String authType) {}
+    @SuppressLint("TrustAllX509TrustManager", "CustomX509TrustManager")
+    private val ANY_CERT_MANAGER: Array<TrustManager> = arrayOf(
+        object : X509TrustManager {
+            override fun getAcceptedIssuers(): Array<X509Certificate>? {
+                return null
             }
-    };
+
+            override fun checkClientTrusted(
+                certs: Array<X509Certificate>,
+                authType: String
+            ) {
+            }
+
+            override fun checkServerTrusted(
+                certs: Array<X509Certificate>,
+                authType: String
+            ) {
+            }
+        }
+    )
 
     @SuppressLint("BadHostnameVerifier")
-    private static final HostnameVerifier ANY_HOSTNAME_VERIFIER = new HostnameVerifier() {
-        public boolean verify(String hostname, SSLSession session) {
-            return true;
-        }
-    };
+    private val ANY_HOSTNAME_VERIFIER = HostnameVerifier { _, _ -> true }
 
-    @Nullable
-    private static final SSLContext TRUSTING_CONTEXT;
-
-    static {
-        SSLContext context;
-        try {
-            context = SSLContext.getInstance("SSL");
-        } catch (NoSuchAlgorithmException e) {
-            Log.e("ConnBuilder", "Unable to acquire SSL context");
-            context = null;
-        }
-
-        SSLContext initializedContext = null;
-        if (context != null) {
-            try {
-                context.init(null, ANY_CERT_MANAGER, new java.security.SecureRandom());
-                initializedContext = context;
-            } catch (KeyManagementException e) {
-                Log.e(TAG, "Failed to initialize trusting SSL context");
-            }
-        }
-
-        TRUSTING_CONTEXT = initializedContext;
+    private val TRUSTING_CONTEXT = try {
+        SSLContext.getInstance("SSL")
+    } catch (_: NoSuchAlgorithmException) {
+        Log.e(TAG, "Unable to acquire SSL context")
+        null
+    }?.apply {
+        init(null, ANY_CERT_MANAGER, SecureRandom())
     }
 
-    private ConnectionBuilderForTesting() {
-        // no need to construct new instances
-    }
+    @Throws(IOException::class)
+    override fun openConnection(uri: Uri): HttpURLConnection {
+        require(HTTP == uri.scheme || HTTPS == uri.scheme) { "scheme or uri must be http or https" }
+        val conn = URL(uri.toString()).openConnection() as HttpURLConnection
 
-    @NonNull
-    @Override
-    public HttpURLConnection openConnection(@NonNull Uri uri) throws IOException {
-        Preconditions.checkNotNull(uri, "url must not be null");
-        Preconditions.checkArgument(HTTP.equals(uri.getScheme()) || HTTPS.equals(uri.getScheme()),
-                "scheme or uri must be http or https");
-        HttpURLConnection conn = (HttpURLConnection) new URL(uri.toString()).openConnection();
-        conn.setConnectTimeout(CONNECTION_TIMEOUT_MS);
-        conn.setReadTimeout(READ_TIMEOUT_MS);
-        conn.setInstanceFollowRedirects(false);
+        conn.connectTimeout = CONNECTION_TIMEOUT_MS
+        conn.readTimeout = READ_TIMEOUT_MS
+        conn.instanceFollowRedirects = false
 
-        if (conn instanceof HttpsURLConnection && TRUSTING_CONTEXT != null) {
-            HttpsURLConnection httpsConn = (HttpsURLConnection) conn;
-            httpsConn.setSSLSocketFactory(TRUSTING_CONTEXT.getSocketFactory());
-            httpsConn.setHostnameVerifier(ANY_HOSTNAME_VERIFIER);
+        if (conn is HttpsURLConnection && TRUSTING_CONTEXT != null) {
+            conn.sslSocketFactory = TRUSTING_CONTEXT.socketFactory
+            conn.hostnameVerifier = ANY_HOSTNAME_VERIFIER
         }
 
-        return conn;
+        return conn
     }
 }

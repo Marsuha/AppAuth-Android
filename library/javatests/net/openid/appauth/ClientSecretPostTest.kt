@@ -11,39 +11,36 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package net.openid.appauth
 
-package net.openid.appauth;
+import net.openid.appauth.TestValues.TEST_CLIENT_ID
+import net.openid.appauth.TestValues.TEST_CLIENT_SECRET
+import org.assertj.core.api.Assertions.assertThat
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
-import static net.openid.appauth.TestValues.TEST_CLIENT_ID;
-import static net.openid.appauth.TestValues.TEST_CLIENT_SECRET;
-import static org.assertj.core.api.Assertions.assertThat;
-
-import java.util.Map;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.robolectric.RobolectricTestRunner;
-import org.robolectric.annotation.Config;
-
-@RunWith(RobolectricTestRunner.class)
-@Config(sdk = 16)
-public class ClientSecretPostTest {
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [16])
+class ClientSecretPostTest {
     @Test
-    public void testGetRequestParameters() throws Exception {
-        ClientSecretPost csp = new ClientSecretPost(TEST_CLIENT_SECRET);
-        Map<String, String> parameters = csp.getRequestParameters(TEST_CLIENT_ID);
-        assertThat(parameters).containsEntry(ClientSecretPost.PARAM_CLIENT_ID, TEST_CLIENT_ID);
+    @Throws(Exception::class)
+    fun testGetRequestParameters() {
+        val csp = ClientSecretPost(TEST_CLIENT_SECRET)
+        val parameters = csp.getRequestParameters(TEST_CLIENT_ID)
+
+        assertThat(parameters).containsEntry(ClientSecretPost.PARAM_CLIENT_ID, TEST_CLIENT_ID)
         assertThat(parameters).containsEntry(
-                ClientSecretPost.PARAM_CLIENT_SECRET, TEST_CLIENT_SECRET);
+            ClientSecretPost.PARAM_CLIENT_SECRET,
+            TEST_CLIENT_SECRET
+        )
     }
 
     @Test
-    public void testGetRequestHeaders() throws Exception {
-        ClientSecretPost csp = new ClientSecretPost(TEST_CLIENT_SECRET);
-        assertThat(csp.getRequestHeaders(TEST_CLIENT_ID)).isNull();
-    }
-
-    @Test(expected = NullPointerException.class)
-    public void testConstructor_withNull() {
-        new ClientSecretPost(null);
+    @Throws(Exception::class)
+    fun testGetRequestHeaders() {
+        val csp = ClientSecretPost(TEST_CLIENT_SECRET)
+        assertThat(csp.getRequestHeaders(TEST_CLIENT_ID)).isNull()
     }
 }

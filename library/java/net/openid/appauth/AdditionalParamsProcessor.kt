@@ -11,90 +11,55 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package net.openid.appauth
 
-package net.openid.appauth;
-
-import static net.openid.appauth.Preconditions.checkArgument;
-import static net.openid.appauth.Preconditions.checkNotNull;
-
-import android.net.Uri;
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
-
-import org.json.JSONException;
-import org.json.JSONObject;
-
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.Set;
+import android.net.Uri
+import org.json.JSONException
+import org.json.JSONObject
 
 /**
- * Utility methods for handling additional parameters in requests and responses.
+ * Validates additional parameters to ensure they do not conflict with built-in parameters.
+ *
+ * @param builtInParams A set of built-in parameter names.
+ * @return A map of validated additional parameters.
+ * @throws IllegalArgumentException if any parameter conflicts with a built-in parameter.
  */
-class AdditionalParamsProcessor {
+internal fun Map<String, String>?.checkAdditionalParams(
+    builtInParams: Set<String>
+): Map<String, String> {
+    if (this == null) return emptyMap()
 
-    static Set<String> builtInParams(String... params) {
-        if (params == null || params.length == 0) {
-            return Collections.emptySet();
+    keys.onEach {
+        require(!builtInParams.contains(it)) {
+            "Parameter $it is directly supported via the authorization request builder, " +
+                    "use the builder method instead"
         }
-
-        return Collections.unmodifiableSet(new HashSet<>(Arrays.asList(params)));
     }
 
-    static Map<String, String> checkAdditionalParams(
-            @Nullable Map<String, String> params,
-            @NonNull Set<String> builtInParams) {
-        if (params == null) {
-            return Collections.emptyMap();
-        }
-
-        Map<String, String> additionalParams = new LinkedHashMap<>();
-        for (Map.Entry<String, String> entry : params.entrySet()) {
-            String key = entry.getKey();
-            String value = entry.getValue();
-            checkNotNull(key, "additional parameter keys cannot be null");
-            checkNotNull(value, "additional parameter values cannot be null");
-
-            checkArgument(!builtInParams.contains(key),
-                    "Parameter %s is directly supported via the authorization request builder, "
-                            + "use the builder method instead",
-                    key);
-            additionalParams.put(key, value);
-        }
-
-        return Collections.unmodifiableMap(additionalParams);
-    }
-
-    static Map<String, String> extractAdditionalParams(
-            JSONObject json,
-            Set<String> builtInParams) throws JSONException {
-        Map<String, String> additionalParams = new LinkedHashMap<>();
-
-        Iterator<String> keysIter = json.keys();
-        while (keysIter.hasNext()) {
-            String key = keysIter.next();
-            if (!builtInParams.contains(key)) {
-                additionalParams.put(key, json.get(key).toString());
-            }
-        }
-        return additionalParams;
-    }
-
-    static Map<String, String> extractAdditionalParams(
-            Uri uri,
-            Set<String> builtInParams) {
-        Map<String, String> additionalParams = new LinkedHashMap<>();
-        for (String param : uri.getQueryParameterNames()) {
-            if (!builtInParams.contains(param)) {
-                additionalParams.put(param, uri.getQueryParameter(param));
-            }
-        }
-        return additionalParams;
-    }
-
-    private AdditionalParamsProcessor() {}
+    return this
 }
+
+/**
+ * Extracts additional parameters from a JSON object, excluding built-in parameters.
+ *
+ * @param builtInParams A set of built-in parameter names.
+ * @return A map of additional parameters extracted from the JSON object.
+ * @throws JSONException if an error occurs while parsing the JSON object.
+ */
+@Throws(JSONException::class)
+internal fun JSONObject.extractAdditionalParams(builtInParams: Set<String>): Map<String, String> =
+    keys().asSequence()
+        .filterNot { builtInParams.contains(it) }
+        .associateWith { get(it).toString() }
+
+/**
+ * Extracts additional parameters from a URI, excluding built-in parameters.
+ *
+ * @param builtInParams A set of built-in parameter names.
+ * @return A map of additional parameters extracted from the URI.
+ */
+internal fun Uri.extractAdditionalParams(builtInParams: Set<String>): Map<String, String> =
+    getQueryParameterNames().asSequence()
+        .filterNot { builtInParams.contains(it) }
+        .filter { getQueryParameter(it) != null }
+        .associateWith { getQueryParameter(it)!! }

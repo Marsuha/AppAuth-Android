@@ -11,45 +11,46 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package net.openid.appauth.browser
 
-package net.openid.appauth.browser;
+import net.openid.appauth.browser.Browsers.Chrome
+import net.openid.appauth.browser.Browsers.Firefox
+import net.openid.appauth.browser.Browsers.SBrowser
+import org.assertj.core.api.Assertions.assertThat
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
-import static org.assertj.core.api.Assertions.assertThat;
-
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.robolectric.RobolectricTestRunner;
-import org.robolectric.annotation.Config;
-
-@RunWith(RobolectricTestRunner.class)
-@Config(sdk = 16)
-public class BrowserDenyListTest {
-
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [16])
+class BrowserDenyListTest {
     @Test
-    public void testMatches_emptyDenyList() {
-        BrowserDenyList denyList = new BrowserDenyList();
-        assertThat(denyList.matches(Browsers.Chrome.customTab("46"))).isTrue();
-        assertThat(denyList.matches(Browsers.Firefox.standaloneBrowser("10"))).isTrue();
-        assertThat(denyList.matches(Browsers.SBrowser.standaloneBrowser("11"))).isTrue();
+    fun testMatches_emptyDenyList() {
+        val denyList = BrowserDenyList()
+        assertThat(denyList.matches(Chrome.customTab("46"))).isTrue()
+        assertThat(denyList.matches(Firefox.standaloneBrowser("10"))).isTrue()
+        assertThat(denyList.matches(SBrowser.standaloneBrowser("11"))).isTrue()
     }
 
     @Test
-    public void testMatches_singleBrowser() {
-        BrowserDenyList denyList = new BrowserDenyList(VersionedBrowserMatcher.FIREFOX_BROWSER);
-        assertThat(denyList.matches(Browsers.Chrome.customTab("46"))).isTrue();
-        assertThat(denyList.matches(Browsers.Firefox.standaloneBrowser("10"))).isFalse();
-        assertThat(denyList.matches(Browsers.SBrowser.standaloneBrowser("11"))).isTrue();
+    fun testMatches_singleBrowser() {
+        val denyList = BrowserDenyList(VersionedBrowserMatcher.FIREFOX_BROWSER)
+        assertThat(denyList.matches(Chrome.customTab("46"))).isTrue()
+        assertThat(denyList.matches(Firefox.standaloneBrowser("10"))).isFalse()
+        assertThat(denyList.matches(SBrowser.standaloneBrowser("11"))).isTrue()
     }
 
     @Test
-    public void testMatches_customTabs() {
-        BrowserDenyList denyList = new BrowserDenyList(
-                VersionedBrowserMatcher.CHROME_CUSTOM_TAB,
-                VersionedBrowserMatcher.SAMSUNG_CUSTOM_TAB);
+    fun testMatches_customTabs() {
+        val denyList = BrowserDenyList(
+            VersionedBrowserMatcher.CHROME_CUSTOM_TAB,
+            VersionedBrowserMatcher.SAMSUNG_CUSTOM_TAB
+        )
 
-        assertThat(denyList.matches(Browsers.Chrome.standaloneBrowser("46"))).isTrue();
-        assertThat(denyList.matches(Browsers.Chrome.customTab("46"))).isFalse();
-        assertThat(denyList.matches(Browsers.SBrowser.standaloneBrowser("11"))).isTrue();
-        assertThat(denyList.matches(Browsers.SBrowser.customTab("11"))).isFalse();
+        assertThat(denyList.matches(Chrome.standaloneBrowser("46"))).isTrue()
+        assertThat(denyList.matches(Chrome.customTab("46"))).isFalse()
+        assertThat(denyList.matches(SBrowser.standaloneBrowser("11"))).isTrue()
+        assertThat(denyList.matches(SBrowser.customTab("11"))).isFalse()
     }
 }

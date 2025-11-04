@@ -11,21 +11,13 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package net.openid.appauth
 
-package net.openid.appauth;
+import java.util.concurrent.atomic.AtomicLong
 
-import java.util.concurrent.atomic.AtomicLong;
+internal class TestClock(time: Long) : Clock {
+    val currentTime: AtomicLong = AtomicLong(time)
 
-class TestClock implements Clock {
-
-    public final AtomicLong currentTime = new AtomicLong();
-
-    TestClock(long time) {
-        currentTime.set(time);
-    }
-
-    @Override
-    public long getCurrentTimeMillis() {
-        return currentTime.get();
-    }
+    override val currentTimeMillis: Long
+        get() = currentTime.get()
 }

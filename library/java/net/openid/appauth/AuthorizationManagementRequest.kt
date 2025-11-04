@@ -11,40 +11,37 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package net.openid.appauth
 
-package net.openid.appauth;
-
-import android.net.Uri;
-
-import org.json.JSONObject;
+import android.net.Uri
+import org.json.JSONObject
 
 /**
  * A base request for session management models
- * {@link AuthorizationRequest}
- * {@link EndSessionRequest}
+ * [AuthorizationRequest]
+ * [EndSessionRequest]
  */
-public interface AuthorizationManagementRequest {
-
+sealed interface AuthorizationManagementRequest {
     /**
      * Produces a JSON representation of the request for persistent storage or local transmission
      * (e.g. between activities).
      */
-    JSONObject jsonSerialize();
+    fun jsonSerialize(): JSONObject
 
     /**
      * Produces a JSON string representation of the request for persistent storage or
      * local transmission (e.g. between activities). This method is just a convenience wrapper
-     * for {@link #jsonSerialize()}, converting the JSON object to its string form.
+     * for [.jsonSerialize], converting the JSON object to its string form.
      */
-    String jsonSerializeString();
+    fun jsonSerializeString(): String
 
     /**
      * An opaque value used by the client to maintain state between the request and callback.
      */
-    String getState();
+    val state: String?
 
     /**
      * Produces a request URI, that can be used to dispatch the request.
      */
-    Uri toUri();
+    fun toUri(): Uri?
 }

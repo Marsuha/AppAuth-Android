@@ -11,48 +11,44 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package net.openid.appauthdemo
 
-package net.openid.appauthdemo;
-
-import android.app.Activity;
-import android.content.Intent;
-import android.net.Uri;
-import android.os.Bundle;
-import android.util.Log;
-import android.view.View;
-import android.widget.Button;
-import android.widget.ImageView;
-import android.widget.TextView;
-import android.widget.Toast;
-import androidx.annotation.MainThread;
-import androidx.annotation.Nullable;
-import androidx.annotation.WorkerThread;
-import androidx.appcompat.app.AppCompatActivity;
-import com.google.android.material.snackbar.Snackbar;
-
-import net.openid.appauth.AppAuthConfiguration;
-import net.openid.appauth.AuthState;
-import net.openid.appauth.AuthorizationException;
-import net.openid.appauth.AuthorizationResponse;
-import net.openid.appauth.AuthorizationService;
-import net.openid.appauth.AuthorizationServiceConfiguration;
-import net.openid.appauth.AuthorizationServiceDiscovery;
-import net.openid.appauth.ClientAuthentication;
-import net.openid.appauth.EndSessionRequest;
-import net.openid.appauth.TokenRequest;
-import net.openid.appauth.TokenResponse;
-import okio.Okio;
-import org.joda.time.format.DateTimeFormat;
-import org.json.JSONException;
-import org.json.JSONObject;
-
-import java.io.IOException;
-import java.net.HttpURLConnection;
-import java.nio.charset.Charset;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicReference;
-
+import android.content.Intent
+import android.os.Bundle
+import android.util.Log
+import android.view.View
+import android.widget.Button
+import android.widget.TextView
+import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult
+import androidx.annotation.MainThread
+import androidx.appcompat.app.AppCompatActivity
+import androidx.core.net.toUri
+import androidx.lifecycle.lifecycleScope
+import com.bumptech.glide.Glide
+import com.google.android.material.snackbar.Snackbar
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import net.openid.appauth.AppAuthConfiguration
+import net.openid.appauth.AuthState
+import net.openid.appauth.AuthState.FreshTokenResult
+import net.openid.appauth.AuthorizationException
+import net.openid.appauth.AuthorizationResponse
+import net.openid.appauth.AuthorizationService
+import net.openid.appauth.ClientAuthentication
+import net.openid.appauth.ClientAuthentication.UnsupportedAuthenticationMethod
+import net.openid.appauth.EndSessionRequest
+import net.openid.appauth.TokenRequest
+import net.openid.appauth.TokenResponse
+import okio.buffer
+import okio.source
+import org.joda.time.format.DateTimeFormat
+import org.json.JSONException
+import org.json.JSONObject
+import java.io.IOException
+import java.nio.charset.Charset
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Displays the authorized state of the user. This activity is provided with the outcome of the
@@ -61,378 +57,406 @@ import java.util.concurrent.atomic.AtomicReference;
  * additional post-authorization operations if available, such as fetching user info and refreshing
  * access tokens.
  */
-public class TokenActivity extends AppCompatActivity {
-    private static final String TAG = "TokenActivity";
+class TokenActivity : AppCompatActivity() {
+    private val authService by lazy {
+        AuthorizationService(
+            context = this,
+            clientConfiguration = AppAuthConfiguration.Builder()
+                .setConnectionBuilder(configuration.connectionBuilder)
+                .build()
+        )
+    }
+    private val stateManager by lazy { AuthStateManager.getInstance(this) }
+    private val userInfoJsonRef = AtomicReference<JSONObject?>()
 
-    private static final String KEY_USER_INFO = "userInfo";
+    private val configuration by lazy { Configuration.getInstance(this) }
 
-    private static final int END_SESSION_REQUEST_CODE = 911;
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
 
-    private AuthorizationService mAuthService;
-    private AuthStateManager mStateManager;
-    private final AtomicReference<JSONObject> mUserInfoJson = new AtomicReference<>();
-    private ExecutorService mExecutor;
-    private Configuration mConfiguration;
-
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-
-        mStateManager = AuthStateManager.getInstance(this);
-        mExecutor = Executors.newSingleThreadExecutor();
-        mConfiguration = Configuration.getInstance(this);
-
-        Configuration config = Configuration.getInstance(this);
-        if (config.hasConfigurationChanged()) {
+        if (configuration.hasConfigurationChanged()) {
             Toast.makeText(
-                    this,
-                    "Configuration change detected",
-                    Toast.LENGTH_SHORT)
-                    .show();
-            signOut();
-            return;
+                this,
+                "Configuration change detected",
+                Toast.LENGTH_SHORT
+            ).show()
+
+            signOut()
+            return
         }
 
-        mAuthService = new AuthorizationService(
-                this,
-                new AppAuthConfiguration.Builder()
-                        .setConnectionBuilder(config.getConnectionBuilder())
-                        .build());
+        setContentView(R.layout.activity_token)
+        displayLoading("Restoring state...")
 
-        setContentView(R.layout.activity_token);
-        displayLoading("Restoring state...");
-
-        if (savedInstanceState != null) {
+        savedInstanceState?.let { state ->
             try {
-                mUserInfoJson.set(new JSONObject(savedInstanceState.getString(KEY_USER_INFO)));
-            } catch (JSONException ex) {
-                Log.e(TAG, "Failed to parse saved user info JSON, discarding", ex);
+                state.getString(KEY_USER_INFO)?.let { userInfoJsonRef.set(JSONObject(it)) }
+            } catch (ex: JSONException) {
+                Log.e(TAG, "Failed to parse saved user info JSON, discarding", ex)
             }
         }
     }
 
-    @Override
-    protected void onStart() {
-        super.onStart();
+    override fun onStart() {
+        super.onStart()
 
-        if (mExecutor.isShutdown()) {
-            mExecutor = Executors.newSingleThreadExecutor();
-        }
+        lifecycleScope.launch {
+            if (stateManager.getCurrent().isAuthorized) {
+                displayAuthorized()
+                return@launch
+            }
 
-        if (mStateManager.getCurrent().isAuthorized()) {
-            displayAuthorized();
-            return;
-        }
+            // the stored AuthState is incomplete, so check if we are currently receiving the result of
+            // the authorization flow from the browser.
+            val response = AuthorizationResponse.fromIntent(intent)
+            val ex = AuthorizationException.fromIntent(intent)
 
-        // the stored AuthState is incomplete, so check if we are currently receiving the result of
-        // the authorization flow from the browser.
-        AuthorizationResponse response = AuthorizationResponse.fromIntent(getIntent());
-        AuthorizationException ex = AuthorizationException.fromIntent(getIntent());
+            if (response != null || ex != null) {
+                stateManager.updateAfterAuthorization(response, ex)
+            }
 
-        if (response != null || ex != null) {
-            mStateManager.updateAfterAuthorization(response, ex);
-        }
+            when {
+                response != null && response.authorizationCode != null -> {
+                    // authorization code exchange is required
+                    stateManager.updateAfterAuthorization(response, ex)
+                    lifecycleScope.launch { exchangeAuthorizationCode(response) }
+                }
 
-        if (response != null && response.authorizationCode != null) {
-            // authorization code exchange is required
-            mStateManager.updateAfterAuthorization(response, ex);
-            exchangeAuthorizationCode(response);
-        } else if (ex != null) {
-            displayNotAuthorized("Authorization flow failed: " + ex.getMessage());
-        } else {
-            displayNotAuthorized("No authorization state retained - reauthorization required");
+                ex != null -> {
+                    displayNotAuthorized("Authorization flow failed: " + ex.message)
+                }
+
+                else -> {
+                    displayNotAuthorized("No authorization state retained - reauthorization required")
+                }
+            }
         }
     }
 
-    @Override
-    protected void onSaveInstanceState(Bundle state) {
-        super.onSaveInstanceState(state);
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
         // user info is retained to survive activity restarts, such as when rotating the
         // device or switching apps. This isn't essential, but it helps provide a less
         // jarring UX when these events occur - data does not just disappear from the view.
-        if (mUserInfoJson.get() != null) {
-            state.putString(KEY_USER_INFO, mUserInfoJson.toString());
+        if (userInfoJsonRef.get() != null) {
+            outState.putString(KEY_USER_INFO, userInfoJsonRef.toString())
         }
     }
 
-    @Override
-    protected void onDestroy() {
-        super.onDestroy();
-        mAuthService.dispose();
-        mExecutor.shutdownNow();
+    override fun onDestroy() {
+        authService.dispose()
+        super.onDestroy()
+        //mExecutor!!.shutdownNow()
     }
 
     @MainThread
-    private void displayNotAuthorized(String explanation) {
-        findViewById(R.id.not_authorized).setVisibility(View.VISIBLE);
-        findViewById(R.id.authorized).setVisibility(View.GONE);
-        findViewById(R.id.loading_container).setVisibility(View.GONE);
-
-        ((TextView)findViewById(R.id.explanation)).setText(explanation);
-        findViewById(R.id.reauth).setOnClickListener((View view) -> signOut());
+    private fun displayNotAuthorized(explanation: String?) {
+        findViewById<View>(R.id.not_authorized).visibility = View.VISIBLE
+        findViewById<View>(R.id.authorized).visibility = View.GONE
+        findViewById<View>(R.id.loading_container).visibility = View.GONE
+        findViewById<TextView>(R.id.explanation).text = explanation
+        findViewById<Button>(R.id.reauth).setOnClickListener { signOut() }
     }
 
     @MainThread
-    private void displayLoading(String message) {
-        findViewById(R.id.loading_container).setVisibility(View.VISIBLE);
-        findViewById(R.id.authorized).setVisibility(View.GONE);
-        findViewById(R.id.not_authorized).setVisibility(View.GONE);
-
-        ((TextView)findViewById(R.id.loading_description)).setText(message);
+    private fun displayLoading(message: String?) {
+        findViewById<View>(R.id.loading_container).visibility = View.VISIBLE
+        findViewById<View>(R.id.authorized).visibility = View.GONE
+        findViewById<View>(R.id.not_authorized).visibility = View.GONE
+        findViewById<TextView>(R.id.loading_description).text = message
     }
 
     @MainThread
-    private void displayAuthorized() {
-        findViewById(R.id.authorized).setVisibility(View.VISIBLE);
-        findViewById(R.id.not_authorized).setVisibility(View.GONE);
-        findViewById(R.id.loading_container).setVisibility(View.GONE);
+    private suspend fun displayAuthorized() {
+        findViewById<View>(R.id.authorized).visibility = View.VISIBLE
+        findViewById<View>(R.id.not_authorized).visibility = View.GONE
+        findViewById<View>(R.id.loading_container).visibility = View.GONE
 
-        AuthState state = mStateManager.getCurrent();
+        val state = stateManager.getCurrent()
+        val refreshTokenInfoView = findViewById<TextView>(R.id.refresh_token_info)
 
-        TextView refreshTokenInfoView = findViewById(R.id.refresh_token_info);
-        refreshTokenInfoView.setText((state.getRefreshToken() == null)
-                ? R.string.no_refresh_token_returned
-                : R.string.refresh_token_returned);
+        refreshTokenInfoView.setText(
+            if (state.refreshToken == null)
+                R.string.no_refresh_token_returned
+            else
+                R.string.refresh_token_returned
+        )
 
-        TextView idTokenInfoView = (TextView) findViewById(R.id.id_token_info);
-        idTokenInfoView.setText((state.getIdToken()) == null
-                ? R.string.no_id_token_returned
-                : R.string.id_token_returned);
+        val idTokenInfoView = findViewById<TextView>(R.id.id_token_info)
 
-        TextView accessTokenInfoView = (TextView) findViewById(R.id.access_token_info);
-        if (state.getAccessToken() == null) {
-            accessTokenInfoView.setText(R.string.no_access_token_returned);
+        idTokenInfoView.setText(
+            if ((state.idToken) == null)
+                R.string.no_id_token_returned
+            else
+                R.string.id_token_returned
+        )
+
+        val accessTokenInfoView = findViewById<TextView>(R.id.access_token_info)
+
+        if (state.accessToken == null) {
+            accessTokenInfoView.setText(R.string.no_access_token_returned)
         } else {
-            Long expiresAt = state.getAccessTokenExpirationTime();
-            if (expiresAt == null) {
-                accessTokenInfoView.setText(R.string.no_access_token_expiry);
-            } else if (expiresAt < System.currentTimeMillis()) {
-                accessTokenInfoView.setText(R.string.access_token_expired);
-            } else {
-                String template = getResources().getString(R.string.access_token_expires_at);
-                accessTokenInfoView.setText(String.format(template,
-                        DateTimeFormat.forPattern("yyyy-MM-dd HH:mm:ss ZZ").print(expiresAt)));
+            val expiresAt = state.accessTokenExpirationTime
+
+            when {
+                expiresAt == null -> {
+                    accessTokenInfoView.setText(R.string.no_access_token_expiry)
+                }
+
+                expiresAt < System.currentTimeMillis() -> {
+                    accessTokenInfoView.setText(R.string.access_token_expired)
+                }
+
+                else -> {
+                    val template = resources.getString(R.string.access_token_expires_at)
+
+                    accessTokenInfoView.text = String.format(
+                        template,
+                        DateTimeFormat.forPattern("yyyy-MM-dd HH:mm:ss ZZ").print(expiresAt)
+                    )
+                }
             }
         }
 
-        Button refreshTokenButton = (Button) findViewById(R.id.refresh_token);
-        refreshTokenButton.setVisibility(state.getRefreshToken() != null
-                ? View.VISIBLE
-                : View.GONE);
-        refreshTokenButton.setOnClickListener((View view) -> refreshAccessToken());
+        val refreshTokenButton = findViewById<Button>(R.id.refresh_token)
+        refreshTokenButton.visibility = state.refreshToken?.let { View.VISIBLE } ?: View.GONE
+        refreshTokenButton.setOnClickListener { lifecycleScope.launch { refreshAccessToken() } }
 
-        Button viewProfileButton = (Button) findViewById(R.id.view_profile);
+        val viewProfileButton = findViewById<Button>(R.id.view_profile)
+        val discoveryDoc = state.authorizationServiceConfiguration?.discoveryDoc
 
-        AuthorizationServiceDiscovery discoveryDoc =
-                state.getAuthorizationServiceConfiguration().discoveryDoc;
-        if ((discoveryDoc == null || discoveryDoc.getUserinfoEndpoint() == null)
-                && mConfiguration.getUserInfoEndpointUri() == null) {
-            viewProfileButton.setVisibility(View.GONE);
+        if ((discoveryDoc == null || discoveryDoc.userinfoEndpoint == null)
+            && configuration.userInfoEndpointUri == null
+        ) {
+            viewProfileButton.visibility = View.GONE
         } else {
-            viewProfileButton.setVisibility(View.VISIBLE);
-            viewProfileButton.setOnClickListener((View view) -> fetchUserInfo());
+            viewProfileButton.visibility = View.VISIBLE
+            viewProfileButton.setOnClickListener { fetchUserInfo() }
         }
 
-        findViewById(R.id.sign_out).setOnClickListener((View view) -> endSession());
+        findViewById<Button>(R.id.sign_out).setOnClickListener {
+            lifecycleScope.launch { endSession() }
+        }
 
-        View userInfoCard = findViewById(R.id.userinfo_card);
-        JSONObject userInfo = mUserInfoJson.get();
+        val userInfoCard = findViewById<View>(R.id.userinfo_card)
+        val userInfo = userInfoJsonRef.get()
+
         if (userInfo == null) {
-            userInfoCard.setVisibility(View.INVISIBLE);
+            userInfoCard.visibility = View.INVISIBLE
         } else {
             try {
-                String name = "???";
-                if (userInfo.has("name")) {
-                    name = userInfo.getString("name");
-                }
-                ((TextView) findViewById(R.id.userinfo_name)).setText(name);
+                var name = "???"
+                if (userInfo.has("name")) name = userInfo.getString("name")
+                findViewById<TextView>(R.id.userinfo_name).text = name
 
                 if (userInfo.has("picture")) {
-                    GlideApp.with(TokenActivity.this)
-                            .load(Uri.parse(userInfo.getString("picture")))
-                            .fitCenter()
-                            .into((ImageView) findViewById(R.id.userinfo_profile));
+                    Glide.with(this@TokenActivity)
+                        .load(userInfo.getString("picture").toUri())
+                        .fitCenter()
+                        .into(findViewById(R.id.userinfo_profile))
                 }
 
-                ((TextView) findViewById(R.id.userinfo_json)).setText(mUserInfoJson.toString());
-                userInfoCard.setVisibility(View.VISIBLE);
-            } catch (JSONException ex) {
-                Log.e(TAG, "Failed to read userinfo JSON", ex);
+                findViewById<TextView>(R.id.userinfo_json).text = userInfoJsonRef.toString()
+                userInfoCard.visibility = View.VISIBLE
+            } catch (ex: JSONException) {
+                Log.e(TAG, "Failed to read userinfo JSON", ex)
             }
         }
     }
 
     @MainThread
-    private void refreshAccessToken() {
-        displayLoading("Refreshing access token");
-        performTokenRequest(
-                mStateManager.getCurrent().createTokenRefreshRequest(),
-                this::handleAccessTokenResponse);
-    }
+    private suspend fun refreshAccessToken() {
+        displayLoading("Refreshing access token")
 
-    @MainThread
-    private void exchangeAuthorizationCode(AuthorizationResponse authorizationResponse) {
-        displayLoading("Exchanging authorization code");
-        performTokenRequest(
-                authorizationResponse.createTokenExchangeRequest(),
-                this::handleCodeExchangeResponse);
-    }
-
-    @MainThread
-    private void performTokenRequest(
-            TokenRequest request,
-            AuthorizationService.TokenResponseCallback callback) {
-        ClientAuthentication clientAuthentication;
         try {
-            clientAuthentication = mStateManager.getCurrent().getClientAuthentication();
-        } catch (ClientAuthentication.UnsupportedAuthenticationMethod ex) {
-            Log.d(TAG, "Token request cannot be made, client authentication for the token "
-                            + "endpoint could not be constructed (%s)", ex);
-            displayNotAuthorized("Client authentication method is unsupported");
-            return;
+            val response = performTokenRequest(
+                stateManager.getCurrent().createTokenRefreshRequest(),
+            )
+
+            response?.let { handleAccessTokenResponse(it, null) }
+        } catch (ex: AuthorizationException) {
+            handleAccessTokenResponse(null, ex)
+        }
+    }
+
+    @MainThread
+    private suspend fun exchangeAuthorizationCode(authorizationResponse: AuthorizationResponse) {
+        displayLoading("Exchanging authorization code")
+
+        try {
+            val response = performTokenRequest(
+                authorizationResponse.createTokenExchangeRequest()
+            )
+
+            response?.let { handleCodeExchangeResponse(it, null) }
+        } catch (ex: AuthorizationException) {
+            handleCodeExchangeResponse(null, ex)
+        }
+    }
+
+    @MainThread
+    private suspend fun performTokenRequest(request: TokenRequest): TokenResponse? {
+        val clientAuthentication: ClientAuthentication?
+
+        try {
+            clientAuthentication = stateManager.getCurrent().clientAuthentication
+        } catch (ex: UnsupportedAuthenticationMethod) {
+            Log.d(
+                TAG,
+                "Token request cannot be made, client authentication for the token "
+                        + "endpoint could not be constructed (%s)",
+                ex
+            )
+
+            displayNotAuthorized("Client authentication method is unsupported")
+            return null
         }
 
-        mAuthService.performTokenRequest(
-                request,
-                clientAuthentication,
-                callback);
+        return authService.performTokenRequest(request, clientAuthentication)
     }
 
-    @WorkerThread
-    private void handleAccessTokenResponse(
-            @Nullable TokenResponse tokenResponse,
-            @Nullable AuthorizationException authException) {
-        mStateManager.updateAfterTokenResponse(tokenResponse, authException);
-        runOnUiThread(this::displayAuthorized);
+    private suspend fun handleAccessTokenResponse(
+        tokenResponse: TokenResponse?,
+        authException: AuthorizationException?
+    ) {
+        stateManager.updateAfterTokenResponse(tokenResponse, authException)
+        displayAuthorized()
     }
 
-    @WorkerThread
-    private void handleCodeExchangeResponse(
-            @Nullable TokenResponse tokenResponse,
-            @Nullable AuthorizationException authException) {
+    private suspend fun handleCodeExchangeResponse(
+        tokenResponse: TokenResponse?,
+        authException: AuthorizationException?
+    ) = withContext(Dispatchers.IO) {
+        stateManager.updateAfterTokenResponse(tokenResponse, authException)
 
-        mStateManager.updateAfterTokenResponse(tokenResponse, authException);
-        if (!mStateManager.getCurrent().isAuthorized()) {
-            final String message = "Authorization Code exchange failed"
-                    + ((authException != null) ? authException.error : "");
+        if (!stateManager.getCurrent().isAuthorized) {
+            val message = "Authorization Code exchange failed ${(authException?.error ?: "")}"
 
             // WrongThread inference is incorrect for lambdas
-            //noinspection WrongThread
-            runOnUiThread(() -> displayNotAuthorized(message));
+            displayNotAuthorized(message)
         } else {
-            runOnUiThread(this::displayAuthorized);
+            displayAuthorized()
         }
     }
 
     /**
-     * Demonstrates the use of {@link AuthState#performActionWithFreshTokens} to retrieve
-     * user info from the IDP's user info endpoint. This callback will negotiate a new access
-     * token / id token for use in a follow-up action, or provide an error if this fails.
+     * Demonstrates the use of [AuthState.performActionWithFreshTokens] to retrieve user info from
+     * the IDP's user info endpoint. This method will negotiate a new access token and id token if
+     * necessary for the follow-up action.
      */
     @MainThread
-    private void fetchUserInfo() {
-        displayLoading("Fetching user info");
-        mStateManager.getCurrent().performActionWithFreshTokens(mAuthService, this::fetchUserInfo);
+    private fun fetchUserInfo() {
+        displayLoading("Fetching user info")
+        lifecycleScope.launch {
+            stateManager.getCurrent()
+                .performActionWithFreshTokens(service = authService, action = ::fetchUserInfo)
+        }
     }
 
+    @Suppress("unused")
     @MainThread
-    private void fetchUserInfo(String accessToken, String idToken, AuthorizationException ex) {
-        if (ex != null) {
-            Log.e(TAG, "Token refresh failed when fetching user info");
-            mUserInfoJson.set(null);
-            runOnUiThread(this::displayAuthorized);
-            return;
-        }
-
-        AuthorizationServiceDiscovery discovery =
-                mStateManager.getCurrent()
-                        .getAuthorizationServiceConfiguration()
-                        .discoveryDoc;
-
-        Uri userInfoEndpoint =
-                    mConfiguration.getUserInfoEndpointUri() != null
-                        ? Uri.parse(mConfiguration.getUserInfoEndpointUri().toString())
-                        : Uri.parse(discovery.getUserinfoEndpoint().toString());
-
-        mExecutor.submit(() -> {
-            try {
-                HttpURLConnection conn = mConfiguration.getConnectionBuilder().openConnection(
-                        userInfoEndpoint);
-                conn.setRequestProperty("Authorization", "Bearer " + accessToken);
-                conn.setInstanceFollowRedirects(false);
-                String response = Okio.buffer(Okio.source(conn.getInputStream()))
-                        .readString(Charset.forName("UTF-8"));
-                mUserInfoJson.set(new JSONObject(response));
-            } catch (IOException ioEx) {
-                Log.e(TAG, "Network error when querying userinfo endpoint", ioEx);
-                showSnackbar("Fetching user info failed");
-            } catch (JSONException jsonEx) {
-                Log.e(TAG, "Failed to parse userinfo response");
-                showSnackbar("Failed to parse user info");
+    private suspend fun fetchUserInfo(result: FreshTokenResult) {
+        when (result) {
+            is FreshTokenResult.Failure -> {
+                Log.e(TAG, "Token refresh failed when fetching user info")
+                userInfoJsonRef.set(null)
+                return displayAuthorized()
             }
 
-            runOnUiThread(this::displayAuthorized);
-        });
-    }
+            is FreshTokenResult.Success -> {
+                val discovery = stateManager.getCurrent()
+                    .authorizationServiceConfiguration!!
+                    .discoveryDoc
 
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == END_SESSION_REQUEST_CODE && resultCode == Activity.RESULT_OK) {
-            signOut();
-            finish();
-        } else {
-            displayEndSessionCancelled();
+                val userInfoEndpoint = if (configuration.userInfoEndpointUri != null)
+                    configuration.userInfoEndpointUri.toString().toUri()
+                else
+                    discovery!!.userinfoEndpoint.toString().toUri()
+
+                try {
+                    val conn = configuration.connectionBuilder.openConnection(userInfoEndpoint)
+                    conn.setRequestProperty("Authorization", "Bearer ${result.accessToken}")
+                    conn.instanceFollowRedirects = false
+
+                    val response = withContext(Dispatchers.IO) {
+                        conn.inputStream.source().buffer()
+                            .readString(Charset.forName("UTF-8"))
+                    }
+
+                    userInfoJsonRef.set(JSONObject(response))
+                } catch (ioEx: IOException) {
+                    Log.e(TAG, "Network error when querying userinfo endpoint", ioEx)
+                    showSnackbar("Fetching user info failed")
+                } catch (_: JSONException) {
+                    Log.e(TAG, "Failed to parse userinfo response")
+                    showSnackbar("Failed to parse user info")
+                }
+
+                displayAuthorized()
+            }
         }
     }
 
-    private void displayEndSessionCancelled() {
-        Snackbar.make(findViewById(R.id.coordinator),
+    private fun displayEndSessionCancelled() {
+        Snackbar.make(
+            findViewById(R.id.coordinator),
             "Sign out canceled",
-            Snackbar.LENGTH_SHORT)
-                .show();
+            Snackbar.LENGTH_SHORT
+        ).show()
     }
 
     @MainThread
-    private void showSnackbar(String message) {
-        Snackbar.make(findViewById(R.id.coordinator),
-                message,
-                Snackbar.LENGTH_SHORT)
-                .show();
+    private fun showSnackbar(message: String) {
+        Snackbar.make(
+            findViewById(R.id.coordinator),
+            message,
+            Snackbar.LENGTH_SHORT
+        ).show()
     }
 
     @MainThread
-    private void endSession() {
-        AuthState currentState = mStateManager.getCurrent();
-        AuthorizationServiceConfiguration config =
-                currentState.getAuthorizationServiceConfiguration();
-        if (config.endSessionEndpoint != null) {
-            Intent endSessionIntent = mAuthService.getEndSessionRequestIntent(
-                    new EndSessionRequest.Builder(config)
-                        .setIdTokenHint(currentState.getIdToken())
-                        .setPostLogoutRedirectUri(mConfiguration.getEndSessionRedirectUri())
-                        .build());
-            startActivityForResult(endSessionIntent, END_SESSION_REQUEST_CODE);
+    private suspend fun endSession() {
+        val currentState = stateManager.getCurrent()
+        val config = currentState.authorizationServiceConfiguration
+        if (config!!.endSessionEndpoint != null) {
+            val endSessionIntent = authService.getEndSessionRequestIntent(
+                EndSessionRequest.Builder(config)
+                    .setIdTokenHint(currentState.idToken)
+                    .setPostLogoutRedirectUri(configuration.endSessionRedirectUri)
+                    .build()
+            )
+
+            registerForActivityResult(StartActivityForResult()) { result ->
+                if (result.resultCode == RESULT_OK) {
+                    signOut()
+                    finish()
+                } else {
+                    displayEndSessionCancelled()
+                }
+            }.launch(endSessionIntent)
         } else {
-            signOut();
+            signOut()
         }
     }
 
     @MainThread
-    private void signOut() {
+    private fun signOut() = lifecycleScope.launch {
         // discard the authorization and token state, but retain the configuration and
         // dynamic client registration (if applicable), to save from retrieving them again.
-        AuthState currentState = mStateManager.getCurrent();
-        AuthState clearedState =
-                new AuthState(currentState.getAuthorizationServiceConfiguration());
-        if (currentState.getLastRegistrationResponse() != null) {
-            clearedState.update(currentState.getLastRegistrationResponse());
-        }
-        mStateManager.replace(clearedState);
+        val currentState = stateManager.getCurrent()
+        val clearedState = AuthState(currentState.authorizationServiceConfiguration!!)
+        currentState.lastRegistrationResponse?.let { clearedState.update(it) }
+        stateManager.replace(clearedState)
 
-        Intent mainIntent = new Intent(this, LoginActivity.class);
-        mainIntent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
-        startActivity(mainIntent);
-        finish();
+        val mainIntent = Intent(this@TokenActivity, LoginActivity::class.java)
+        mainIntent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
+        startActivity(mainIntent)
+        finish()
+    }
+
+    companion object {
+        private const val TAG = "TokenActivity"
+
+        private const val KEY_USER_INFO = "userInfo"
     }
 }

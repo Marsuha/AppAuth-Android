@@ -11,705 +11,606 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package net.openid.appauth
 
-package net.openid.appauth;
-
-import static net.openid.appauth.Preconditions.checkNotEmpty;
-import static net.openid.appauth.Preconditions.checkNotNull;
-
-import android.content.Intent;
-import android.net.Uri;
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
-import androidx.annotation.VisibleForTesting;
-import androidx.collection.ArrayMap;
-
-import org.json.JSONException;
-import org.json.JSONObject;
-
-import java.util.Collections;
-import java.util.Map;
+import android.content.Intent
+import android.net.Uri
+import androidx.annotation.VisibleForTesting
+import androidx.core.net.toUri
+import org.json.JSONException
+import org.json.JSONObject
 
 /**
  * Returned as a response to OAuth2 requests if they fail. Specifically:
  *
- * - The {@link net.openid.appauth.AuthorizationService.TokenResponseCallback response} to
- * {@link AuthorizationService#performTokenRequest(net.openid.appauth.TokenRequest,
- * AuthorizationService.TokenResponseCallback) token requests},
+ * - The response to [token requests][AuthorizationService.performTokenRequest],
  *
- * - The {@link net.openid.appauth.AuthorizationServiceConfiguration.RetrieveConfigurationCallback
- * response}
- * to
- * {@link AuthorizationServiceConfiguration#fetchFromUrl(android.net.Uri,
- * AuthorizationServiceConfiguration.RetrieveConfigurationCallback) configuration retrieval}.
+ * - The response to [configuration retrieval][AuthorizationServiceConfiguration.fetchFromUrl].
  */
-@SuppressWarnings({"ThrowableInstanceNeverThrown", "ThrowableResultOfMethodCallIgnored"})
-public final class AuthorizationException extends Exception {
-
+@Suppress("unused")
+class AuthorizationException @JvmOverloads constructor(
     /**
-     * The extra string that used to store an {@link AuthorizationException} in an intent by
-     * {@link #toIntent()}.
-     */
-    public static final String EXTRA_EXCEPTION = "net.openid.appauth.AuthorizationException";
-
-    /**
-     * The OAuth2 parameter used to indicate the type of error during an authorization or
-     * token request.
+     * The type of the error.
+     * @see .TYPE_GENERAL_ERROR
      *
-     * @see "The OAuth 2.0 Authorization Framework (RFC 6749), Section 4.1.2.1
-     * <https://tools.ietf.org/html/rfc6749#section-4.1.2.1>"
-     * @see "The OAuth 2.0 Authorization Framework" (RFC 6749), Section 5.2
-     * <https://tools.ietf.org/html/rfc6749#section-5.2>"
-     */
-    public static final String PARAM_ERROR = "error";
-
-    /**
-     * The OAuth2 parameter used to provide a human readable description of the error which
-     * occurred.
+     * @see .TYPE_OAUTH_AUTHORIZATION_ERROR
      *
-     * @see "The OAuth 2.0 Authorization Framework (RFC 6749), Section 4.1.2.1
-     * <https://tools.ietf.org/html/rfc6749#section-4.1.2.1>"
-     * @see "The OAuth 2.0 Authorization Framework" (RFC 6749), Section 5.2
-     * <https://tools.ietf.org/html/rfc6749#section-5.2>"
-     */
-    public static final String PARAM_ERROR_DESCRIPTION = "error_description";
-
-    /**
-     * The OAuth2 parameter used to provide a URI to a human-readable page which describes the
-     * error.
+     * @see .TYPE_OAUTH_TOKEN_ERROR
      *
-     * @see "The OAuth 2.0 Authorization Framework (RFC 6749), Section 4.1.2.1
-     * <https://tools.ietf.org/html/rfc6749#section-4.1.2.1>"
-     * @see "The OAuth 2.0 Authorization Framework" (RFC 6749), Section 5.2
-     * <https://tools.ietf.org/html/rfc6749#section-5.2>"
+     * @see .TYPE_RESOURCE_SERVER_AUTHORIZATION_ERROR
      */
-    public static final String PARAM_ERROR_URI = "error_uri";
-
-
+    @JvmField val type: Int,
     /**
-     * The error type used for all errors that are not specific to OAuth related responses.
+     * The error code describing the class of problem encountered from the set defined in this
+     * class.
      */
-    public static final int TYPE_GENERAL_ERROR = 0;
-
+    @JvmField val code: Int,
     /**
-     * The error type for OAuth specific errors on the authorization endpoint. This error type is
-     * used when the server responds to an authorization request with an explicit OAuth error, as
-     * defined by [the OAuth2 specification, section 4.1.2.1](
-     * https://tools.ietf.org/html/rfc6749#section-4.1.2.1). If the authorization response is
-     * invalid and not explicitly an error response, another error type will be used.
-     *
-     * @see "The OAuth 2.0 Authorization Framework (RFC 6749), Section 4.1.2.1
-     * <https://tools.ietf.org/html/rfc6749#section-4.1.2.1>"
+     * The error string as it is found in the OAuth2 protocol.
      */
-    public static final int TYPE_OAUTH_AUTHORIZATION_ERROR = 1;
-
+    @JvmField val error: String? = null,
     /**
-     * The error type for OAuth specific errors on the token endpoint. This error type is used when
-     * the server responds with HTTP 400 and an OAuth error, as defined by
-     * [the OAuth2 specification, section 5.2](https://tools.ietf.org/html/rfc6749#section-5.2).
-     * If an HTTP 400 response does not parse as an OAuth error (i.e. no 'error' field is present
-     * or the JSON is invalid), another error domain will be used.
-     *
-     * @see "The OAuth 2.0 Authorization Framework" (RFC 6749), Section 5.2
-     * <https://tools.ietf.org/html/rfc6749#section-5.2>"
+     * The human readable error message associated with this exception, if available.
      */
-    public static final int TYPE_OAUTH_TOKEN_ERROR = 2;
-
+    @JvmField val errorDescription: String? = null,
     /**
-     * The error type for authorization errors encountered out of band on the resource server.
+     * A URI identifying a human-readable web page with information about this error.
      */
-    public static final int TYPE_RESOURCE_SERVER_AUTHORIZATION_ERROR = 3;
-
-    /**
-     * The error type for OAuth specific errors on the registration endpoint.
-     */
-    public static final int TYPE_OAUTH_REGISTRATION_ERROR = 4;
-
-    @VisibleForTesting
-    static final String KEY_TYPE = "type";
-
-    @VisibleForTesting
-    static final String KEY_CODE = "code";
-
-    @VisibleForTesting
-    static final String KEY_ERROR = "error";
-
-    @VisibleForTesting
-    static final String KEY_ERROR_DESCRIPTION = "errorDescription";
-
-    @VisibleForTesting
-    static final String KEY_ERROR_URI = "errorUri";
-
-    /**
-     * Prime number multiplier used to produce a reasonable hash value distribution.
-     */
-    private static final int HASH_MULTIPLIER = 31;
-
+    val errorUri: Uri? = null,
+    rootCause: Throwable? = null
+) : Exception(errorDescription, rootCause) {
     /**
      * Error codes specific to AppAuth for Android, rather than those defined in the OAuth2 and
      * OpenID specifications.
      */
-    public static final class GeneralErrors {
+    object GeneralErrors {
         // codes in this group should be between 0-999
-
         /**
          * Indicates a problem parsing an OpenID Connect Service Discovery document.
          */
-        public static final AuthorizationException INVALID_DISCOVERY_DOCUMENT =
-                generalEx(0, "Invalid discovery document");
+        val INVALID_DISCOVERY_DOCUMENT: AuthorizationException =
+            generalEx(0, "Invalid discovery document")
 
         /**
          * Indicates the user manually canceled the OAuth authorization code flow.
          */
-        public static final AuthorizationException USER_CANCELED_AUTH_FLOW =
-                generalEx(1, "User cancelled flow");
+        @JvmField
+        val USER_CANCELED_AUTH_FLOW: AuthorizationException = generalEx(1, "User cancelled flow")
 
         /**
          * Indicates an OAuth authorization flow was programmatically cancelled.
          */
-        public static final AuthorizationException PROGRAM_CANCELED_AUTH_FLOW =
-                generalEx(2, "Flow cancelled programmatically");
+        val PROGRAM_CANCELED_AUTH_FLOW: AuthorizationException =
+            generalEx(2, "Flow cancelled programmatically")
 
         /**
          * Indicates a network error occurred.
          */
-        public static final AuthorizationException NETWORK_ERROR =
-                generalEx(3, "Network error");
+        @JvmField
+        val NETWORK_ERROR: AuthorizationException = generalEx(3, "Network error")
 
         /**
          * Indicates a server error occurred.
          */
-        public static final AuthorizationException SERVER_ERROR =
-                generalEx(4, "Server error");
+        val SERVER_ERROR: AuthorizationException = generalEx(4, "Server error")
 
         /**
          * Indicates a problem occurred deserializing JSON.
          */
-        public static final AuthorizationException JSON_DESERIALIZATION_ERROR =
-                generalEx(5, "JSON deserialization error");
+        val JSON_DESERIALIZATION_ERROR: AuthorizationException =
+            generalEx(5, "JSON deserialization error")
 
         /**
-         * Indicates a problem occurred constructing a {@link TokenResponse token response} object
+         * Indicates a problem occurred constructing a [token response][TokenResponse] object
          * from the JSON provided by the server.
          */
-        public static final AuthorizationException TOKEN_RESPONSE_CONSTRUCTION_ERROR =
-                generalEx(6, "Token response construction error");
+        val TOKEN_RESPONSE_CONSTRUCTION_ERROR: AuthorizationException =
+            generalEx(6, "Token response construction error")
 
         /**
          * Indicates a problem parsing an OpenID Connect Registration Response.
          */
-        public static final AuthorizationException INVALID_REGISTRATION_RESPONSE =
-                generalEx(7, "Invalid registration response");
+        val INVALID_REGISTRATION_RESPONSE: AuthorizationException =
+            generalEx(7, "Invalid registration response")
 
         /**
          * Indicates that a received ID token could not be parsed
          */
-        public static final AuthorizationException ID_TOKEN_PARSING_ERROR =
-                generalEx(8, "Unable to parse ID Token");
+        val ID_TOKEN_PARSING_ERROR: AuthorizationException =
+            generalEx(8, "Unable to parse ID Token")
 
         /**
          * Indicates that a received ID token is invalid
          */
-        public static final AuthorizationException ID_TOKEN_VALIDATION_ERROR =
-                generalEx(9, "Invalid ID Token");
+        @JvmField
+        val ID_TOKEN_VALIDATION_ERROR: AuthorizationException = generalEx(9, "Invalid ID Token")
     }
 
     /**
      * Error codes related to failed authorization requests.
      *
-     * @see "The OAuth 2.0 Authorization Framework (RFC 6749), Section 4.1.2.1
-     * <https://tools.ietf.org/html/rfc6749#section-4.1.2.1>"
+     * @see "The OAuth 2.0 Authorization Framework
      */
-    public static final class AuthorizationRequestErrors {
+    object AuthorizationRequestErrors {
         // codes in this group should be between 1000-1999
-
         /**
          * An `invalid_request` OAuth2 error response.
          */
-        public static final AuthorizationException INVALID_REQUEST =
-                authEx(1000, "invalid_request");
+        @JvmField
+        val INVALID_REQUEST: AuthorizationException = authEx(1000, "invalid_request")
 
         /**
          * An `unauthorized_client` OAuth2 error response.
          */
-        public static final AuthorizationException UNAUTHORIZED_CLIENT =
-                authEx(1001, "unauthorized_client");
+        val UNAUTHORIZED_CLIENT: AuthorizationException = authEx(1001, "unauthorized_client")
 
         /**
          * An `access_denied` OAuth2 error response.
          */
-        public static final AuthorizationException ACCESS_DENIED =
-                authEx(1002, "access_denied");
+        @JvmField
+        val ACCESS_DENIED: AuthorizationException = authEx(1002, "access_denied")
 
         /**
          * An `unsupported_response_type` OAuth2 error response.
          */
-        public static final AuthorizationException UNSUPPORTED_RESPONSE_TYPE =
-                authEx(1003, "unsupported_response_type");
+        val UNSUPPORTED_RESPONSE_TYPE: AuthorizationException =
+            authEx(1003, "unsupported_response_type")
 
         /**
          * An `invalid_scope` OAuth2 error response.
          */
-        public static final AuthorizationException INVALID_SCOPE =
-                authEx(1004, "invalid_scope");
+        val INVALID_SCOPE: AuthorizationException = authEx(1004, "invalid_scope")
 
         /**
          * An `server_error` OAuth2 error response, equivalent to an HTTP 500 error code, but
          * sent via redirect.
          */
-        public static final AuthorizationException SERVER_ERROR =
-                authEx(1005, "server_error");
+        val SERVER_ERROR: AuthorizationException = authEx(1005, "server_error")
 
         /**
          * A `temporarily_unavailable` OAuth2 error response, equivalent to an HTTP 503 error
          * code, but sent via redirect.
          */
-        public static final AuthorizationException TEMPORARILY_UNAVAILABLE =
-                authEx(1006, "temporarily_unavailable");
+        val TEMPORARILY_UNAVAILABLE: AuthorizationException =
+            authEx(1006, "temporarily_unavailable")
 
         /**
          * An authorization error occurring on the client rather than the server. For example,
          * due to client misconfiguration. This error should be treated as unrecoverable.
          */
-        public static final AuthorizationException CLIENT_ERROR =
-                authEx(1007, null);
+        @JvmField
+        val CLIENT_ERROR: AuthorizationException = authEx(1007)
 
         /**
          * Indicates an OAuth error as per RFC 6749, but the error code is not known to the
          * AppAuth for Android library. It could be a custom error or code, or one from an
-         * OAuth extension. The {@link #error} field provides the exact error string returned by
+         * OAuth extension. The [.error] field provides the exact error string returned by
          * the server.
          */
-        public static final AuthorizationException OTHER =
-                authEx(1008, null);
+        val OTHER: AuthorizationException = authEx(1008)
 
         /**
          * Indicates that the response state param did not match the request state param,
          * resulting in the response being discarded.
          */
-        public static final AuthorizationException STATE_MISMATCH =
-                generalEx(9, "Response state param did not match request state");
+        @JvmField
+        val STATE_MISMATCH: AuthorizationException =
+            generalEx(9, "Response state param did not match request state")
 
-        private static final Map<String, AuthorizationException> STRING_TO_EXCEPTION =
-                exceptionMapByString(
-                        INVALID_REQUEST,
-                        UNAUTHORIZED_CLIENT,
-                        ACCESS_DENIED,
-                        UNSUPPORTED_RESPONSE_TYPE,
-                        INVALID_SCOPE,
-                        SERVER_ERROR,
-                        TEMPORARILY_UNAVAILABLE,
-                        CLIENT_ERROR,
-                        OTHER);
+        private val STRING_TO_EXCEPTION: Map<String, AuthorizationException> =
+            exceptionMapByString(
+                INVALID_REQUEST,
+                UNAUTHORIZED_CLIENT,
+                ACCESS_DENIED,
+                UNSUPPORTED_RESPONSE_TYPE,
+                INVALID_SCOPE,
+                SERVER_ERROR,
+                TEMPORARILY_UNAVAILABLE,
+                CLIENT_ERROR,
+                OTHER
+            )
 
         /**
          * Returns the matching exception type for the provided OAuth2 error string, or
-         * {@link #OTHER} if unknown.
+         * [.OTHER] if unknown.
          */
-        @NonNull
-        public static AuthorizationException byString(String error) {
-            AuthorizationException ex = STRING_TO_EXCEPTION.get(error);
-            if (ex != null) {
-                return ex;
-            }
-            return OTHER;
-        }
+        fun byString(error: String) = STRING_TO_EXCEPTION[error] ?: OTHER
     }
 
     /**
      * Error codes related to failed token requests.
      *
-     * @see "The OAuth 2.0 Authorization Framework" (RFC 6749), Section 5.2
-     * <https://tools.ietf.org/html/rfc6749#section-5.2>"
+     * @see "The OAuth 2.0 Authorization Framework"
      */
-    public static final class TokenRequestErrors {
+    object TokenRequestErrors {
         // codes in this group should be between 2000-2999
-
         /**
          * An `invalid_request` OAuth2 error response.
          */
-        public static final AuthorizationException INVALID_REQUEST =
-                tokenEx(2000, "invalid_request");
+        val INVALID_REQUEST: AuthorizationException = tokenEx(2000, "invalid_request")
 
         /**
          * An `invalid_client` OAuth2 error response.
          */
-        public static final AuthorizationException INVALID_CLIENT =
-                tokenEx(2001, "invalid_client");
+        val INVALID_CLIENT: AuthorizationException = tokenEx(2001, "invalid_client")
 
         /**
          * An `invalid_grant` OAuth2 error response.
          */
-        public static final AuthorizationException INVALID_GRANT =
-                tokenEx(2002, "invalid_grant");
+        val INVALID_GRANT: AuthorizationException = tokenEx(2002, "invalid_grant")
 
         /**
          * An `unauthorized_client` OAuth2 error response.
          */
-        public static final AuthorizationException UNAUTHORIZED_CLIENT =
-                tokenEx(2003, "unauthorized_client");
+        @JvmField
+        val UNAUTHORIZED_CLIENT: AuthorizationException = tokenEx(2003, "unauthorized_client")
 
         /**
          * An `unsupported_grant_type` OAuth2 error response.
          */
-        public static final AuthorizationException UNSUPPORTED_GRANT_TYPE =
-                tokenEx(2004, "unsupported_grant_type");
+        val UNSUPPORTED_GRANT_TYPE: AuthorizationException = tokenEx(2004, "unsupported_grant_type")
 
         /**
          * An `invalid_scope` OAuth2 error response.
          */
-        public static final AuthorizationException INVALID_SCOPE =
-                tokenEx(2005, "invalid_scope");
+        val INVALID_SCOPE: AuthorizationException = tokenEx(2005, "invalid_scope")
 
         /**
          * An authorization error occurring on the client rather than the server. For example,
          * due to client misconfiguration. This error should be treated as unrecoverable.
          */
-        public static final AuthorizationException CLIENT_ERROR =
-                tokenEx(2006, null);
+        @JvmField
+        val CLIENT_ERROR: AuthorizationException = tokenEx(2006)
 
         /**
          * Indicates an OAuth error as per RFC 6749, but the error code is not known to the
          * AppAuth for Android library. It could be a custom error or code, or one from an
-         * OAuth extension. The {@link #error} field provides the exact error string returned by
+         * OAuth extension. The [.error] field provides the exact error string returned by
          * the server.
          */
-        public static final AuthorizationException OTHER =
-                tokenEx(2007, null);
+        val OTHER: AuthorizationException = tokenEx(2007)
 
-        private static final Map<String, AuthorizationException> STRING_TO_EXCEPTION =
-                exceptionMapByString(
-                        INVALID_REQUEST,
-                        INVALID_CLIENT,
-                        INVALID_GRANT,
-                        UNAUTHORIZED_CLIENT,
-                        UNSUPPORTED_GRANT_TYPE,
-                        INVALID_SCOPE,
-                        CLIENT_ERROR,
-                        OTHER);
+        private val STRING_TO_EXCEPTION: Map<String, AuthorizationException> =
+            exceptionMapByString(
+                INVALID_REQUEST,
+                INVALID_CLIENT,
+                INVALID_GRANT,
+                UNAUTHORIZED_CLIENT,
+                UNSUPPORTED_GRANT_TYPE,
+                INVALID_SCOPE,
+                CLIENT_ERROR,
+                OTHER
+            )
 
         /**
          * Returns the matching exception type for the provided OAuth2 error string, or
-         * {@link #OTHER} if unknown.
+         * [.OTHER] if unknown.
          */
-        public static AuthorizationException byString(String error) {
-            AuthorizationException ex = STRING_TO_EXCEPTION.get(error);
-            if (ex != null) {
-                return ex;
-            }
-            return OTHER;
-        }
+        fun byString(error: String) = STRING_TO_EXCEPTION[error] ?: OTHER
     }
 
     /**
      * Error codes related to failed registration requests.
      */
-    public static final class RegistrationRequestErrors {
+    object RegistrationRequestErrors {
         // codes in this group should be between 4000-4999
-
         /**
          * An `invalid_request` OAuth2 error response.
          */
-        public static final AuthorizationException INVALID_REQUEST =
-                registrationEx(4000, "invalid_request");
+        val INVALID_REQUEST: AuthorizationException = registrationEx(4000, "invalid_request")
 
         /**
          * An `invalid_client` OAuth2 error response.
          */
-        public static final AuthorizationException INVALID_REDIRECT_URI =
-                registrationEx(4001, "invalid_redirect_uri");
+        val INVALID_REDIRECT_URI: AuthorizationException =
+            registrationEx(4001, "invalid_redirect_uri")
 
         /**
          * An `invalid_grant` OAuth2 error response.
          */
-        public static final AuthorizationException INVALID_CLIENT_METADATA =
-                registrationEx(4002, "invalid_client_metadata");
+        val INVALID_CLIENT_METADATA: AuthorizationException =
+            registrationEx(4002, "invalid_client_metadata")
 
         /**
          * An authorization error occurring on the client rather than the server. For example,
          * due to client misconfiguration. This error should be treated as unrecoverable.
          */
-        public static final AuthorizationException CLIENT_ERROR =
-                registrationEx(4003, null);
+        val CLIENT_ERROR: AuthorizationException = registrationEx(4003)
 
         /**
          * Indicates an OAuth error as per RFC 6749, but the error code is not known to the
          * AppAuth for Android library. It could be a custom error or code, or one from an
-         * OAuth extension. The {@link #error} field provides the exact error string returned by
+         * OAuth extension. The [.error] field provides the exact error string returned by
          * the server.
          */
-        public static final AuthorizationException OTHER =
-                registrationEx(4004, null);
+        val OTHER: AuthorizationException = registrationEx(4004)
 
-        private static final Map<String, AuthorizationException> STRING_TO_EXCEPTION =
-                exceptionMapByString(
-                        INVALID_REQUEST,
-                        INVALID_REDIRECT_URI,
-                        INVALID_CLIENT_METADATA,
-                        CLIENT_ERROR,
-                        OTHER);
+        private val STRING_TO_EXCEPTION: Map<String, AuthorizationException> =
+            exceptionMapByString(
+                INVALID_REQUEST,
+                INVALID_REDIRECT_URI,
+                INVALID_CLIENT_METADATA,
+                CLIENT_ERROR,
+                OTHER
+            )
 
         /**
          * Returns the matching exception type for the provided OAuth2 error string, or
-         * {@link #OTHER} if unknown.
+         * [.OTHER] if unknown.
          */
-        public static AuthorizationException byString(String error) {
-            AuthorizationException ex = STRING_TO_EXCEPTION.get(error);
-            if (ex != null) {
-                return ex;
-            }
-            return OTHER;
-        }
-    }
-
-    private static AuthorizationException generalEx(int code, @Nullable String errorDescription) {
-        return new AuthorizationException(
-                TYPE_GENERAL_ERROR, code, null, errorDescription, null, null);
-    }
-
-    private static AuthorizationException authEx(int code, @Nullable String error) {
-        return new AuthorizationException(
-                TYPE_OAUTH_AUTHORIZATION_ERROR, code, error, null, null, null);
-    }
-
-    private static AuthorizationException tokenEx(int code, @Nullable String error) {
-        return new AuthorizationException(
-                TYPE_OAUTH_TOKEN_ERROR, code, error, null, null, null);
-    }
-
-    private static AuthorizationException registrationEx(int code, @Nullable String error) {
-        return new AuthorizationException(
-                TYPE_OAUTH_REGISTRATION_ERROR, code, error, null, null, null);
-    }
-
-    /**
-     * Creates an exception based on one of the existing values defined in
-     * {@link GeneralErrors}, {@link AuthorizationRequestErrors} or {@link TokenRequestErrors},
-     * providing a root cause.
-     */
-    public static AuthorizationException fromTemplate(
-            @NonNull AuthorizationException ex,
-            @Nullable Throwable rootCause) {
-        return new AuthorizationException(
-                ex.type,
-                ex.code,
-                ex.error,
-                ex.errorDescription,
-                ex.errorUri,
-                rootCause);
-    }
-
-    /**
-     * Creates an exception based on one of the existing values defined in
-     * {@link AuthorizationRequestErrors} or {@link TokenRequestErrors}, adding information
-     * retrieved from OAuth error response.
-     */
-    public static AuthorizationException fromOAuthTemplate(
-            @NonNull AuthorizationException ex,
-            @Nullable String errorOverride,
-            @Nullable String errorDescriptionOverride,
-            @Nullable Uri errorUriOverride) {
-        return new AuthorizationException(
-                ex.type,
-                ex.code,
-                (errorOverride != null) ? errorOverride : ex.error,
-                (errorDescriptionOverride != null) ? errorDescriptionOverride : ex.errorDescription,
-                (errorUriOverride != null) ? errorUriOverride : ex.errorUri,
-                null);
-    }
-
-    /**
-     * Creates an exception from an OAuth redirect URI that describes an authorization failure.
-     */
-    public static AuthorizationException fromOAuthRedirect(
-            @NonNull Uri redirectUri) {
-        String error = redirectUri.getQueryParameter(PARAM_ERROR);
-        String errorDescription = redirectUri.getQueryParameter(PARAM_ERROR_DESCRIPTION);
-        String errorUri = redirectUri.getQueryParameter(PARAM_ERROR_URI);
-        AuthorizationException base = AuthorizationRequestErrors.byString(error);
-        return new AuthorizationException(
-                base.type,
-                base.code,
-                error,
-                errorDescription != null ? errorDescription : base.errorDescription,
-                errorUri != null ? Uri.parse(errorUri) : base.errorUri,
-                null);
-    }
-
-    /**
-     * Reconstructs an {@link AuthorizationException} from the JSON produced by
-     * {@link #toJsonString()}.
-     * @throws JSONException if the JSON is malformed or missing required properties
-     */
-    public static AuthorizationException fromJson(@NonNull String jsonStr) throws JSONException {
-        checkNotEmpty(jsonStr, "jsonStr cannot be null or empty");
-        return fromJson(new JSONObject(jsonStr));
-    }
-
-    /**
-     * Reconstructs an {@link AuthorizationException} from the JSON produced by
-     * {@link #toJson()}.
-     * @throws JSONException if the JSON is malformed or missing required properties
-     */
-    public static AuthorizationException fromJson(@NonNull JSONObject json) throws JSONException {
-        checkNotNull(json, "json cannot be null");
-        return new AuthorizationException(
-                json.getInt(KEY_TYPE),
-                json.getInt(KEY_CODE),
-                JsonUtil.getStringIfDefined(json, KEY_ERROR),
-                JsonUtil.getStringIfDefined(json, KEY_ERROR_DESCRIPTION),
-                JsonUtil.getUriIfDefined(json, KEY_ERROR_URI),
-                null);
-    }
-
-    /**
-     * Extracts an {@link AuthorizationException} from an intent produced by {@link #toIntent()}.
-     * This is used to retrieve an error response in the handler registered for a call to
-     * {@link AuthorizationService#performAuthorizationRequest}.
-     */
-    @Nullable
-    public static AuthorizationException fromIntent(Intent data) {
-        checkNotNull(data);
-
-        if (!data.hasExtra(EXTRA_EXCEPTION)) {
-            return null;
-        }
-
-        try {
-            return fromJson(data.getStringExtra(EXTRA_EXCEPTION));
-        } catch (JSONException ex) {
-            throw new IllegalArgumentException("Intent contains malformed exception data", ex);
-        }
-    }
-
-    private static Map<String, AuthorizationException> exceptionMapByString(
-            AuthorizationException... exceptions) {
-        ArrayMap<String, AuthorizationException> map =
-                new ArrayMap<>(exceptions != null ? exceptions.length : 0);
-
-        if (exceptions != null) {
-            for (AuthorizationException ex : exceptions) {
-                if (ex.error != null) {
-                    map.put(ex.error, ex);
-                }
-            }
-        }
-
-        return Collections.unmodifiableMap(map);
-    }
-
-    /**
-     * The type of the error.
-     * @see #TYPE_GENERAL_ERROR
-     * @see #TYPE_OAUTH_AUTHORIZATION_ERROR
-     * @see #TYPE_OAUTH_TOKEN_ERROR
-     * @see #TYPE_RESOURCE_SERVER_AUTHORIZATION_ERROR
-     */
-    public final int type;
-
-    /**
-     * The error code describing the class of problem encountered from the set defined in this
-     * class.
-     */
-    public final int code;
-
-    /**
-     * The error string as it is found in the OAuth2 protocol.
-     */
-    @Nullable
-    public final String error;
-
-    /**
-     * The human readable error message associated with this exception, if available.
-     */
-    @Nullable
-    public final String errorDescription;
-
-    /**
-     * A URI identifying a human-readable web page with information about this error.
-     */
-    @Nullable
-    public final Uri errorUri;
-
-    /**
-     * Instantiates an authorization request with optional root cause information.
-     */
-    public AuthorizationException(
-            int type,
-            int code,
-            @Nullable String error,
-            @Nullable String errorDescription,
-            @Nullable Uri errorUri,
-            @Nullable Throwable rootCause) {
-        super(errorDescription, rootCause);
-        this.type = type;
-        this.code = code;
-        this.error = error;
-        this.errorDescription = errorDescription;
-        this.errorUri = errorUri;
+        fun byString(error: String) = STRING_TO_EXCEPTION[error] ?: OTHER
     }
 
     /**
      * Produces a JSON representation of the authorization exception, for transmission or storage.
      * This does not include any provided root cause.
      */
-    @NonNull
-    public JSONObject toJson() {
-        JSONObject json = new JSONObject();
-        JsonUtil.put(json, KEY_TYPE, type);
-        JsonUtil.put(json, KEY_CODE, code);
-        JsonUtil.putIfNotNull(json, KEY_ERROR, error);
-        JsonUtil.putIfNotNull(json, KEY_ERROR_DESCRIPTION, errorDescription);
-        JsonUtil.putIfNotNull(json, KEY_ERROR_URI, errorUri);
-        return json;
+    fun toJson() = JSONObject().apply {
+        put(KEY_TYPE, type)
+        put(KEY_CODE, code)
+        error?.let { put(KEY_ERROR, it) }
+        errorDescription?.let { put(KEY_ERROR_DESCRIPTION, it) }
+        errorUri?.let { put(KEY_ERROR_URI, it.toString()) }
     }
 
     /**
      * Provides a JSON string representation of an authorization exception, for transmission or
      * storage. This does not include any provided root cause.
      */
-    @NonNull
-    public String toJsonString() {
-        return toJson().toString();
-    }
+    fun toJsonString() = toJson().toString()
 
     /**
      * Creates an intent from this exception. Used to carry error responses to the handling activity
-     * specified in calls to {@link AuthorizationService#performAuthorizationRequest}.
+     * specified in calls to [AuthorizationService.performAuthorizationRequest].
      */
-    @NonNull
-    public Intent toIntent() {
-        Intent data = new Intent();
-        data.putExtra(EXTRA_EXCEPTION, toJsonString());
-        return data;
+    fun toIntent() = Intent().apply {
+        putExtra(EXTRA_EXCEPTION, toJsonString())
     }
 
     /**
-     * Exceptions are considered to be equal if their {@link #type type} and {@link #code code}
+     * Exceptions are considered to be equal if their [type][.type] and [code][.code]
      * are the same; all other properties are irrelevant for comparison.
      */
-    @Override
-    public boolean equals(Object obj) {
-        if (obj == this) {
-            return true;
-        }
-
-        if (obj == null || !(obj instanceof AuthorizationException)) {
-            return false;
-        }
-
-        AuthorizationException other = (AuthorizationException) obj;
-        return this.type == other.type && this.code == other.code;
+    override fun equals(other: Any?): Boolean {
+        if (other === this) return true
+        if (other == null || other !is AuthorizationException) return false
+        return this.type == other.type && this.code == other.code
     }
 
-    @Override
-    public int hashCode() {
-        // equivalent to Arrays.hashCode(new int[] { type, code });
-        return (HASH_MULTIPLIER * (HASH_MULTIPLIER + type)) + code;
-    }
+    // equivalent to Arrays.hashCode(new int[] { type, code });
+    override fun hashCode() = (HASH_MULTIPLIER * (HASH_MULTIPLIER + type)) + code
 
-    @Override
-    public String toString() {
-        return "AuthorizationException: " + toJsonString();
+    override fun toString() = "AuthorizationException: ${toJsonString()}"
+
+    companion object {
+        /**
+         * The extra string that used to store an [AuthorizationException] in an intent by
+         * [.toIntent].
+         */
+        const val EXTRA_EXCEPTION: String = "net.openid.appauth.AuthorizationException"
+
+        /**
+         * The OAuth2 parameter used to indicate the type of error during an authorization or
+         * token request.
+         *
+         * @see "The OAuth 2.0 Authorization Framework
+         * @see "The OAuth 2.0 Authorization Framework"
+         */
+        const val PARAM_ERROR: String = "error"
+
+        /**
+         * The OAuth2 parameter used to provide a human readable description of the error which
+         * occurred.
+         *
+         * @see "The OAuth 2.0 Authorization Framework
+         * @see "The OAuth 2.0 Authorization Framework"
+         */
+        const val PARAM_ERROR_DESCRIPTION: String = "error_description"
+
+        /**
+         * The OAuth2 parameter used to provide a URI to a human-readable page which describes the
+         * error.
+         *
+         * @see "The OAuth 2.0 Authorization Framework
+         * @see "The OAuth 2.0 Authorization Framework"
+         */
+        const val PARAM_ERROR_URI: String = "error_uri"
+
+
+        /**
+         * The error type used for all errors that are not specific to OAuth related responses.
+         */
+        const val TYPE_GENERAL_ERROR: Int = 0
+
+        /**
+         * The error type for OAuth specific errors on the authorization endpoint. This error type is
+         * used when the server responds to an authorization request with an explicit OAuth error, as
+         * defined by [the OAuth2 specification, section 4.1.2.1](
+ * https://tools.ietf.org/html/rfc6749#section-4.1.2.1). If the authorization response is
+         * invalid and not explicitly an error response, another error type will be used.
+         *
+         * @see "The OAuth 2.0 Authorization Framework
+         */
+        const val TYPE_OAUTH_AUTHORIZATION_ERROR: Int = 1
+
+        /**
+         * The error type for OAuth specific errors on the token endpoint. This error type is used when
+         * the server responds with HTTP 400 and an OAuth error, as defined by
+         * [the OAuth2 specification, section 5.2](https://tools.ietf.org/html/rfc6749#section-5.2).
+         * If an HTTP 400 response does not parse as an OAuth error (i.e. no 'error' field is present
+         * or the JSON is invalid), another error domain will be used.
+         *
+         * @see "The OAuth 2.0 Authorization Framework"
+         */
+        const val TYPE_OAUTH_TOKEN_ERROR: Int = 2
+
+        /**
+         * The error type for authorization errors encountered out of band on the resource server.
+         */
+        const val TYPE_RESOURCE_SERVER_AUTHORIZATION_ERROR: Int = 3
+
+        /**
+         * The error type for OAuth specific errors on the registration endpoint.
+         */
+        const val TYPE_OAUTH_REGISTRATION_ERROR: Int = 4
+
+        @VisibleForTesting
+        const val KEY_TYPE: String = "type"
+
+        @VisibleForTesting
+        const val KEY_CODE: String = "code"
+
+        @VisibleForTesting
+        const val KEY_ERROR: String = "error"
+
+        @VisibleForTesting
+        const val KEY_ERROR_DESCRIPTION: String = "errorDescription"
+
+        @VisibleForTesting
+        const val KEY_ERROR_URI: String = "errorUri"
+
+        /**
+         * Prime number multiplier used to produce a reasonable hash value distribution.
+         */
+        private const val HASH_MULTIPLIER = 31
+
+        private fun generalEx(code: Int, errorDescription: String? = null): AuthorizationException {
+            return AuthorizationException(
+                type = TYPE_GENERAL_ERROR,
+                code = code,
+                errorDescription = errorDescription
+            )
+        }
+
+        private fun authEx(code: Int, error: String? = null): AuthorizationException {
+            return AuthorizationException(
+                type = TYPE_OAUTH_AUTHORIZATION_ERROR,
+                code = code,
+                error = error
+            )
+        }
+
+        private fun tokenEx(code: Int, error: String? = null): AuthorizationException {
+            return AuthorizationException(
+                type = TYPE_OAUTH_TOKEN_ERROR,
+                code = code,
+                error = error
+            )
+        }
+
+        private fun registrationEx(code: Int, error: String? = null): AuthorizationException {
+            return AuthorizationException(
+                type = TYPE_OAUTH_REGISTRATION_ERROR,
+                code = code,
+                error = error
+            )
+        }
+
+        /**
+         * Creates an exception based on one of the existing values defined in
+         * [GeneralErrors], [AuthorizationRequestErrors] or [TokenRequestErrors],
+         * providing a root cause.
+         */
+        @JvmStatic
+        fun fromTemplate(
+            ex: AuthorizationException,
+            rootCause: Throwable?
+        ): AuthorizationException {
+            return AuthorizationException(
+                ex.type,
+                ex.code,
+                ex.error,
+                ex.errorDescription,
+                ex.errorUri,
+                rootCause
+            )
+        }
+
+        /**
+         * Creates an exception based on one of the existing values defined in
+         * [AuthorizationRequestErrors] or [TokenRequestErrors], adding information
+         * retrieved from OAuth error response.
+         */
+        @JvmOverloads
+        fun fromOAuthTemplate(
+            ex: AuthorizationException,
+            errorOverride: String? = null,
+            errorDescriptionOverride: String? = null,
+            errorUriOverride: Uri? = null
+        ): AuthorizationException {
+            return AuthorizationException(
+                type = ex.type,
+                code = ex.code,
+                error = errorOverride ?: ex.error,
+                errorDescription = errorDescriptionOverride?.takeIf { it.isNotEmpty() }
+                    ?: ex.errorDescription,
+                errorUri = errorUriOverride ?: ex.errorUri,
+            )
+        }
+
+        /**
+         * Creates an exception from an OAuth redirect URI that describes an authorization failure.
+         */
+        fun fromOAuthRedirect(redirectUri: Uri): AuthorizationException {
+            val error = redirectUri.getQueryParameter(PARAM_ERROR)
+            val errorDescription = redirectUri.getQueryParameter(PARAM_ERROR_DESCRIPTION)
+            val errorUri = redirectUri.getQueryParameter(PARAM_ERROR_URI)
+            val base = error?.let { AuthorizationRequestErrors.byString(it) }
+                ?: AuthorizationRequestErrors.OTHER
+
+            return AuthorizationException(
+                type = base.type,
+                code = base.code,
+                error = error,
+                errorDescription = errorDescription ?: base.errorDescription,
+                errorUri = errorUri?.toUri() ?: base.errorUri,
+            )
+        }
+
+        /**
+         * Reconstructs an [AuthorizationException] from the JSON produced by
+         * [.toJsonString].
+         * @throws JSONException if the JSON is malformed or missing required properties
+         */
+        @Throws(JSONException::class)
+        fun fromJson(jsonStr: String): AuthorizationException {
+            require(jsonStr.isNotEmpty()) { "jsonStr cannot be empty" }
+            return fromJson(JSONObject(jsonStr))
+        }
+
+        /**
+         * Reconstructs an [AuthorizationException] from the JSON produced by
+         * [toJson].
+         * @throws JSONException if the JSON is malformed or missing required properties
+         */
+        @JvmStatic
+        @Throws(JSONException::class)
+        fun fromJson(json: JSONObject): AuthorizationException {
+            return AuthorizationException(
+                type = json.getInt(KEY_TYPE),
+                code = json.getInt(KEY_CODE),
+                error = json.getStringIfDefined(KEY_ERROR),
+                errorDescription = json.getStringIfDefined(KEY_ERROR_DESCRIPTION),
+                errorUri = json.getUriIfDefined(KEY_ERROR_URI),
+            )
+        }
+
+        /**
+         * Extracts an [AuthorizationException] from an intent produced by [.toIntent].
+         * This is used to retrieve an error response in the handler registered for a call to
+         * [AuthorizationService.performAuthorizationRequest].
+         */
+        @JvmStatic
+        fun fromIntent(data: Intent): AuthorizationException? {
+            try {
+                return data.getStringExtra(EXTRA_EXCEPTION)?.let { fromJson(it) }
+            } catch (ex: JSONException) {
+                throw IllegalArgumentException("Intent contains malformed exception data", ex)
+            }
+        }
+
+        private fun exceptionMapByString(
+            vararg exceptions: AuthorizationException
+        ) = exceptions.filter { it.error != null }.associateBy { it.error!! }
     }
 }

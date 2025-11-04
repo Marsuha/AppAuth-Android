@@ -1,166 +1,174 @@
-package net.openid.appauth.browser;
+package net.openid.appauth.browser
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.eq;
+import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.os.Bundle
+import androidx.browser.customtabs.CustomTabsCallback
+import androidx.browser.customtabs.CustomTabsClient
+import androidx.browser.customtabs.CustomTabsService
+import androidx.browser.customtabs.CustomTabsServiceConnection
+import androidx.browser.customtabs.CustomTabsSession
+import androidx.core.os.bundleOf
+import com.google.common.truth.Truth
+import kotlinx.coroutines.test.runTest
+import org.assertj.core.api.Assertions.assertThat
+import org.junit.Before
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.mockito.ArgumentCaptor
+import org.mockito.Captor
+import org.mockito.Mock
+import org.mockito.junit.MockitoJUnit
+import org.mockito.junit.MockitoRule
+import org.mockito.kotlin.any
+import org.mockito.kotlin.argumentCaptor
+import org.mockito.kotlin.doReturn
+import org.mockito.kotlin.eq
+import org.mockito.kotlin.mock
+import org.mockito.kotlin.verify
+import org.mockito.kotlin.whenever
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
-import android.content.ComponentName;
-import android.content.Context;
-import android.content.Intent;
-import android.net.Uri;
-import android.os.Bundle;
-import androidx.browser.customtabs.CustomTabsCallback;
-import androidx.browser.customtabs.CustomTabsClient;
-import androidx.browser.customtabs.CustomTabsService;
-import androidx.browser.customtabs.CustomTabsServiceConnection;
-import androidx.browser.customtabs.CustomTabsSession;
-import java.util.List;
-
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Captor;
-import org.mockito.Mock;
-import org.mockito.Mockito;
-import org.mockito.MockitoAnnotations;
-import org.robolectric.RobolectricTestRunner;
-import org.robolectric.annotation.Config;
-
-@RunWith(RobolectricTestRunner.class)
-@Config(sdk = 16)
-public class CustomTabManagerTest {
-
-    private static final String BROWSER_PACKAGE_NAME = "com.example.browser";
-
-    private AutoCloseable mMockitoCloseable;
-
-    @Mock
-    Context mContext;
-
-    @Captor
-    ArgumentCaptor<Intent> mConnectIntentCaptor;
-
-    @Captor
-    ArgumentCaptor<CustomTabsServiceConnection> mConnectionCaptor;
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [16])
+class CustomTabManagerTest {
+    @get:Rule
+    val mockitoRule: MockitoRule = MockitoJUnit.rule()
 
     @Mock
-    CustomTabsClient mClient;
+    lateinit var context: Context
 
-    private CustomTabManager mManager;
+    @Mock
+    lateinit var client: CustomTabsClient
+
+    @Captor
+    lateinit var connectIntentCaptor: ArgumentCaptor<Intent>
+
+    @Captor
+    lateinit var connectionCaptor: ArgumentCaptor<CustomTabsServiceConnection>
+
+    private lateinit var manager: CustomTabManager
 
     @Before
-    public void setUp() {
-        mMockitoCloseable = MockitoAnnotations.openMocks(this);
-        mManager = new CustomTabManager(mContext);
+    fun setUp() {
+        manager = CustomTabManager(context)
     }
 
-    @After
-    public void tearDown() throws Exception {
-        mMockitoCloseable.close();
-    }
-
-    @SuppressWarnings("WrongConstant")
     @Test
-    public void testBind() {
-        startBind(true);
-        provideClient();
+    fun testBind() = runTest {
+        startBind(true)
+        provideClient()
 
         // the mock client should now be available on the manager
-        assertThat(mManager.getClient()).isEqualTo(mClient);
+        assertThat(manager.getClient()).isEqualTo(client)
     }
 
     @Test
-    public void testBind_browserDoesNotSupportCustomTabs() {
-        startBind(false);
-        assertThat(mManager.getClient()).isEqualTo(null);
+    fun testBind_browserDoesNotSupportCustomTabs() = runTest {
+        startBind(false)
+        assertThat(manager.getClient()).isEqualTo(null)
     }
 
+    @Suppress("DEPRECATION")
     @Test
-    public void testCreateSession() {
-        startBind(true);
-        provideClient();
+    fun testCreateSession() = runTest {
+        // Arrange: Setup mocks and test data
+        startBind(true)
+        provideClient()
 
-        CustomTabsCallback mockCallbacks = Mockito.mock(CustomTabsCallback.class);
-        CustomTabsSession mockSession = Mockito.mock(CustomTabsSession.class);
+        val mockCallbacks = mock<CustomTabsCallback>()
+        val mockSession = mock<CustomTabsSession>()
 
-        Mockito.doReturn(mockSession).when(mClient).newSession(mockCallbacks);
+        // Use 'whenever' for more idiomatic stubbing
+        whenever(client.newSession(mockCallbacks)) doReturn mockSession
 
-        Uri launchUri1 = Uri.parse("https://idp.example.com");
-        Uri launchUri2 = Uri.parse("https://another.example.com");
-        Uri launchUri3 = Uri.parse("https://yetanother.example.com");
+        val primaryUri = Uri.parse("https://idp.example.com")
+        val otherPossibleUri1 = Uri.parse("https://another.example.com")
+        val otherPossibleUri2 = Uri.parse("https://yetanother.example.com")
 
-        Bundle launchUri2Bundle = new Bundle();
-        launchUri2Bundle.putParcelable(CustomTabsService.KEY_URL, launchUri2);
-
-        Bundle launchUri3Bundle = new Bundle();
-        launchUri3Bundle.putParcelable(CustomTabsService.KEY_URL, launchUri3);
-
-        CustomTabsSession session = mManager.createSession(
+        // Act: Call the method under test
+        val session = manager.createSession(
             mockCallbacks,
-            launchUri1,
-            launchUri2,
-            launchUri3);
+            primaryUri,
+            otherPossibleUri1,
+            otherPossibleUri2
+        )
 
-        assertThat(session).isEqualTo(mockSession);
+        // Assert: Verify the results
+        Truth.assertThat(session).isEqualTo(mockSession)
 
-        // upon creation of the session, the code should prime the session with the expected URIs
-        @SuppressWarnings("unchecked")
-        ArgumentCaptor<List<Bundle>> bundleCaptor = ArgumentCaptor.forClass(List.class);
-        Mockito.verify(mockSession).mayLaunchUrl(
-            eq(launchUri1),
-            eq((Bundle)null),
-            bundleCaptor.capture());
+        // Group verifications for clarity and use an idiomatic argument captor
+        val otherUrisCaptor = argumentCaptor<List<Bundle>>()
 
-        List<Bundle> bundles = bundleCaptor.getValue();
-        assertThat(bundles).hasSize(2);
-        assertThat(bundles.get(0).get(CustomTabsService.KEY_URL)).isEqualTo(launchUri2);
-        assertThat(bundles.get(1).get(CustomTabsService.KEY_URL)).isEqualTo(launchUri3);
+        verify(mockSession).mayLaunchUrl(
+            eq(primaryUri),
+            eq(null), // Verifying the second argument is explicitly null
+            otherUrisCaptor.capture()
+        )
+
+        // Assert on the captured argument
+        val capturedBundles = otherUrisCaptor.firstValue
+        Truth.assertThat(capturedBundles).hasSize(2)
+
+        // Using Truth's 'containsExactly' makes the assertion more expressive
+        Truth.assertThat(capturedBundles).containsExactly(
+            bundleOf(CustomTabsService.KEY_URL to otherPossibleUri1),
+            bundleOf(CustomTabsService.KEY_URL to otherPossibleUri2)
+        ).inOrder()
     }
 
     @Test
-    public void testCreateSession_browserDoesNotSupportCustomTabs() {
-        startBind(false);
-        assertThat(mManager.createSession(null)).isNull();
+    fun testCreateSession_browserDoesNotSupportCustomTabs() = runTest {
+        startBind(false)
+        assertThat(manager.createSession(null)).isNull()
     }
 
     @Test
-    public void testCreateSession_creationFails() {
-        startBind(true);
-        provideClient();
+    fun testCreateSession_creationFails() = runTest {
+        startBind(true)
+        provideClient()
 
         // Emulate session creation failure - annoyingly the contract for this is just to return
         // null, rather than an exception with some useful context.
-        CustomTabsCallback mockCallbacks = Mockito.mock(CustomTabsCallback.class);
-        Mockito.doReturn(null).when(mClient).newSession(mockCallbacks);
-
-        assertThat(mManager.createSession(mockCallbacks)).isNull();
+        val mockCallbacks = mock<CustomTabsCallback>()
+        whenever(client.newSession(mockCallbacks)) doReturn null
+        assertThat(manager.createSession(mockCallbacks)).isNull()
     }
 
     @Test
-    public void testDispose() {
-        startBind(true);
-
+    fun testDispose() {
+        startBind(true)
     }
 
-    @SuppressWarnings("WrongConstant")
-    private void startBind(boolean succeed) {
-        Mockito.doReturn(succeed).when(mContext).bindService(
-            mConnectIntentCaptor.capture(),
-            mConnectionCaptor.capture(),
-            Mockito.anyInt());
+    private fun startBind(succeed: Boolean) {
+        whenever(
+            context.bindService(
+                connectIntentCaptor.capture(),
+                connectionCaptor.capture(),
+                any<Int>()
+            )
+        ) doReturn succeed
 
-        mManager.bind(BROWSER_PACKAGE_NAME);
+        manager.bind(BROWSER_PACKAGE_NAME)
 
         // check the service connection is made to the specified package
-        Intent intent = mConnectIntentCaptor.getValue();
-        assertThat(intent.getPackage()).isEqualTo(BROWSER_PACKAGE_NAME);
+        val intent = connectIntentCaptor.value
+        assertThat(intent.`package`).isEqualTo(BROWSER_PACKAGE_NAME)
     }
 
-    private void provideClient() {
-        CustomTabsServiceConnection conn = mConnectionCaptor.getValue();
+    private fun provideClient() {
+        val conn = connectionCaptor.value
         conn.onCustomTabsServiceConnected(
-            new ComponentName(BROWSER_PACKAGE_NAME, BROWSER_PACKAGE_NAME + ".CustomTabsService"),
-            mClient);
+            ComponentName(BROWSER_PACKAGE_NAME, "$BROWSER_PACKAGE_NAME.CustomTabsService"),
+            client
+        )
+    }
+
+    companion object {
+        private const val BROWSER_PACKAGE_NAME = "com.example.browser"
     }
 }

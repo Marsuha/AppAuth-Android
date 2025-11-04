@@ -11,127 +11,116 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package net.openid.appauth.internal
 
-package net.openid.appauth.internal;
+import android.net.Uri
+import android.net.UrlQuerySanitizer
+import androidx.browser.customtabs.CustomTabsService
+import org.assertj.core.api.Assertions
+import org.junit.Before
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
-import android.net.Uri;
-import android.net.UrlQuerySanitizer;
-import android.os.Bundle;
-import androidx.browser.customtabs.CustomTabsService;
-
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.robolectric.RobolectricTestRunner;
-import org.robolectric.annotation.Config;
-
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
-import static org.assertj.core.api.Assertions.assertThat;
-
-@RunWith(RobolectricTestRunner.class)
-@Config(sdk = 16)
-public class UriUtilTest {
-
-    private UrlQuerySanitizer mSanitizer;
+@Suppress("DEPRECATION")
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [16])
+class UriUtilTest {
+    private lateinit var sanitizer: UrlQuerySanitizer
 
     @Before
-    public void setUp() {
-        mSanitizer = new UrlQuerySanitizer();
-        mSanitizer.setAllowUnregisteredParamaters(true);
-        mSanitizer.setUnregisteredParameterValueSanitizer(UrlQuerySanitizer.getUrlAndSpaceLegal());
+    fun setUp() {
+        sanitizer = UrlQuerySanitizer()
+        sanitizer.allowUnregisteredParamaters = true
+        sanitizer.unregisteredParameterValueSanitizer = UrlQuerySanitizer.getUrlAndSpaceLegal()
     }
 
     @Test
-    public void testFormUrlEncode() {
-        Map<String, String> parameters = new HashMap<>();
-        parameters.put("test1", "value1");
-        parameters.put("test2", "value2");
-        String query = UriUtil.formUrlEncode(parameters);
+    fun testFormUrlEncode() {
+        val parameters = mapOf(
+            "test1" to "value1",
+            "test2" to "value2"
+        )
 
-        mSanitizer.parseQuery(query);
-        for (Map.Entry<String, String> param : parameters.entrySet()) {
-            assertThat(mSanitizer.getValue(param.getKey())).isEqualTo(param.getValue());
+        val query = parameters.formUrlEncode()
+        sanitizer.parseQuery(query)
+
+        parameters.forEach {
+            Assertions.assertThat(sanitizer.getValue(it.key)).isEqualTo(it.value)
         }
     }
 
     @Test
-    public void testFormUrlEncode_withSpaceSeparatedValueForParameter() {
-        Map<String, String> parameters = new HashMap<>();
-        parameters.put("test1", "value1");
-        parameters.put("test2", "value2 value3");
-        String query = UriUtil.formUrlEncode(parameters);
+    fun testFormUrlEncode_withSpaceSeparatedValueForParameter() {
+        val parameters = mapOf(
+            "test1" to "value1",
+            "test2" to "value2 value3"
+        )
 
-        assertThat(query).contains("value2+value3");
-        mSanitizer.parseQuery(query);
-        for (Map.Entry<String, String> param : parameters.entrySet()) {
-            assertThat(mSanitizer.getValue(param.getKey())).isEqualTo(param.getValue());
+        val query = parameters.formUrlEncode()
+
+        Assertions.assertThat(query).contains("value2+value3")
+        sanitizer.parseQuery(query)
+
+        parameters.forEach {
+            Assertions.assertThat(sanitizer.getValue(it.key)).isEqualTo(it.value)
         }
     }
 
     @Test
-    public void testFormUrlEncode_withNull() {
-        assertThat(UriUtil.formUrlEncode(null)).isEqualTo("");
+    fun testFormUrlEncode_withNull() {
+        Assertions.assertThat(null.formUrlEncode()).isEqualTo("")
     }
 
     @Test
-    public void testFormUrlEncode_withEmpty() {
-        assertThat(UriUtil.formUrlEncode(new HashMap<String, String>())).isEqualTo("");
+    fun testFormUrlEncode_withEmpty() {
+        Assertions.assertThat(emptyMap<String, String>().formUrlEncode()).isEqualTo("")
     }
 
     @Test
-    public void testToCustomTabUri() {
-        Uri exampleUri = Uri.parse("https://www.example.com");
-        Uri anotherExampleUri = Uri.parse("https://another.example.com");
+    fun testToCustomTabUri() {
+        val exampleUri = Uri.parse("https://www.example.com")
+        val anotherExampleUri = Uri.parse("https://another.example.com")
 
-        List<Bundle> bundles = UriUtil.toCustomTabUriBundle(
-            new Uri[] { exampleUri, anotherExampleUri },
-            0);
+        val bundles = arrayOf(exampleUri, anotherExampleUri).toCustomTabUriBundle()
 
-        assertThat(bundles).hasSize(2);
-        assertThat(bundles.get(0).keySet()).contains(CustomTabsService.KEY_URL);
-        assertThat(bundles.get(0).get(CustomTabsService.KEY_URL)).isEqualTo(exampleUri);
-        assertThat(bundles.get(1).keySet()).contains(CustomTabsService.KEY_URL);
-        assertThat(bundles.get(1).get(CustomTabsService.KEY_URL)).isEqualTo(anotherExampleUri);
+        Assertions.assertThat(bundles).hasSize(2)
+        Assertions.assertThat(bundles[0].keySet()).contains(CustomTabsService.KEY_URL)
+        Assertions.assertThat(bundles[0].get(CustomTabsService.KEY_URL)).isEqualTo(exampleUri)
+        Assertions.assertThat(bundles[1].keySet()).contains(CustomTabsService.KEY_URL)
+        Assertions.assertThat(bundles[1].get(CustomTabsService.KEY_URL))
+            .isEqualTo(anotherExampleUri)
     }
 
     @Test
-    public void testToCustomTabUri_startIndex() {
-        Uri anotherExampleUri = Uri.parse("https://another.example.com");
+    fun testToCustomTabUri_startIndex() {
+        val anotherExampleUri = Uri.parse("https://another.example.com")
 
-        List<Bundle> bundles = UriUtil.toCustomTabUriBundle(
-            new Uri[] {
-                Uri.parse("https://www.example.com"),
-                anotherExampleUri
-            },
-            1);
+        val bundles = arrayOf(
+            Uri.parse("https://www.example.com"),
+            anotherExampleUri
+        ).toCustomTabUriBundle(1)
 
-        assertThat(bundles).hasSize(1);
-        assertThat(bundles.get(0).keySet()).contains(CustomTabsService.KEY_URL);
-        assertThat(bundles.get(0).get(CustomTabsService.KEY_URL)).isEqualTo(anotherExampleUri);
+        Assertions.assertThat(bundles).hasSize(1)
+        Assertions.assertThat(bundles[0].keySet()).contains(CustomTabsService.KEY_URL)
+        Assertions.assertThat(bundles[0].get(CustomTabsService.KEY_URL))
+            .isEqualTo(anotherExampleUri)
     }
 
     @Test
-    public void testToCustomTabUriBundle_emptyArray() {
-        assertThat(UriUtil.toCustomTabUriBundle(new Uri[0], 0)).isEmpty();
+    fun testToCustomTabUriBundle_emptyArray() {
+        Assertions.assertThat(arrayOf<Uri?>(null).toCustomTabUriBundle(0))
+            .isEmpty()
     }
 
     @Test
-    public void testToCustomTabUriBundle_nullArray() {
-        assertThat(UriUtil.toCustomTabUriBundle(null, 0)).isEmpty();
-    }
+    fun testToCustomTabUriBundle_startIndexOutsideArray() {
+        val bundles = arrayOf(
+            Uri.parse("https://www.example.com"),
+            Uri.parse("https://another.example.com")
+        ).toCustomTabUriBundle(2)
 
-    @Test
-    public void testToCustomTabUriBundle_startIndexOutsideArray() {
-        List<Bundle> bundles = UriUtil.toCustomTabUriBundle(
-            new Uri[] {
-                Uri.parse("https://www.example.com"),
-                Uri.parse("https://another.example.com")
-            },
-            2);
-
-        assertThat(bundles).hasSize(0);
+        Assertions.assertThat(bundles).hasSize(0)
     }
 }

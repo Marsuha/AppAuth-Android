@@ -11,42 +11,44 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package net.openid.appauth
 
-package net.openid.appauth;
-
-import androidx.annotation.NonNull;
-
-import java.util.Map;
-
-public interface ClientAuthentication {
+/**
+ * An interface for client authentication methods.
+ *
+ * This interface defines the contract for implementing different client authentication mechanisms
+ * as specified in [Section 2.3 of RFC6749](https://tools.ietf.org/html/rfc6749#section-2.3)
+ * and [Section 2 of OpenID Connect Core 1.0](https://openid.net/specs/openid-connect-core-1_0.html#ClientAuthentication).
+ *
+ * Implementations of this interface are responsible for providing the necessary headers or
+ * parameters to authenticate the client when making requests to the token endpoint.
+ *
+ * @see ClientSecretBasic
+ * @see ClientSecretPost
+ * @see NoClientAuthentication
+ */
+sealed interface ClientAuthentication {
     /**
-     * Thrown when a mandatory property is missing from the registration response.
+     * An exception thrown when a client authentication method is not supported by the
+     * authorization server. This typically occurs when the server's discovery document
+     * does not list the method in its `token_endpoint_auth_methods_supported` metadata.
+     *
+     * @param unsupportedAuthenticationMethod The name of the unsupported authentication method.
      */
-    class UnsupportedAuthenticationMethod extends Exception {
-        private String mAuthMethod;
+    class UnsupportedAuthenticationMethod(
+        unsupportedAuthenticationMethod: String
+    ) : Exception("Unsupported client authentication method: $unsupportedAuthenticationMethod")
 
-        /**
-         * Indicates that the specified client authentication method is unsupported.
-         */
-        public UnsupportedAuthenticationMethod(String field) {
-            super("Unsupported client authentication method: " + field);
-            mAuthMethod = field;
-        }
-
-        public String getUnsupportedAuthenticationMethod() {
-            return mAuthMethod;
-        }
-    }
 
     /**
      * Constructs any extra parameters necessary to include in the request headers for the client
      * authentication.
      */
-    Map<String, String> getRequestHeaders(@NonNull String clientId);
+    fun getRequestHeaders(clientId: String): Map<String, String>?
 
     /**
      * Constructs any extra parameters necessary to include in the request body for the client
      * authentication.
      */
-    Map<String, String> getRequestParameters(@NonNull String clientId);
+    fun getRequestParameters(clientId: String): Map<String, String>?
 }

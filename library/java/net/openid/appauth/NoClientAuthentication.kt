@@ -11,47 +11,29 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-package net.openid.appauth;
-
-import androidx.annotation.NonNull;
-
-import java.util.Collections;
-import java.util.Map;
+package net.openid.appauth
 
 /**
  * Implementation of the client authentication method 'none'. This is the default,
  * if no other authentication method is specified when calling
- * {@link AuthorizationService#performTokenRequest(TokenRequest,
- * AuthorizationService.TokenResponseCallback)}.
+ * [AuthorizationService.performTokenRequest].
  *
  * @see "OpenID Connect Core 1.0, Section 9
- * <https://openid.net/specs/openid-connect-core-1_0.html#rfc.section.9>"
+ * <https:></https:>//openid.net/specs/openid-connect-core-1_0.html.rfc.section.9>"
  */
-public class NoClientAuthentication implements ClientAuthentication {
+object NoClientAuthentication : ClientAuthentication {
     /**
      * Name of this authentication method.
      */
-    public static final String NAME = "none";
-
-    /**
-     * The default (singleton) instance of {@link NoClientAuthentication}.
-     */
-    public static final NoClientAuthentication INSTANCE = new NoClientAuthentication();
-
-    private NoClientAuthentication() {
-        // no need to instantiate separate instances from INSTANCE
-    }
+    @Suppress("unused")
+    const val NAME: String = "none"
 
     /**
      * {@inheritDoc}
      *
      * @return always `null`.
      */
-    @Override
-    public Map<String, String> getRequestHeaders(@NonNull String clientId) {
-        return null;
-    }
+    override fun getRequestHeaders(clientId: String): Map<String, String>? = null
 
     /**
      * {@inheritDoc}
@@ -59,8 +41,6 @@ public class NoClientAuthentication implements ClientAuthentication {
      * Where no alternative form of client authentication is used, the client_id is simply
      * sent as a client identity assertion.
      */
-    @Override
-    public Map<String, String> getRequestParameters(@NonNull String clientId) {
-        return Collections.singletonMap(TokenRequest.PARAM_CLIENT_ID, clientId);
-    }
+    override fun getRequestParameters(clientId: String) =
+        mapOf(TokenRequest.PARAM_CLIENT_ID to clientId)
 }

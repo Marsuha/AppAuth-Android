@@ -11,84 +11,84 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package net.openid.appauth.browser
 
-package net.openid.appauth.browser;
+import net.openid.appauth.browser.VersionRange.Companion.atLeast
+import net.openid.appauth.browser.VersionRange.Companion.atMost
+import net.openid.appauth.browser.VersionRange.Companion.between
+import org.assertj.core.api.Assertions.assertThat
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
-import static org.assertj.core.api.Assertions.assertThat;
-
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.robolectric.RobolectricTestRunner;
-import org.robolectric.annotation.Config;
-
-@RunWith(RobolectricTestRunner.class)
-@Config(sdk = 16)
-public class VersionRangeTest {
-
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [16])
+class VersionRangeTest {
     @Test
-    public void testAtLeast() {
-        VersionRange range = VersionRange.atLeast("1.2");
-        assertThat(range.matches("2")).isTrue();
-        assertThat(range.matches("1.5")).isTrue();
-        assertThat(range.matches("1.2.1")).isTrue();
-        assertThat(range.matches("1.2")).isTrue();
-        assertThat(range.matches("1.2.0")).isTrue();
+    fun testAtLeast() {
+        val range = atLeast("1.2")
+        assertThat(range.matches("2")).isTrue()
+        assertThat(range.matches("1.5")).isTrue()
+        assertThat(range.matches("1.2.1")).isTrue()
+        assertThat(range.matches("1.2")).isTrue()
+        assertThat(range.matches("1.2.0")).isTrue()
 
-        assertThat(range.matches("1.1.9")).isFalse();
-        assertThat(range.matches("1.1")).isFalse();
-        assertThat(range.matches("1")).isFalse();
+        assertThat(range.matches("1.1.9")).isFalse()
+        assertThat(range.matches("1.1")).isFalse()
+        assertThat(range.matches("1")).isFalse()
     }
 
     @Test
-    public void testAtMost() {
-        VersionRange range = VersionRange.atMost("1.2");
-        assertThat(range.matches("2")).isFalse();
-        assertThat(range.matches("1.5")).isFalse();
-        assertThat(range.matches("1.2.1")).isFalse();
-        assertThat(range.matches("1.2")).isTrue();
-        assertThat(range.matches("1.2.0")).isTrue();
+    fun testAtMost() {
+        val range = atMost("1.2")
+        assertThat(range.matches("2")).isFalse()
+        assertThat(range.matches("1.5")).isFalse()
+        assertThat(range.matches("1.2.1")).isFalse()
+        assertThat(range.matches("1.2")).isTrue()
+        assertThat(range.matches("1.2.0")).isTrue()
 
-        assertThat(range.matches("1.1.9")).isTrue();
-        assertThat(range.matches("1.1")).isTrue();
-        assertThat(range.matches("1")).isTrue();
-        assertThat(range.matches("0.5")).isTrue();
+        assertThat(range.matches("1.1.9")).isTrue()
+        assertThat(range.matches("1.1")).isTrue()
+        assertThat(range.matches("1")).isTrue()
+        assertThat(range.matches("0.5")).isTrue()
     }
 
     @Test
-    public void testBetween() {
-        VersionRange range = VersionRange.between("2.0", "2.10");
-        assertThat(range.matches("0.8")).isFalse();
-        assertThat(range.matches("1.5")).isFalse();
-        assertThat(range.matches("1.9")).isFalse();
+    fun testBetween() {
+        val range = between("2.0", "2.10")
+        assertThat(range.matches("0.8")).isFalse()
+        assertThat(range.matches("1.5")).isFalse()
+        assertThat(range.matches("1.9")).isFalse()
 
-        assertThat(range.matches("2.0")).isTrue();
-        assertThat(range.matches("2.0.1")).isTrue();
-        assertThat(range.matches("2.1")).isTrue();
-        assertThat(range.matches("2.9.5")).isTrue();
-        assertThat(range.matches("2.10")).isTrue();
+        assertThat(range.matches("2.0")).isTrue()
+        assertThat(range.matches("2.0.1")).isTrue()
+        assertThat(range.matches("2.1")).isTrue()
+        assertThat(range.matches("2.9.5")).isTrue()
+        assertThat(range.matches("2.10")).isTrue()
 
-        assertThat(range.matches("2.10.1")).isFalse();
-        assertThat(range.matches("2.11")).isFalse();
-        assertThat(range.matches("3.0")).isFalse();
+        assertThat(range.matches("2.10.1")).isFalse()
+        assertThat(range.matches("2.11")).isFalse()
+        assertThat(range.matches("3.0")).isFalse()
     }
 
     @Test
-    public void testToString_noBounds() {
-        assertThat(VersionRange.ANY_VERSION.toString()).isEqualTo("any version");
+    fun testToString_noBounds() {
+        assertThat(VersionRange.ANY_VERSION.toString()).isEqualTo("any version")
     }
 
     @Test
-    public void testToString_lowerBoundOnly() {
-        assertThat(VersionRange.atLeast("1.2").toString()).isEqualTo("1.2 or higher");
+    fun testToString_lowerBoundOnly() {
+        assertThat(atLeast("1.2").toString()).isEqualTo("1.2 or higher")
     }
 
     @Test
-    public void testToString_upperBoundOnly() {
-        assertThat(VersionRange.atMost("1.2").toString()).isEqualTo("1.2 or lower");
+    fun testToString_upperBoundOnly() {
+        assertThat(atMost("1.2").toString()).isEqualTo("1.2 or lower")
     }
 
     @Test
-    public void testToString_lowerAndUpperBounds() {
-        assertThat(VersionRange.between("1.2", "2.0").toString()).isEqualTo("between 1.2 and 2");
+    fun testToString_lowerAndUpperBounds() {
+        assertThat(between("1.2", "2.0").toString()).isEqualTo("between 1.2 and 2")
     }
 }

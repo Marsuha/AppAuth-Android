@@ -11,13 +11,7 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-package net.openid.appauth.browser;
-
-import androidx.annotation.NonNull;
-
-import java.util.Arrays;
-import java.util.List;
+package net.openid.appauth.browser
 
 /**
  * A denyList of browsers. This will reject a match for any browser on the list, and permit
@@ -26,43 +20,29 @@ import java.util.List;
  * ```java
  * // denyList Chrome, whether using a custom tab or not
  * new BrowserDenyList(
- *     VersionedBrowserMatcher.CHROME_BROWSER,
- *     VersionedBrowserMatcher.CHROME_CUSTOM_TAB);
+ * VersionedBrowserMatcher.CHROME_BROWSER,
+ * VersionedBrowserMatcher.CHROME_CUSTOM_TAB);
  *
  * // denyList Firefox
  * new BrowserDenyList(
- *     VersionedBrowserMatcher.FIREFOX_BROWSER,
- *     VersionedBrowserMatcher.FIREFOX_CUSTOM_TAB);
+ * VersionedBrowserMatcher.FIREFOX_BROWSER,
+ * VersionedBrowserMatcher.FIREFOX_CUSTOM_TAB);
  *
  * // denyList Dolphin Browser
  * new BrowserDenyList(
- *     new VersionedBrowserMatcher(
- *         "mobi.mgeek.TunnyBrowser",
- *         "<DOLPHIN_SIGNATURE>",
- *         false,
- *         VersionRange.ANY_VERSION));
+ * new VersionedBrowserMatcher(
+ * "mobi.mgeek.TunnyBrowser",
+ * "<DOLPHIN_SIGNATURE>",
+ * false,
+ * VersionRange.ANY_VERSION));
  * }
  * ```
- */
-public class BrowserDenyList implements BrowserMatcher {
+</DOLPHIN_SIGNATURE> */
+class BrowserDenyList(vararg matchers: BrowserMatcher) : BrowserMatcher {
+    private val mBrowserMatchers: List<BrowserMatcher> = listOf(*matchers)
 
-    private List<BrowserMatcher> mBrowserMatchers;
-
-    /**
-     * Creates a denyList from the provided set of matchers.
-     */
-    public BrowserDenyList(BrowserMatcher... matchers) {
-        mBrowserMatchers = Arrays.asList(matchers);
-    }
-
-    @Override
-    public boolean matches(@NonNull BrowserDescriptor descriptor) {
-        for (BrowserMatcher matcher : mBrowserMatchers) {
-            if (matcher.matches(descriptor)) {
-                return false;
-            }
-        }
-
-        return true;
+    override fun matches(descriptor: BrowserDescriptor): Boolean {
+        mBrowserMatchers.forEach { if (it.matches(descriptor)) return false }
+        return true
     }
 }

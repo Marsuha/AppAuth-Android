@@ -11,868 +11,616 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package net.openid.appauth
 
-package net.openid.appauth;
-
-import static net.openid.appauth.Preconditions.checkNotNull;
-
-import android.annotation.TargetApi;
-import android.app.Activity;
-import android.app.PendingIntent;
-import android.content.ActivityNotFoundException;
-import android.content.Context;
-import android.content.ContextWrapper;
-import android.content.Intent;
-import android.net.Uri;
-import android.os.AsyncTask;
-import android.os.Build;
-import android.text.TextUtils;
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
-import androidx.annotation.VisibleForTesting;
-import androidx.browser.customtabs.CustomTabsIntent;
-
-import net.openid.appauth.AuthorizationException.GeneralErrors;
-import net.openid.appauth.AuthorizationException.RegistrationRequestErrors;
-import net.openid.appauth.AuthorizationException.TokenRequestErrors;
-import net.openid.appauth.IdToken.IdTokenException;
-import net.openid.appauth.browser.BrowserDescriptor;
-import net.openid.appauth.browser.BrowserSelector;
-import net.openid.appauth.browser.CustomTabManager;
-import net.openid.appauth.connectivity.ConnectionBuilder;
-import net.openid.appauth.internal.Logger;
-import net.openid.appauth.internal.UriUtil;
-import org.json.JSONException;
-import org.json.JSONObject;
-
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStreamWriter;
-import java.net.HttpURLConnection;
-import java.net.URLConnection;
-import java.util.Map;
-
+import android.app.Activity
+import android.app.PendingIntent
+import android.content.ActivityNotFoundException
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import androidx.browser.customtabs.CustomTabsIntent
+import androidx.core.net.toUri
+import androidx.lifecycle.Lifecycle.Event.ON_DESTROY
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.LifecycleOwner
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import net.openid.appauth.AuthorizationException.Companion.PARAM_ERROR
+import net.openid.appauth.AuthorizationException.Companion.PARAM_ERROR_DESCRIPTION
+import net.openid.appauth.AuthorizationException.Companion.PARAM_ERROR_URI
+import net.openid.appauth.AuthorizationException.GeneralErrors
+import net.openid.appauth.AuthorizationException.RegistrationRequestErrors
+import net.openid.appauth.AuthorizationException.TokenRequestErrors
+import net.openid.appauth.IdToken.IdTokenException
+import net.openid.appauth.RegistrationResponse.MissingArgumentException
+import net.openid.appauth.browser.BrowserDescriptor
+import net.openid.appauth.browser.BrowserSelector
+import net.openid.appauth.browser.CustomTabManager
+import net.openid.appauth.connectivity.ConnectionBuilder
+import net.openid.appauth.internal.Logger
+import net.openid.appauth.internal.formUrlEncode
+import net.openid.appauth.internal.isActivity
+import org.json.JSONException
+import org.json.JSONObject
+import java.io.IOException
+import java.io.InputStream
+import java.io.OutputStreamWriter
+import java.net.HttpURLConnection.HTTP_MULT_CHOICE
+import java.net.HttpURLConnection.HTTP_OK
 
 /**
- * Dispatches requests to an OAuth2 authorization service. Note that instances of this class
- * _must be manually disposed_ when no longer required, to avoid leaks
- * (see {@link #dispose()}.
+ * Manages the client's interactions with an OAuth 2.0 and OpenID Connect authorization service.
+ *
+ * This class provides methods to perform key tasks such as:
+ * - Initiating authorization requests using a browser/custom tab.
+ * - Handling authorization, end-session, and token exchange flows.
+ * - Performing dynamic client registration.
+ *
+ * An `AuthorizationService` is created with a `Context` and an optional `AppAuthConfiguration`.
+ * It automatically selects a browser that supports custom tabs if available, based on the
+ * provided configuration.
+ *
+ * ### Lifecycle
+ *
+ * Instances of this class hold a connection to a `CustomTabsService` and must be disposed of
+ * when no longer needed to avoid resource leaks. The `dispose()` method should be called, for
+ * example, in the `onDestroy()` lifecycle event of an Activity. If the `AuthorizationService`
+ * is created with an `Activity` context, it will automatically handle its own disposal.
+ *
+ * ### Example Usage:
+ *
+ * ```kotlin
+ * // Create a service instance
+ * val authService = AuthorizationService(this)
+ *
+ * // Create an authorization request
+ * val authRequest = AuthorizationRequest.Builder(...)
+ *     .build()
+ *
+ * // Define intents for success and cancellation
+ * val successIntent = ...
+ * val cancelIntent = ...
+ *
+ * // Perform the authorization request
+ * lifecycleScope.launch {
+ *     authService.performAuthorizationRequest(
+ *         authRequest,
+ *         successIntent,
+ *         cancelIntent
+ *     )
+ * }
+ *
+ * // Remember to dispose of the service when done
+ * override fun onDestroy() {
+ *     super.onDestroy()
+ *     authService.dispose()
+ * }
+ * ```
+ *
+ * @param context The context used to create the service. If it's an `Activity` context, the
+ *     service will automatically be disposed of in `onDestroy`.
+ * @param clientConfiguration The configuration for AppAuth, including the browser matcher and
+ *     connection builder. Defaults to `AppAuthConfiguration.DEFAULT`.
  */
-public class AuthorizationService {
-
-    @VisibleForTesting
-    Context mContext;
-
-    @NonNull
-    private final AppAuthConfiguration mClientConfiguration;
-
-    @NonNull
-    private final CustomTabManager mCustomTabManager;
-
-    @Nullable
-    private final BrowserDescriptor mBrowser;
-
-    private boolean mDisposed = false;
-
-    /**
-     * Creates an AuthorizationService instance, using the
-     * {@link AppAuthConfiguration#DEFAULT default configuration}. Note that
-     * instances of this class must be manually disposed when no longer required, to avoid
-     * leaks (see {@link #dispose()}.
-     */
-    public AuthorizationService(@NonNull Context context) {
-        this(context, AppAuthConfiguration.DEFAULT);
-    }
-
-    /**
-     * Creates an AuthorizationService instance, using the specified configuration. Note that
-     * instances of this class must be manually disposed when no longer required, to avoid
-     * leaks (see {@link #dispose()}.
-     */
-    public AuthorizationService(
-            @NonNull Context context,
-            @NonNull AppAuthConfiguration clientConfiguration) {
-        this(context,
-                clientConfiguration,
-                BrowserSelector.select(
-                        context,
-                        clientConfiguration.getBrowserMatcher()),
-                new CustomTabManager(context));
-    }
-
-    /**
-     * Constructor that injects a url builder into the service for testing.
-     */
-    @VisibleForTesting
-    AuthorizationService(@NonNull Context context,
-                         @NonNull AppAuthConfiguration clientConfiguration,
-                         @Nullable BrowserDescriptor browser,
-                         @NonNull CustomTabManager customTabManager) {
-        mContext = checkNotNull(context);
-        mClientConfiguration = clientConfiguration;
-        mCustomTabManager = customTabManager;
-        mBrowser = browser;
-
-        if (browser != null && browser.useCustomTab) {
-            mCustomTabManager.bind(browser.packageName);
-        }
-    }
-
-    public CustomTabManager getCustomTabManager() {
-        return mCustomTabManager;
-    }
-
+class AuthorizationService @JvmOverloads constructor(
+    val context: Context,
+    private val clientConfiguration: AppAuthConfiguration = AppAuthConfiguration.DEFAULT,
     /**
      * Returns the BrowserDescriptor of the chosen browser.
      * Can for example be used to set the browsers package name to a CustomTabsIntent.
      */
-    public BrowserDescriptor getBrowserDescriptor() {
-        return mBrowser;
+    val browserDescriptor: BrowserDescriptor? = BrowserSelector.select(
+        context,
+        clientConfiguration.browserMatcher
+    ),
+    val customTabManager: CustomTabManager = CustomTabManager(context)
+) {
+    private var mDisposed = false
+
+    /**
+     * Constructor that injects a url builder into the service for testing.
+     */
+    init {
+        browserDescriptor?.let {
+            if (it.useCustomTab) {
+                customTabManager.bind(it.packageName)
+
+                if (context.isActivity()) {
+                    (context as LifecycleOwner).lifecycle.addObserver(
+                        LifecycleEventObserver { _, event ->
+                            if (event == ON_DESTROY) dispose()
+                        }
+                    )
+                }
+            }
+        }
     }
 
     /**
      * Creates a custom tab builder, that will use a tab session from an existing connection to
      * a web browser, if available.
      */
-    public CustomTabsIntent.Builder createCustomTabsIntentBuilder(Uri... possibleUris) {
-        checkNotDisposed();
-        return mCustomTabManager.createTabBuilder(possibleUris);
-    }
-
-    /**
-     * Sends an authorization request to the authorization service, using a
-     * [custom tab](https://developer.chrome.com/multidevice/android/customtabs)
-     * if available, or a browser instance.
-     * The parameters of this request are determined by both the authorization service
-     * configuration and the provided {@link AuthorizationRequest request object}. Upon completion
-     * of this request, the provided {@link PendingIntent completion PendingIntent} will be invoked.
-     * If the user cancels the authorization request, the current activity will regain control.
-     */
-    public void performAuthorizationRequest(
-            @NonNull AuthorizationRequest request,
-            @NonNull PendingIntent completedIntent) {
-        performAuthorizationRequest(
-                request,
-                completedIntent,
-                null,
-                createCustomTabsIntentBuilder().build());
-    }
-
-    /**
-     * Sends an authorization request to the authorization service, using a
-     * [custom tab](https://developer.chrome.com/multidevice/android/customtabs)
-     * if available, or a browser instance.
-     * The parameters of this request are determined by both the authorization service
-     * configuration and the provided {@link AuthorizationRequest request object}. Upon completion
-     * of this request, the provided {@link PendingIntent completion PendingIntent} will be invoked.
-     * If the user cancels the authorization request, the provided
-     * {@link PendingIntent cancel PendingIntent} will be invoked.
-     */
-    public void performAuthorizationRequest(
-            @NonNull AuthorizationRequest request,
-            @NonNull PendingIntent completedIntent,
-            @NonNull PendingIntent canceledIntent) {
-        performAuthorizationRequest(
-                request,
-                completedIntent,
-                canceledIntent,
-                createCustomTabsIntentBuilder().build());
+    suspend fun createCustomTabsIntentBuilder(vararg possibleUris: Uri?): CustomTabsIntent.Builder {
+        checkNotDisposed()
+        return customTabManager.createTabBuilder(*possibleUris)
     }
 
     /**
      * Sends an authorization request to the authorization service, using a
      * [custom tab](https://developer.chrome.com/multidevice/android/customtabs).
      * The parameters of this request are determined by both the authorization service
-     * configuration and the provided {@link AuthorizationRequest request object}. Upon completion
-     * of this request, the provided {@link PendingIntent completion PendingIntent} will be invoked.
-     * If the user cancels the authorization request, the current activity will regain control.
-     *
-     * @param customTabsIntent
-     *     The intent that will be used to start the custom tab. It is recommended that this intent
-     *     be created with the help of {@link #createCustomTabsIntentBuilder(Uri[])}, which will
-     *     ensure that a warmed-up version of the browser will be used, minimizing latency.
-     */
-    public void performAuthorizationRequest(
-            @NonNull AuthorizationRequest request,
-            @NonNull PendingIntent completedIntent,
-            @NonNull CustomTabsIntent customTabsIntent) {
-        performAuthorizationRequest(
-                request,
-                completedIntent,
-                null,
-                customTabsIntent);
-    }
-
-    /**
-     * Sends an authorization request to the authorization service, using a
-     * [custom tab](https://developer.chrome.com/multidevice/android/customtabs).
-     * The parameters of this request are determined by both the authorization service
-     * configuration and the provided {@link AuthorizationRequest request object}. Upon completion
-     * of this request, the provided {@link PendingIntent completion PendingIntent} will be invoked.
+     * configuration and the provided [request object][AuthorizationRequest]. Upon completion
+     * of this request, the provided [completion PendingIntent][PendingIntent] will be invoked.
      * If the user cancels the authorization request, the provided
-     * {@link PendingIntent cancel PendingIntent} will be invoked.
+     * [cancel PendingIntent][PendingIntent] will be invoked.
      *
      * @param customTabsIntent
-     *     The intent that will be used to start the custom tab. It is recommended that this intent
-     *     be created with the help of {@link #createCustomTabsIntentBuilder(Uri[])}, which will
-     *     ensure that a warmed-up version of the browser will be used, minimizing latency.
+     * The intent that will be used to start the custom tab. It is recommended that this intent
+     * be created with the help of [.createCustomTabsIntentBuilder], which will
+     * ensure that a warmed-up version of the browser will be used, minimizing latency.
      *
-     * @throws android.content.ActivityNotFoundException if no suitable browser is available to
-     *     perform the authorization flow.
+     * @throws ActivityNotFoundException if no suitable browser is available to
+     * perform the authorization flow.
      */
-    public void performAuthorizationRequest(
-            @NonNull AuthorizationRequest request,
-            @NonNull PendingIntent completedIntent,
-            @Nullable PendingIntent canceledIntent,
-            @NonNull CustomTabsIntent customTabsIntent) {
+    @JvmOverloads
+    suspend fun performAuthorizationRequest(
+        request: AuthorizationRequest,
+        completedIntent: PendingIntent,
+        canceledIntent: PendingIntent? = null,
+        customTabsIntent: CustomTabsIntent? = null
+    ) {
         performAuthManagementRequest(
-                request,
-                completedIntent,
-                canceledIntent,
-                customTabsIntent);
-    }
-
-    /**
-     * Sends an end session request to the authorization service, using a
-     * [custom tab](https://developer.chrome.com/multidevice/android/customtabs)
-     * if available, or a browser instance.
-     * The parameters of this request are determined by both the authorization service
-     * configuration and the provided {@link EndSessionRequest request object}. Upon completion
-     * of this request, the provided {@link PendingIntent completion PendingIntent} will be invoked.
-     * If the user cancels the authorization request, the current activity will regain control.
-     */
-    public void performEndSessionRequest(
-            @NonNull EndSessionRequest request,
-            @NonNull PendingIntent completedIntent) {
-        performEndSessionRequest(
-                request,
-                completedIntent,
-                null,
-                createCustomTabsIntentBuilder().build());
-    }
-
-    /**
-     * Sends an end session request to the authorization service, using a
-     * [custom tab](https://developer.chrome.com/multidevice/android/customtabs)
-     * if available, or a browser instance.
-     * The parameters of this request are determined by both the authorization service
-     * configuration and the provided {@link EndSessionRequest request object}. Upon completion
-     * of this request, the provided {@link PendingIntent completion PendingIntent} will be invoked.
-     * If the user cancels the authorization request, the provided
-     * {@link PendingIntent cancel PendingIntent} will be invoked.
-     */
-    public void performEndSessionRequest(
-            @NonNull EndSessionRequest request,
-            @NonNull PendingIntent completedIntent,
-            @NonNull PendingIntent canceledIntent) {
-        performEndSessionRequest(
-                request,
-                completedIntent,
-                canceledIntent,
-                createCustomTabsIntentBuilder().build());
+            request,
+            completedIntent,
+            canceledIntent,
+            customTabsIntent ?: createCustomTabsIntentBuilder().build()
+        )
     }
 
     /**
      * Sends an end session request to the authorization service, using a
      * [custom tab](https://developer.chrome.com/multidevice/android/customtabs).
      * The parameters of this request are determined by both the authorization service
-     * configuration and the provided {@link EndSessionRequest request object}. Upon completion
-     * of this request, the provided {@link PendingIntent completion PendingIntent} will be invoked.
-     * If the user cancels the authorization request, the current activity will regain control.
-     *
-     * @param customTabsIntent
-     *     The intent that will be used to start the custom tab. It is recommended that this intent
-     *     be created with the help of {@link #createCustomTabsIntentBuilder(Uri[])}, which will
-     *     ensure that a warmed-up version of the browser will be used, minimizing latency.
-     */
-    public void performEndSessionRequest(
-            @NonNull EndSessionRequest request,
-            @NonNull PendingIntent completedIntent,
-            @NonNull CustomTabsIntent customTabsIntent) {
-        performEndSessionRequest(
-                request,
-                completedIntent,
-                null,
-                customTabsIntent);
-    }
-
-    /**
-     * Sends an end session request to the authorization service, using a
-     * [custom tab](https://developer.chrome.com/multidevice/android/customtabs).
-     * The parameters of this request are determined by both the authorization service
-     * configuration and the provided {@link EndSessionRequest request object}. Upon completion
-     * of this request, the provided {@link PendingIntent completion PendingIntent} will be invoked.
+     * configuration and the provided [request object][EndSessionRequest]. Upon completion
+     * of this request, the provided [completion PendingIntent][PendingIntent] will be invoked.
      * If the user cancels the authorization request, the provided
-     * {@link PendingIntent cancel PendingIntent} will be invoked.
+     * [cancel PendingIntent][PendingIntent] will be invoked.
      *
      * @param customTabsIntent
-     *     The intent that will be used to start the custom tab. It is recommended that this intent
-     *     be created with the help of {@link #createCustomTabsIntentBuilder(Uri[])}, which will
-     *     ensure that a warmed-up version of the browser will be used, minimizing latency.
+     * The intent that will be used to start the custom tab. It is recommended that this intent
+     * be created with the help of [.createCustomTabsIntentBuilder], which will
+     * ensure that a warmed-up version of the browser will be used, minimizing latency.
      *
-     * @throws android.content.ActivityNotFoundException if no suitable browser is available to
-     *     perform the authorization flow.
+     * @throws ActivityNotFoundException if no suitable browser is available to
+     * perform the authorization flow.
      */
-    public void performEndSessionRequest(
-            @NonNull EndSessionRequest request,
-            @NonNull PendingIntent completedIntent,
-            @Nullable PendingIntent canceledIntent,
-            @NonNull CustomTabsIntent customTabsIntent) {
+    @JvmOverloads
+    suspend fun performEndSessionRequest(
+        request: EndSessionRequest,
+        completedIntent: PendingIntent,
+        canceledIntent: PendingIntent? = null,
+        customTabsIntent: CustomTabsIntent? = null
+    ) {
         performAuthManagementRequest(
-                request,
-                completedIntent,
-                canceledIntent,
-                customTabsIntent);
+            request,
+            completedIntent,
+            canceledIntent,
+            customTabsIntent ?: createCustomTabsIntentBuilder().build()
+        )
     }
 
-    private void performAuthManagementRequest(
-            @NonNull AuthorizationManagementRequest request,
-            @NonNull PendingIntent completedIntent,
-            @Nullable PendingIntent canceledIntent,
-            @NonNull CustomTabsIntent customTabsIntent) {
+    private fun performAuthManagementRequest(
+        request: AuthorizationManagementRequest,
+        completedIntent: PendingIntent,
+        canceledIntent: PendingIntent?,
+        customTabsIntent: CustomTabsIntent
+    ) {
+        checkNotDisposed()
 
-        checkNotDisposed();
-        checkNotNull(request);
-        checkNotNull(completedIntent);
-        checkNotNull(customTabsIntent);
-
-        Intent authIntent = prepareAuthorizationRequestIntent(request, customTabsIntent);
-        Intent startIntent = AuthorizationManagementActivity.createStartIntent(
-                mContext,
-                request,
-                authIntent,
-                completedIntent,
-                canceledIntent);
+        val authIntent = prepareAuthorizationRequestIntent(request, customTabsIntent)
+        val startIntent = AuthorizationManagementActivity.createStartIntent(
+            context,
+            request,
+            authIntent,
+            completedIntent,
+            canceledIntent
+        )
 
         // Calling start activity from outside an activity requires FLAG_ACTIVITY_NEW_TASK.
-        if (!isActivity(mContext)) {
-            startIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        if (!context.isActivity()) {
+            startIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
-        mContext.startActivity(startIntent);
-    }
 
-    private boolean isActivity(Context context) {
-        while (context instanceof ContextWrapper) {
-            if (context instanceof Activity) {
-                return true;
-            }
-            context = ((ContextWrapper) context).getBaseContext();
-        }
-        return false;
+        context.startActivity(startIntent)
     }
 
     /**
      * Constructs an intent that encapsulates the provided request and custom tabs intent,
-     * and is intended to be launched via {@link Activity#startActivityForResult}.
+     * and is intended to be launched via [Activity.startActivityForResult].
      * The parameters of this request are determined by both the authorization service
-     * configuration and the provided {@link AuthorizationRequest request object}. Upon completion
-     * of this request, the activity that gets launched will call {@link Activity#setResult} with
-     * {@link Activity#RESULT_OK} and an {@link Intent} containing authorization completion
+     * configuration and the provided [request object][AuthorizationRequest]. Upon completion
+     * of this request, the activity that gets launched will call [Activity.setResult] with
+     * [Activity.RESULT_OK] and an [Intent] containing authorization completion
      * information. If the user presses the back button or closes the browser tab, the launched
-     * activity will call {@link Activity#setResult} with
-     * {@link Activity#RESULT_CANCELED} without a data {@link Intent}. Note that
-     * {@link Activity#RESULT_OK} indicates the authorization request completed,
+     * activity will call [Activity.setResult] with
+     * [Activity.RESULT_CANCELED] without a data [Intent]. Note that
+     * [Activity.RESULT_OK] indicates the authorization request completed,
      * not necessarily that it was a successful authorization.
      *
      * @param customTabsIntent
-     *     The intent that will be used to start the custom tab. It is recommended that this intent
-     *     be created with the help of {@link #createCustomTabsIntentBuilder(Uri[])}, which will
-     *     ensure that a warmed-up version of the browser will be used, minimizing latency.
+     * The intent that will be used to start the custom tab. It is recommended that this intent
+     * be created with the help of [.createCustomTabsIntentBuilder], which will
+     * ensure that a warmed-up version of the browser will be used, minimizing latency.
      *
-     * @throws android.content.ActivityNotFoundException if no suitable browser is available to
-     *     perform the authorization flow.
+     * @throws ActivityNotFoundException if no suitable browser is available to
+     * perform the authorization flow.
      */
-    @TargetApi(Build.VERSION_CODES.LOLLIPOP)
-    public Intent getAuthorizationRequestIntent(
-            @NonNull AuthorizationRequest request,
-            @NonNull CustomTabsIntent customTabsIntent) {
-
-        Intent authIntent = prepareAuthorizationRequestIntent(request, customTabsIntent);
-        return AuthorizationManagementActivity.createStartForResultIntent(
-                mContext,
-                request,
-                authIntent);
-    }
-
-    /**
-     * Constructs an intent that encapsulates the provided request and a default custom tabs intent,
-     * and is intended to be launched via {@link Activity#startActivityForResult}
-     * When started, the intent launches an {@link Activity} that sends an authorization request
-     * to the authorization service, using a
-     * [custom tab](https://developer.chrome.com/multidevice/android/customtabs).
-     * The parameters of this request are determined by both the authorization service
-     * configuration and the provided {@link AuthorizationRequest request object}. Upon completion
-     * of this request, the activity that gets launched will call {@link Activity#setResult} with
-     * {@link Activity#RESULT_OK} and an {@link Intent} containing authorization completion
-     * information. If the user presses the back button or closes the browser tab, the launched
-     * activity will call {@link Activity#setResult} with
-     * {@link Activity#RESULT_CANCELED} without a data {@link Intent}. Note that
-     * {@link Activity#RESULT_OK} indicates the authorization request completed,
-     * not necessarily that it was a successful authorization.
-     *
-     * @throws android.content.ActivityNotFoundException if no suitable browser is available to
-     *     perform the authorization flow.
-     */
-    @TargetApi(Build.VERSION_CODES.LOLLIPOP)
-    public Intent getAuthorizationRequestIntent(
-            @NonNull AuthorizationRequest request) {
-        return getAuthorizationRequestIntent(request, createCustomTabsIntentBuilder().build());
-    }
-
-    /**
-     * Constructs an intent that encapsulates the provided request and custom tabs intent,
-     * and is intended to be launched via {@link Activity#startActivityForResult}.
-     * The parameters of this request are determined by both the authorization service
-     * configuration and the provided {@link AuthorizationRequest request object}. Upon completion
-     * of this request, the activity that gets launched will call {@link Activity#setResult} with
-     * {@link Activity#RESULT_OK} and an {@link Intent} containing authorization completion
-     * information. If the user presses the back button or closes the browser tab, the launched
-     * activity will call {@link Activity#setResult} with
-     * {@link Activity#RESULT_CANCELED} without a data {@link Intent}. Note that
-     * {@link Activity#RESULT_OK} indicates the authorization request completed,
-     * not necessarily that it was a successful authorization.
-     *
-     * @param customTabsIntent
-     *     The intent that will be used to start the custom tab. It is recommended that this intent
-     *     be created with the help of {@link #createCustomTabsIntentBuilder(Uri[])}, which will
-     *     ensure that a warmed-up version of the browser will be used, minimizing latency.
-     *
-     * @throws android.content.ActivityNotFoundException if no suitable browser is available to
-     *     perform the authorization flow.
-     */
-    @TargetApi(Build.VERSION_CODES.LOLLIPOP)
-    public Intent getEndSessionRequestIntent(
-            @NonNull EndSessionRequest request,
-            @NonNull CustomTabsIntent customTabsIntent) {
-
-        Intent authIntent = prepareAuthorizationRequestIntent(request, customTabsIntent);
-        return AuthorizationManagementActivity.createStartForResultIntent(
-            mContext,
+    @JvmOverloads
+    suspend fun getAuthorizationRequestIntent(
+        request: AuthorizationRequest,
+        customTabsIntent: CustomTabsIntent? = null
+    ): Intent {
+        val authIntent = prepareAuthorizationRequestIntent(
             request,
-            authIntent);
+            customTabsIntent ?: createCustomTabsIntentBuilder().build()
+        )
+
+        return AuthorizationManagementActivity.createStartForResultIntent(
+            context,
+            request,
+            authIntent
+        )
     }
 
     /**
-     * Constructs an intent that encapsulates the provided request and a default custom tabs intent,
-     * and is intended to be launched via {@link Activity#startActivityForResult}
-     * When started, the intent launches an {@link Activity} that sends an authorization request
-     * to the authorization service, using a
-     * [custom tab](https://developer.chrome.com/multidevice/android/customtabs).
+     * Constructs an intent that encapsulates the provided request and custom tabs intent,
+     * and is intended to be launched via [Activity.startActivityForResult].
      * The parameters of this request are determined by both the authorization service
-     * configuration and the provided {@link EndSessionRequest request object}. Upon completion
-     * of this request, the activity that gets launched will call {@link Activity#setResult} with
-     * {@link Activity#RESULT_OK} and an {@link Intent} containing authorization completion
+     * configuration and the provided [request object][AuthorizationRequest]. Upon completion
+     * of this request, the activity that gets launched will call [Activity.setResult] with
+     * [Activity.RESULT_OK] and an [Intent] containing authorization completion
      * information. If the user presses the back button or closes the browser tab, the launched
-     * activity will call {@link Activity#setResult} with
-     * {@link Activity#RESULT_CANCELED} without a data {@link Intent}. Note that
-     * {@link Activity#RESULT_OK} indicates the authorization request completed,
+     * activity will call [Activity.setResult] with
+     * [Activity.RESULT_CANCELED] without a data [Intent]. Note that
+     * [Activity.RESULT_OK] indicates the authorization request completed,
      * not necessarily that it was a successful authorization.
      *
-     * @throws android.content.ActivityNotFoundException if no suitable browser is available to
-     *     perform the authorization flow.
+     * @param customTabsIntent
+     * The intent that will be used to start the custom tab. It is recommended that this intent
+     * be created with the help of [.createCustomTabsIntentBuilder], which will
+     * ensure that a warmed-up version of the browser will be used, minimizing latency.
+     *
+     * @throws ActivityNotFoundException if no suitable browser is available to
+     * perform the authorization flow.
      */
-    @TargetApi(Build.VERSION_CODES.LOLLIPOP)
-    public Intent getEndSessionRequestIntent(
-            @NonNull EndSessionRequest request) {
-        return getEndSessionRequestIntent(request, createCustomTabsIntentBuilder().build());
+    @JvmOverloads
+    suspend fun getEndSessionRequestIntent(
+        request: EndSessionRequest,
+        customTabsIntent: CustomTabsIntent? = null
+    ): Intent {
+        val authIntent = prepareAuthorizationRequestIntent(
+            request,
+            customTabsIntent ?: createCustomTabsIntentBuilder().build()
+        )
+
+        return AuthorizationManagementActivity.createStartForResultIntent(
+            context,
+            request,
+            authIntent
+        )
     }
 
     /**
      * Sends a request to the authorization service to exchange a code granted as part of an
-     * authorization request for a token. The result of this request will be sent to the provided
-     * callback handler.
+     * authorization request for a token, or to refresh an access token using a refresh token.
+     *
+     * This is a convenience wrapper for the more detailed `performTokenRequest` function,
+     * providing sensible defaults. It automatically handles client authentication if provided.
+     *
+     * @param request The token request to be performed, which can be for an authorization code
+     *     exchange or a token refresh.
+     * @param clientAuthentication The mechanism for authenticating the client to the token endpoint.
+     *     Defaults to [NoClientAuthentication] if not specified.
+     * @return A [TokenResponse] containing the new tokens from the server.
+     * @throws AuthorizationException if the request fails due to a network error, a server error
+     *     response, or an invalid ID token.
      */
-    public void performTokenRequest(
-            @NonNull TokenRequest request,
-            @NonNull TokenResponseCallback callback) {
-        performTokenRequest(request, NoClientAuthentication.INSTANCE, callback);
+    @JvmOverloads
+    suspend fun performTokenRequest(
+        request: TokenRequest,
+        clientAuthentication: ClientAuthentication = NoClientAuthentication,
+    ): TokenResponse {
+        checkNotDisposed()
+        Logger.debug(
+            "Initiating code exchange request to %s",
+            request.configuration.tokenEndpoint
+        )
+
+        return performTokenRequest(
+            request = request,
+            clientAuthentication = clientAuthentication,
+            connectionBuilder = clientConfiguration.connectionBuilder,
+            clock = SystemClock,
+            skipIssuerHttpsCheck = clientConfiguration.skipIssuerHttpsCheck
+        )
     }
 
     /**
-     * Sends a request to the authorization service to exchange a code granted as part of an
-     * authorization request for a token. The result of this request will be sent to the provided
-     * callback handler.
+     * Performs a token request to the authorization server's token endpoint.
+     *
+     * This function is used for various grant types, such as exchanging an authorization code
+     * for a token or using a refresh token to obtain a new access token. It constructs and sends a
+     * POST request to the token endpoint as defined in the `TokenRequest`'s configuration.
+     *
+     * The method handles:
+     * - Setting the appropriate headers, including `Content-Type` and `Accept`.
+     * - Applying client authentication headers and parameters via the [ClientAuthentication] provider.
+     * - Form-URL-encoding the request parameters.
+     * - Sending the request over the network using the provided [ConnectionBuilder].
+     * - Parsing the JSON response.
+     * - Validating the ID token if one is received, using the provided [Clock].
+     * - Handling network errors, JSON parsing errors, and OAuth2.0 specified error responses.
+     *
+     * @param request The token request to be performed.
+     * @param clientAuthentication The mechanism for authenticating the client to the token endpoint.
+     * @param connectionBuilder The builder for creating network connections.
+     * @param clock The clock used for validating the ID token's expiration and issuance time.
+     * @param skipIssuerHttpsCheck If set to `true`, HTTPS is not required for the issuer URI,
+     * which can be useful for development and testing. This should not be `true` in production.
+     * @return A [TokenResponse] containing the tokens and related information from the server.
+     * @throws AuthorizationException if the request fails due to a network error, a server error
+     * response, or an invalid ID token.
      */
-    public void performTokenRequest(
-            @NonNull TokenRequest request,
-            @NonNull ClientAuthentication clientAuthentication,
-            @NonNull TokenResponseCallback callback) {
-        checkNotDisposed();
-        Logger.debug("Initiating code exchange request to %s",
-                request.configuration.tokenEndpoint);
-        new TokenRequestTask(
-                request,
-                clientAuthentication,
-                mClientConfiguration.getConnectionBuilder(),
-                SystemClock.INSTANCE,
-                callback,
-                mClientConfiguration.getSkipIssuerHttpsCheck())
-                .execute();
+    @Throws(AuthorizationException::class)
+    private suspend fun performTokenRequest(
+        request: TokenRequest,
+        clientAuthentication: ClientAuthentication,
+        connectionBuilder: ConnectionBuilder,
+        clock: Clock,
+        skipIssuerHttpsCheck: Boolean
+    ): TokenResponse {
+        var `is`: InputStream? = null
+
+        val responseJson = withContext(Dispatchers.IO) {
+            try {
+                val conn = connectionBuilder.openConnection(request.configuration.tokenEndpoint)
+                conn.requestMethod = "POST"
+                conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
+
+                if (conn.getRequestProperty("Accept").isNullOrEmpty()) {
+                    conn.setRequestProperty("Accept", "application/json")
+                }
+
+                conn.doOutput = true
+
+                clientAuthentication.getRequestHeaders(request.clientId)?.let { headers ->
+                    headers.forEach { conn.setRequestProperty(it.key, it.value) }
+                }
+
+                val parameters = clientAuthentication.getRequestParameters(request.clientId)?.let {
+                    request.requestParameters + it
+                } ?: request.requestParameters
+
+                val queryData = parameters.formUrlEncode()
+                conn.setRequestProperty("Content-Length", queryData.length.toString())
+
+                OutputStreamWriter(conn.outputStream).use { wr ->
+                    wr.write(queryData)
+                    wr.flush()
+                }
+
+                `is` = if (conn.responseCode in HTTP_OK until HTTP_MULT_CHOICE) {
+                    conn.inputStream
+                } else {
+                    conn.errorStream
+                }
+
+                JSONObject(`is`.readString())
+            } catch (ex: IOException) {
+                Logger.debugWithStack(ex, "Failed to complete exchange request")
+                throw AuthorizationException.fromTemplate(
+                    GeneralErrors.NETWORK_ERROR,
+                    ex
+                )
+            } catch (ex: JSONException) {
+                Logger.debugWithStack(ex, "Failed to complete exchange request")
+                throw AuthorizationException.fromTemplate(
+                    GeneralErrors.JSON_DESERIALIZATION_ERROR,
+                    ex
+                )
+            } finally {
+                `is`.closeQuietly()
+            }
+        }
+
+        if (responseJson.has(PARAM_ERROR)) {
+            val error = responseJson.getString(PARAM_ERROR)
+            throw AuthorizationException.fromOAuthTemplate(
+                TokenRequestErrors.byString(error),
+                error,
+                responseJson.optString(PARAM_ERROR_DESCRIPTION),
+                responseJson.optString(PARAM_ERROR_URI).toUri()
+            )
+        }
+
+        val tokenResponse = TokenResponse.Builder(request)
+            .fromResponseJson(responseJson)
+            .build()
+
+        tokenResponse.idToken?.let { idTokenString ->
+            try {
+                val idToken = IdToken.from(idTokenString)
+                idToken.validate(request, clock, skipIssuerHttpsCheck)
+            } catch (ex: IdTokenException) {
+                throw AuthorizationException.fromTemplate(
+                    GeneralErrors.ID_TOKEN_PARSING_ERROR,
+                    ex
+                )
+            } catch (ex: JSONException) {
+                throw AuthorizationException.fromTemplate(
+                    GeneralErrors.ID_TOKEN_PARSING_ERROR,
+                    ex
+                )
+            }
+        }
+
+        Logger.debug("Token exchange with %s completed", request.configuration.tokenEndpoint)
+        return tokenResponse
     }
 
     /**
-     * Sends a request to the authorization service to dynamically register a client.
-     * The result of this request will be sent to the provided callback handler.
+     * Performs a registration request as per the
+     * [OAuth 2.0 Dynamic Client Registration Protocol](https://tools.ietf.org/html/rfc7591).
+     *
+     * @param request The registration request.
+     * @return The registration response.
+     * @throws AuthorizationException for networking errors or when the authorization server
+     *     returns an error. See [AuthorizationException.error] for the formal error code.
      */
-    public void performRegistrationRequest(
-            @NonNull RegistrationRequest request,
-            @NonNull RegistrationResponseCallback callback) {
-        checkNotDisposed();
-        Logger.debug("Initiating dynamic client registration %s",
-                request.configuration.registrationEndpoint.toString());
-        new RegistrationRequestTask(
-                request,
-                mClientConfiguration.getConnectionBuilder(),
-                callback)
-                .execute();
+    @Throws(AuthorizationException::class)
+    suspend fun performRegistrationRequest(
+        request: RegistrationRequest
+    ): RegistrationResponse {
+        checkNotDisposed()
+
+        Logger.debug(
+            "Initiating dynamic client registration %s",
+            request.configuration.registrationEndpoint.toString()
+        )
+
+        var `is`: InputStream? = null
+
+        val responseJson = withContext(Dispatchers.IO) {
+            try {
+                val postData = request.toJsonString()
+
+                val conn = clientConfiguration.connectionBuilder
+                    .openConnection(request.configuration.registrationEndpoint!!)
+
+                conn.requestMethod = "POST"
+                conn.setRequestProperty("Content-Type", "application/json")
+                conn.doOutput = true
+                conn.setRequestProperty("Content-Length", postData.length.toString())
+
+                OutputStreamWriter(conn.getOutputStream()).use { wr ->
+                    wr.write(postData)
+                    wr.flush()
+                }
+
+                `is` = conn.getInputStream()
+                JSONObject(`is`.readString())
+            } catch (ex: IOException) {
+                Logger.debugWithStack(ex, "Failed to complete registration request")
+                throw AuthorizationException.fromTemplate(GeneralErrors.NETWORK_ERROR, ex)
+            } catch (ex: JSONException) {
+                Logger.debugWithStack(ex, "Failed to complete registration request")
+                throw AuthorizationException.fromTemplate(
+                    GeneralErrors.JSON_DESERIALIZATION_ERROR,
+                    ex
+                )
+            } finally {
+                `is`.closeQuietly()
+            }
+        }
+
+        if (responseJson.has(PARAM_ERROR)) {
+            try {
+                val error = responseJson.getString(PARAM_ERROR)
+
+                throw AuthorizationException.fromOAuthTemplate(
+                    RegistrationRequestErrors.byString(error),
+                    error,
+                    responseJson.getString(PARAM_ERROR_DESCRIPTION),
+                    responseJson.getString(PARAM_ERROR_URI).toUri()
+                )
+            } catch (jsonEx: JSONException) {
+                throw AuthorizationException.fromTemplate(
+                    GeneralErrors.JSON_DESERIALIZATION_ERROR,
+                    jsonEx
+                )
+            }
+        }
+
+        val registrationResponse = try {
+            RegistrationResponse.Builder(request)
+                .fromResponseJson(responseJson)
+                .build()
+        } catch (jsonEx: JSONException) {
+            throw AuthorizationException.fromTemplate(
+                GeneralErrors.JSON_DESERIALIZATION_ERROR,
+                jsonEx
+            )
+        } catch (ex: MissingArgumentException) {
+            Logger.errorWithStack(ex, "Malformed registration response")
+
+            throw AuthorizationException.fromTemplate(
+                GeneralErrors.INVALID_REGISTRATION_RESPONSE,
+                ex
+            )
+        }
+
+        Logger.debug(
+            "Dynamic registration with %s completed",
+            request.configuration.registrationEndpoint
+        )
+
+        return registrationResponse
     }
 
     /**
      * Disposes state that will not normally be handled by garbage collection. This should be
      * called when the authorization service is no longer required, including when any owning
-     * activity is paused or destroyed (i.e. in {@link android.app.Activity#onStop()}).
+     * activity is paused or destroyed.
      */
-    public void dispose() {
-        if (mDisposed) {
-            return;
-        }
-        mCustomTabManager.dispose();
-        mDisposed = true;
+    fun dispose() {
+        if (mDisposed) return
+        customTabManager.dispose()
+        mDisposed = true
     }
 
-    private void checkNotDisposed() {
-        if (mDisposed) {
-            throw new IllegalStateException("Service has been disposed and rendered inoperable");
-        }
+    private fun checkNotDisposed() {
+        check(!mDisposed) { "Service has been disposed and rendered inoperable" }
     }
 
-    private Intent prepareAuthorizationRequestIntent(
-            AuthorizationManagementRequest request,
-            CustomTabsIntent customTabsIntent) {
-        checkNotDisposed();
+    /**
+     * Prepares an intent to be used to launch the authorization flow in a browser.
+     * This will be either a [CustomTabsIntent] or a standard `ACTION_VIEW` intent,
+     * depending on the capabilities of the selected browser. The intent will be
+     * configured with the correct package name and the authorization request URI.
+     *
+     * @param request The authorization management request to be sent.
+     * @param customTabsIntent The pre-built [CustomTabsIntent] to be used if the selected
+     *     browser supports custom tabs.
+     * @return An [Intent] ready to be used to launch the authorization flow.
+     * @throws ActivityNotFoundException if no suitable browser is available.
+     */
+    private fun prepareAuthorizationRequestIntent(
+        request: AuthorizationManagementRequest,
+        customTabsIntent: CustomTabsIntent
+    ): Intent {
+        checkNotDisposed()
+        browserDescriptor ?: throw ActivityNotFoundException()
+        val requestUri = request.toUri()
 
-        if (mBrowser == null) {
-            throw new ActivityNotFoundException();
-        }
-
-        Uri requestUri = request.toUri();
-        Intent intent;
-        if (mBrowser.useCustomTab) {
-            intent = customTabsIntent.intent;
+        val intent: Intent = if (browserDescriptor.useCustomTab) {
+            customTabsIntent.intent
         } else {
-            intent = new Intent(Intent.ACTION_VIEW);
+            Intent(Intent.ACTION_VIEW)
         }
-        intent.setPackage(mBrowser.packageName);
-        intent.setData(requestUri);
 
-        Logger.debug("Using %s as browser for auth, custom tab = %s",
-                intent.getPackage(),
-                mBrowser.useCustomTab.toString());
+        intent.`package` = browserDescriptor.packageName
+        intent.data = requestUri
+
+        Logger.debug(
+            "Using %s as browser for auth, custom tab = %s",
+            intent.`package`,
+            browserDescriptor.useCustomTab.toString()
+        )
 
         //TODO fix logger for configuration
         //Logger.debug("Initiating authorization request to %s"
         //request.configuration.authorizationEndpoint);
-
-        return intent;
-    }
-
-    private static class TokenRequestTask
-            extends AsyncTask<Void, Void, JSONObject> {
-
-        private TokenRequest mRequest;
-        private ClientAuthentication mClientAuthentication;
-        private final ConnectionBuilder mConnectionBuilder;
-        private TokenResponseCallback mCallback;
-        private Clock mClock;
-        private boolean mSkipIssuerHttpsCheck;
-
-        private AuthorizationException mException;
-
-        TokenRequestTask(TokenRequest request,
-                         @NonNull ClientAuthentication clientAuthentication,
-                         @NonNull ConnectionBuilder connectionBuilder,
-                         Clock clock,
-                         TokenResponseCallback callback,
-                         Boolean skipIssuerHttpsCheck) {
-            mRequest = request;
-            mClientAuthentication = clientAuthentication;
-            mConnectionBuilder = connectionBuilder;
-            mClock = clock;
-            mCallback = callback;
-            mSkipIssuerHttpsCheck = skipIssuerHttpsCheck;
-        }
-
-        @Override
-        protected JSONObject doInBackground(Void... voids) {
-            InputStream is = null;
-            try {
-                HttpURLConnection conn = mConnectionBuilder.openConnection(
-                        mRequest.configuration.tokenEndpoint);
-                conn.setRequestMethod("POST");
-                conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
-                addJsonToAcceptHeader(conn);
-                conn.setDoOutput(true);
-
-                Map<String, String> headers = mClientAuthentication
-                        .getRequestHeaders(mRequest.clientId);
-                if (headers != null) {
-                    for (Map.Entry<String,String> header : headers.entrySet()) {
-                        conn.setRequestProperty(header.getKey(), header.getValue());
-                    }
-                }
-
-                Map<String, String> parameters = mRequest.getRequestParameters();
-                Map<String, String> clientAuthParams = mClientAuthentication
-                        .getRequestParameters(mRequest.clientId);
-                if (clientAuthParams != null) {
-                    parameters.putAll(clientAuthParams);
-                }
-
-                String queryData = UriUtil.formUrlEncode(parameters);
-                conn.setRequestProperty("Content-Length", String.valueOf(queryData.length()));
-                OutputStreamWriter wr = new OutputStreamWriter(conn.getOutputStream());
-
-                wr.write(queryData);
-                wr.flush();
-
-                if (conn.getResponseCode() >= HttpURLConnection.HTTP_OK
-                        && conn.getResponseCode() < HttpURLConnection.HTTP_MULT_CHOICE) {
-                    is = conn.getInputStream();
-                } else {
-                    is = conn.getErrorStream();
-                }
-                String response = Utils.readInputStream(is);
-                return new JSONObject(response);
-            } catch (IOException ex) {
-                Logger.debugWithStack(ex, "Failed to complete exchange request");
-                mException = AuthorizationException.fromTemplate(
-                        GeneralErrors.NETWORK_ERROR, ex);
-            } catch (JSONException ex) {
-                Logger.debugWithStack(ex, "Failed to complete exchange request");
-                mException = AuthorizationException.fromTemplate(
-                        GeneralErrors.JSON_DESERIALIZATION_ERROR, ex);
-            } finally {
-                Utils.closeQuietly(is);
-            }
-            return null;
-        }
-
-        @Override
-        protected void onPostExecute(JSONObject json) {
-            if (mException != null) {
-                mCallback.onTokenRequestCompleted(null, mException);
-                return;
-            }
-
-            if (json.has(AuthorizationException.PARAM_ERROR)) {
-                AuthorizationException ex;
-                try {
-                    String error = json.getString(AuthorizationException.PARAM_ERROR);
-                    ex = AuthorizationException.fromOAuthTemplate(
-                            TokenRequestErrors.byString(error),
-                            error,
-                            json.optString(AuthorizationException.PARAM_ERROR_DESCRIPTION, null),
-                            UriUtil.parseUriIfAvailable(
-                                    json.optString(AuthorizationException.PARAM_ERROR_URI)));
-                } catch (JSONException jsonEx) {
-                    ex = AuthorizationException.fromTemplate(
-                            GeneralErrors.JSON_DESERIALIZATION_ERROR,
-                            jsonEx);
-                }
-                mCallback.onTokenRequestCompleted(null, ex);
-                return;
-            }
-
-            TokenResponse response;
-            try {
-                response = new TokenResponse.Builder(mRequest).fromResponseJson(json).build();
-            } catch (JSONException jsonEx) {
-                mCallback.onTokenRequestCompleted(null,
-                        AuthorizationException.fromTemplate(
-                                GeneralErrors.JSON_DESERIALIZATION_ERROR,
-                                jsonEx));
-                return;
-            }
-
-            if (response.idToken != null) {
-                IdToken idToken;
-                try {
-                    idToken = IdToken.from(response.idToken);
-                } catch (IdTokenException | JSONException ex) {
-                    mCallback.onTokenRequestCompleted(null,
-                            AuthorizationException.fromTemplate(
-                                    GeneralErrors.ID_TOKEN_PARSING_ERROR,
-                                    ex));
-                    return;
-                }
-
-                try {
-                    idToken.validate(
-                            mRequest,
-                            mClock,
-                            mSkipIssuerHttpsCheck
-                    );
-                } catch (AuthorizationException ex) {
-                    mCallback.onTokenRequestCompleted(null, ex);
-                    return;
-                }
-            }
-            Logger.debug("Token exchange with %s completed",
-                    mRequest.configuration.tokenEndpoint);
-            mCallback.onTokenRequestCompleted(response, null);
-        }
-
-        /**
-         * GitHub will only return a spec-compliant response if JSON is explicitly defined
-         * as an acceptable response type. As this is essentially harmless for all other
-         * spec-compliant IDPs, we add this header if no existing Accept header has been set
-         * by the connection builder.
-         */
-        private void addJsonToAcceptHeader(URLConnection conn) {
-            if (TextUtils.isEmpty(conn.getRequestProperty("Accept"))) {
-                conn.setRequestProperty("Accept", "application/json");
-            }
-        }
-    }
-
-    /**
-     * Callback interface for token endpoint requests.
-     * @see AuthorizationService#performTokenRequest
-     */
-    public interface TokenResponseCallback {
-        /**
-         * Invoked when the request completes successfully or fails.
-         *
-         * Exactly one of `response` or `ex` will be non-null. If `response` is `null`, a failure
-         * occurred during the request. This can happen if a bad URI was provided, no connection
-         * to the server could be established, or the response JSON was incomplete or incorrectly
-         * formatted.
-         *
-         * @param response the retrieved token response, if successful; `null` otherwise.
-         * @param ex a description of the failure, if one occurred: `null` otherwise.
-         *
-         * @see AuthorizationException.TokenRequestErrors
-         */
-        void onTokenRequestCompleted(@Nullable TokenResponse response,
-                @Nullable AuthorizationException ex);
-    }
-
-    private static class RegistrationRequestTask
-            extends AsyncTask<Void, Void, JSONObject> {
-        private RegistrationRequest mRequest;
-        private final ConnectionBuilder mConnectionBuilder;
-        private RegistrationResponseCallback mCallback;
-
-        private AuthorizationException mException;
-
-        RegistrationRequestTask(RegistrationRequest request,
-                ConnectionBuilder connectionBuilder,
-                RegistrationResponseCallback callback) {
-            mRequest = request;
-            mConnectionBuilder = connectionBuilder;
-            mCallback = callback;
-        }
-
-        @Override
-        protected JSONObject doInBackground(Void... voids) {
-            InputStream is = null;
-            String postData = mRequest.toJsonString();
-            try {
-                HttpURLConnection conn = mConnectionBuilder.openConnection(
-                        mRequest.configuration.registrationEndpoint);
-                conn.setRequestMethod("POST");
-                conn.setRequestProperty("Content-Type", "application/json");
-                conn.setDoOutput(true);
-                conn.setRequestProperty("Content-Length", String.valueOf(postData.length()));
-                OutputStreamWriter wr = new OutputStreamWriter(conn.getOutputStream());
-                wr.write(postData);
-                wr.flush();
-
-                is = conn.getInputStream();
-                String response = Utils.readInputStream(is);
-                return new JSONObject(response);
-            } catch (IOException ex) {
-                Logger.debugWithStack(ex, "Failed to complete registration request");
-                mException = AuthorizationException.fromTemplate(
-                        GeneralErrors.NETWORK_ERROR, ex);
-            } catch (JSONException ex) {
-                Logger.debugWithStack(ex, "Failed to complete registration request");
-                mException = AuthorizationException.fromTemplate(
-                        GeneralErrors.JSON_DESERIALIZATION_ERROR, ex);
-            } finally {
-                Utils.closeQuietly(is);
-            }
-            return null;
-        }
-
-        @Override
-        protected void onPostExecute(JSONObject json) {
-            if (mException != null) {
-                mCallback.onRegistrationRequestCompleted(null, mException);
-                return;
-            }
-
-            if (json.has(AuthorizationException.PARAM_ERROR)) {
-                AuthorizationException ex;
-                try {
-                    String error = json.getString(AuthorizationException.PARAM_ERROR);
-                    ex = AuthorizationException.fromOAuthTemplate(
-                            RegistrationRequestErrors.byString(error),
-                            error,
-                            json.getString(AuthorizationException.PARAM_ERROR_DESCRIPTION),
-                            UriUtil.parseUriIfAvailable(
-                                    json.getString(AuthorizationException.PARAM_ERROR_URI)));
-                } catch (JSONException jsonEx) {
-                    ex = AuthorizationException.fromTemplate(
-                            GeneralErrors.JSON_DESERIALIZATION_ERROR,
-                            jsonEx);
-                }
-                mCallback.onRegistrationRequestCompleted(null, ex);
-                return;
-            }
-
-            RegistrationResponse response;
-            try {
-                response = new RegistrationResponse.Builder(mRequest)
-                        .fromResponseJson(json).build();
-            } catch (JSONException jsonEx) {
-                mCallback.onRegistrationRequestCompleted(null,
-                        AuthorizationException.fromTemplate(
-                                GeneralErrors.JSON_DESERIALIZATION_ERROR,
-                                jsonEx));
-                return;
-            } catch (RegistrationResponse.MissingArgumentException ex) {
-                Logger.errorWithStack(ex, "Malformed registration response");
-                mException = AuthorizationException.fromTemplate(
-                        GeneralErrors.INVALID_REGISTRATION_RESPONSE,
-                        ex);
-                return;
-            }
-            Logger.debug("Dynamic registration with %s completed",
-                    mRequest.configuration.registrationEndpoint);
-            mCallback.onRegistrationRequestCompleted(response, null);
-        }
-    }
-
-    /**
-     * Callback interface for token endpoint requests.
-     *
-     * @see AuthorizationService#performTokenRequest
-     */
-    public interface RegistrationResponseCallback {
-        /**
-         * Invoked when the request completes successfully or fails.
-         *
-         * Exactly one of `response` or `ex` will be non-null. If `response` is `null`, a failure
-         * occurred during the request. This can happen if an invalid URI was provided, no
-         * connection to the server could be established, or the response JSON was incomplete or
-         * incorrectly formatted.
-         *
-         * @param response the retrieved registration response, if successful; `null` otherwise.
-         * @param ex a description of the failure, if one occurred: `null` otherwise.
-         * @see AuthorizationException.RegistrationRequestErrors
-         */
-        void onRegistrationRequestCompleted(@Nullable RegistrationResponse response,
-                                            @Nullable AuthorizationException ex);
+        return intent
     }
 }

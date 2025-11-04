@@ -11,9 +11,8 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 /**
  * Internal data types and utility classes for AppAuth. The contents of this package are *NOT* part
  * of the public API, and are subject to change without notice.
  */
-package net.openid.appauth.internal;
+package net.openid.appauth.internal

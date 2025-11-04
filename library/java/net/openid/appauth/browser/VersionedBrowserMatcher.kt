@@ -11,114 +11,114 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
+@file:Suppress("unused")
 
-package net.openid.appauth.browser;
-
-import androidx.annotation.NonNull;
-
-import java.util.Collections;
-import java.util.Set;
+package net.openid.appauth.browser
 
 /**
  * Matches a browser based on its package name, set of signatures, version and whether it is
  * being used as a custom tab. This can be used as part of a browser allowList or denyList.
+ *
+ * Creates a browser matcher that requires an exact match on package name, set of signature
+ * hashes, custom tab usage mode, and a version range.: BrowserDescriptor {
+            return
  */
-public class VersionedBrowserMatcher implements BrowserMatcher {
-
+class VersionedBrowserMatcher(
+    private val packageName: String,
+    private val signatureHashes: Set<String>,
+    private val usingCustomTab: Boolean,
+    private val versionRange: VersionRange
+) : BrowserMatcher {
     /**
-     * Matches any version of Chrome for use as a custom tab.
-     */
-    public static final VersionedBrowserMatcher CHROME_CUSTOM_TAB = new VersionedBrowserMatcher(
-            Browsers.Chrome.PACKAGE_NAME,
-            Browsers.Chrome.SIGNATURE_SET,
-            true,
-            VersionRange.atLeast(Browsers.Chrome.MINIMUM_VERSION_FOR_CUSTOM_TAB));
-
-    /**
-     * Matches any version of Google Chrome for use as a standalone browser.
-     */
-    public static final VersionedBrowserMatcher CHROME_BROWSER = new VersionedBrowserMatcher(
-            Browsers.Chrome.PACKAGE_NAME,
-            Browsers.Chrome.SIGNATURE_SET,
-            false,
-            VersionRange.ANY_VERSION);
-
-    /**
-     * Matches any version of Firefox for use as a custom tab.
-     */
-    public static final VersionedBrowserMatcher FIREFOX_CUSTOM_TAB = new VersionedBrowserMatcher(
-            Browsers.Firefox.PACKAGE_NAME,
-            Browsers.Firefox.SIGNATURE_SET,
-            true,
-            VersionRange.atLeast(Browsers.Firefox.MINIMUM_VERSION_FOR_CUSTOM_TAB));
-
-    /**
-     * Matches any version of Mozilla Firefox.
-     */
-    public static final VersionedBrowserMatcher FIREFOX_BROWSER = new VersionedBrowserMatcher(
-            Browsers.Firefox.PACKAGE_NAME,
-            Browsers.Firefox.SIGNATURE_SET,
-            false,
-            VersionRange.ANY_VERSION);
-
-    /**
-     * Matches any version of SBrowser for use as a standalone browser.
-     */
-    public static final VersionedBrowserMatcher SAMSUNG_BROWSER = new VersionedBrowserMatcher(
-            Browsers.SBrowser.PACKAGE_NAME,
-            Browsers.SBrowser.SIGNATURE_SET,
-            false,
-            VersionRange.ANY_VERSION);
-
-    /**
-     * Matches any version of SBrowser for use as a custom tab.
-     */
-    public static final VersionedBrowserMatcher SAMSUNG_CUSTOM_TAB = new VersionedBrowserMatcher(
-            Browsers.SBrowser.PACKAGE_NAME,
-            Browsers.SBrowser.SIGNATURE_SET,
-            true,
-            VersionRange.atLeast(Browsers.SBrowser.MINIMUM_VERSION_FOR_CUSTOM_TAB));
-
-    private String mPackageName;
-    private Set<String> mSignatureHashes;
-    private VersionRange mVersionRange;
-    private boolean mUsingCustomTab;
-
-    /**
+     * Matches a browser based on its package name, set of signatures, version and whether it is
+     * being used as a custom tab. This can be used as part of a browser allowList or denyList.
+     *
      * Creates a browser matcher that requires an exact match on package name, single signature
      * hash, custom tab usage mode, and a version range.
      */
-    public VersionedBrowserMatcher(
-            @NonNull String packageName,
-            @NonNull String signatureHash,
-            boolean usingCustomTab,
-            @NonNull VersionRange versionRange) {
-        this(packageName,
-                Collections.singleton(signatureHash),
-                usingCustomTab,
-                versionRange);
+    constructor(
+        packageName: String,
+        signatureHash: String,
+        usingCustomTab: Boolean,
+        versionRange: VersionRange
+    ) : this(
+        packageName,
+        setOf(signatureHash),
+        usingCustomTab,
+        versionRange
+    )
+
+    override fun matches(descriptor: BrowserDescriptor): Boolean {
+        return packageName == descriptor.packageName
+                && usingCustomTab == descriptor.useCustomTab && versionRange.matches(descriptor.version)
+                && signatureHashes == descriptor.signatureHashes
     }
 
-    /**
-     * Creates a browser matcher that requires an exact match on package name, set of signature
-     * hashes, custom tab usage mode, and a version range.
-     */
-    public VersionedBrowserMatcher(
-            @NonNull String packageName,
-            @NonNull Set<String> signatureHashes,
-            boolean usingCustomTab,
-            @NonNull VersionRange versionRange) {
-        mPackageName = packageName;
-        mSignatureHashes = signatureHashes;
-        mUsingCustomTab = usingCustomTab;
-        mVersionRange = versionRange;
-    }
+    companion object {
+        /**
+         * Matches any version of Chrome for use as a custom tab.
+         */
+        @JvmField
+        val CHROME_CUSTOM_TAB: VersionedBrowserMatcher = VersionedBrowserMatcher(
+            Browsers.Chrome.PACKAGE_NAME,
+            Browsers.Chrome.SIGNATURE_SET,
+            true,
+            VersionRange.atLeast(Browsers.Chrome.MINIMUM_VERSION_FOR_CUSTOM_TAB)
+        )
 
-    @Override
-    public boolean matches(@NonNull BrowserDescriptor descriptor) {
-        return mPackageName.equals(descriptor.packageName)
-                && mUsingCustomTab == descriptor.useCustomTab
-                && mVersionRange.matches(descriptor.version)
-                && mSignatureHashes.equals(descriptor.signatureHashes);
+        /**
+         * Matches any version of Google Chrome for use as a standalone browser.
+         */
+        @JvmField
+        val CHROME_BROWSER: VersionedBrowserMatcher = VersionedBrowserMatcher(
+            Browsers.Chrome.PACKAGE_NAME,
+            Browsers.Chrome.SIGNATURE_SET,
+            false,
+            VersionRange.ANY_VERSION
+        )
+
+        /**
+         * Matches any version of Firefox for use as a custom tab.
+         */
+        @JvmField
+        val FIREFOX_CUSTOM_TAB: VersionedBrowserMatcher = VersionedBrowserMatcher(
+            Browsers.Firefox.PACKAGE_NAME,
+            Browsers.Firefox.SIGNATURE_SET,
+            true,
+            VersionRange.atLeast(Browsers.Firefox.MINIMUM_VERSION_FOR_CUSTOM_TAB)
+        )
+
+        /**
+         * Matches any version of Mozilla Firefox.
+         */
+        @JvmField
+        val FIREFOX_BROWSER: VersionedBrowserMatcher = VersionedBrowserMatcher(
+            Browsers.Firefox.PACKAGE_NAME,
+            Browsers.Firefox.SIGNATURE_SET,
+            false,
+            VersionRange.ANY_VERSION
+        )
+
+        /**
+         * Matches any version of SBrowser for use as a standalone browser.
+         */
+        @JvmField
+        val SAMSUNG_BROWSER: VersionedBrowserMatcher = VersionedBrowserMatcher(
+            Browsers.SBrowser.PACKAGE_NAME,
+            Browsers.SBrowser.SIGNATURE_SET,
+            false,
+            VersionRange.ANY_VERSION
+        )
+
+        /**
+         * Matches any version of SBrowser for use as a custom tab.
+         */
+        @JvmField
+        val SAMSUNG_CUSTOM_TAB: VersionedBrowserMatcher = VersionedBrowserMatcher(
+            Browsers.SBrowser.PACKAGE_NAME,
+            Browsers.SBrowser.SIGNATURE_SET,
+            true,
+            VersionRange.atLeast(Browsers.SBrowser.MINIMUM_VERSION_FOR_CUSTOM_TAB)
+        )
     }
 }

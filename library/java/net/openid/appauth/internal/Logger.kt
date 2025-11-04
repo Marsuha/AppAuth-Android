@@ -11,147 +11,137 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package net.openid.appauth.internal
 
-package net.openid.appauth.internal;
-
-import static net.openid.appauth.Preconditions.checkNotNull;
-
-import android.util.Log;
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
-import androidx.annotation.VisibleForTesting;
+import android.util.Log
+import androidx.annotation.VisibleForTesting
 
 /**
- * Convenience wrapper around {@link android.util.Log}, which evaluates the current log level of
+ * Convenience wrapper around [Log], which evaluates the current log level of
  * the logging tag once and uses this to determine whether logging should proceed. This minimizes
  * the number of native calls made as part of logging.
  */
-public final class Logger {
+@Suppress("unused")
+class Logger @VisibleForTesting internal constructor(private val log: LogWrapper) {
+    private val mLogLevel: Int
 
-    @VisibleForTesting
-    static final String LOG_TAG = "AppAuth";
-
-    @Nullable
-    private static Logger sInstance;
-
-    @NonNull
-    private final LogWrapper mLog;
-
-    private final int mLogLevel;
-
-    public static synchronized Logger getInstance() {
-        if (sInstance == null) {
-            sInstance = new Logger(AndroidLogWrapper.INSTANCE);
-        }
-        return sInstance;
-    }
-
-    @VisibleForTesting
-    public static synchronized void setInstance(Logger logger) {
-        sInstance = logger;
-    }
-
-    @VisibleForTesting
-    Logger(LogWrapper log) {
-        mLog = checkNotNull(log);
+    init {
         // determine the active logging level
-        int level = Log.ASSERT;
-        while (level >= Log.VERBOSE && mLog.isLoggable(LOG_TAG, level)) {
-            level--;
+        var level = Log.ASSERT
+
+        while (level >= Log.VERBOSE && log.isLoggable(LOG_TAG, level)) {
+            level--
         }
 
-        mLogLevel = level + 1;
+        mLogLevel = level + 1
     }
 
-    public static void verbose(String message, Object... messageParams) {
-        getInstance().log(Log.VERBOSE, null, message, messageParams);
-    }
+    fun log(level: Int, tr: Throwable?, message: String, vararg messageParams: Any?) {
+        if (mLogLevel > level) return
 
-    public static void verboseWithStack(Throwable tr, String message, Object... messageParams) {
-        getInstance().log(Log.VERBOSE, tr, message, messageParams);
-    }
-
-    public static void debug(String message, Object... messageParams) {
-        getInstance().log(Log.DEBUG, null, message, messageParams);
-    }
-
-    public static void debugWithStack(Throwable tr, String message, Object... messageParams) {
-        getInstance().log(Log.DEBUG, tr, message, messageParams);
-    }
-
-    public static void info(String message, Object... messageParams) {
-        getInstance().log(Log.INFO, null, message, messageParams);
-    }
-
-    public static void infoWithStack(Throwable tr, String message, Object... messageParams) {
-        getInstance().log(Log.INFO, tr, message, messageParams);
-    }
-
-    public static void warn(String message, Object... messageParams) {
-        getInstance().log(Log.WARN, null, message, messageParams);
-    }
-
-    public static void warnWithStack(Throwable tr, String message, Object... messageParams) {
-        getInstance().log(Log.WARN, tr, message, messageParams);
-    }
-
-    public static void error(String message, Object... messageParams) {
-        getInstance().log(Log.ERROR, null, message, messageParams);
-    }
-
-    public static void errorWithStack(Throwable tr, String message, Object... messageParams) {
-        getInstance().log(Log.ERROR, tr, message, messageParams);
-    }
-
-    public void log(int level, Throwable tr, String message, Object... messageParams) {
-        if (mLogLevel > level) {
-            return;
-        }
-        String formattedMessage;
-        if (messageParams == null || messageParams.length < 1) {
-            formattedMessage = message;
+        var formattedMessage = if (messageParams.isEmpty()) {
+            message
         } else {
-            formattedMessage = String.format(message, messageParams);
+            String.format(message, *messageParams)
         }
 
-        if (tr != null) {
-            formattedMessage += "\n" + mLog.getStackTraceString(tr);
-        }
-
-        mLog.println(level, LOG_TAG, formattedMessage);
+        formattedMessage += "\n${log.getStackTraceString(tr)}"
+        log.println(level, LOG_TAG, formattedMessage)
     }
 
     /**
-     * The core interface of {@link android.util.Log}, converted into instance methods so as to
+     * The core interface of [Log], converted into instance methods so as to
      * allow easier mock testing.
      */
     @VisibleForTesting
-    public interface LogWrapper {
-        void println(int level, String tag, String message);
+    interface LogWrapper {
+        fun println(level: Int, tag: String, message: String)
 
-        boolean isLoggable(String tag, int level);
+        fun isLoggable(tag: String, level: Int): Boolean
 
-        String getStackTraceString(Throwable tr);
+        fun getStackTraceString(tr: Throwable?): String
     }
 
     /**
-     * Default {@link LogWrapper} implementation, using {@link android.util.Log} static methods.
+     * Default [LogWrapper] implementation, using [Log] static methods.
      */
-    private static final class AndroidLogWrapper implements LogWrapper {
-        private static final AndroidLogWrapper INSTANCE = new AndroidLogWrapper();
-
-        private AndroidLogWrapper() {}
-
-        public void println(int level, String tag, String message) {
-            Log.println(level, tag, message);
+    private object AndroidLogWrapper : LogWrapper {
+        override fun println(level: Int, tag: String, message: String) {
+            Log.println(level, tag, message)
         }
 
-        public boolean isLoggable(String tag, int level) {
-            return Log.isLoggable(tag, level);
+        override fun isLoggable(tag: String, level: Int): Boolean {
+            return Log.isLoggable(tag, level)
         }
 
-        public String getStackTraceString(Throwable tr) {
-            return Log.getStackTraceString(tr);
+        override fun getStackTraceString(tr: Throwable?): String {
+            return Log.getStackTraceString(tr)
+        }
+    }
+
+    companion object {
+        @VisibleForTesting
+        const val LOG_TAG: String = "AppAuth"
+
+        private var sInstance: Logger? = null
+
+        @JvmStatic
+        @get:Synchronized
+        @set:Synchronized
+        @set:VisibleForTesting
+        var instance: Logger
+            get() {
+                if (sInstance == null) sInstance = Logger(AndroidLogWrapper)
+                return sInstance!!
+            }
+            set(logger) {
+                sInstance = logger
+            }
+
+        @JvmStatic
+        fun verbose(message: String, vararg messageParams: Any?) {
+            instance.log(Log.VERBOSE, null, message, *messageParams)
+        }
+
+        fun verboseWithStack(tr: Throwable?, message: String, vararg messageParams: Any?) {
+            instance.log(Log.VERBOSE, tr, message, *messageParams)
+        }
+
+        @JvmStatic
+        fun debug(message: String, vararg messageParams: Any?) {
+            instance.log(Log.DEBUG, null, message, *messageParams)
+        }
+
+        @JvmStatic
+        fun debugWithStack(tr: Throwable?, message: String, vararg messageParams: Any?) {
+            instance.log(Log.DEBUG, tr, message, *messageParams)
+        }
+
+        @JvmStatic
+        fun info(message: String, vararg messageParams: Any?) {
+            instance.log(Log.INFO, null, message, *messageParams)
+        }
+
+        fun infoWithStack(tr: Throwable?, message: String, vararg messageParams: Any?) {
+            instance.log(Log.INFO, tr, message, *messageParams)
+        }
+
+        @JvmStatic
+        fun warn(message: String, vararg messageParams: Any?) {
+            instance.log(Log.WARN, null, message, *messageParams)
+        }
+
+        fun warnWithStack(tr: Throwable?, message: String, vararg messageParams: Any?) {
+            instance.log(Log.WARN, tr, message, *messageParams)
+        }
+
+        @JvmStatic
+        fun error(message: String, vararg messageParams: Any?) {
+            instance.log(Log.ERROR, null, message, *messageParams)
+        }
+
+        fun errorWithStack(tr: Throwable?, message: String, vararg messageParams: Any?) {
+            instance.log(Log.ERROR, tr, message, *messageParams)
         }
     }
 }

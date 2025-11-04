@@ -11,18 +11,18 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package net.openid.appauth
 
-package net.openid.appauth;
-
-import android.os.Bundle;
-import androidx.appcompat.app.AppCompatActivity;
+import android.os.Bundle
+import androidx.appcompat.app.AppCompatActivity
+import net.openid.appauth.AuthorizationManagementActivity.Companion.createResponseHandlingIntent
 
 /**
  * Activity that receives the redirect Uri sent by the OpenID endpoint. It forwards the data
- * received as part of this redirect to {@link AuthorizationManagementActivity}, which
+ * received as part of this redirect to [AuthorizationManagementActivity], which
  * destroys the browser tab before returning the result to the completion
- * {@link android.app.PendingIntent}
- * provided to {@link AuthorizationService#performAuthorizationRequest}.
+ * [android.app.PendingIntent]
+ * provided to [AuthorizationService.performAuthorizationRequest].
  *
  * App developers using this library must override the `appAuthRedirectScheme`
  * property in their `build.gradle` to specify the custom scheme that will be used for
@@ -33,27 +33,21 @@ import androidx.appcompat.app.AppCompatActivity;
  *
  * ```xml
  * <intent-filter>
- *   <action android:name="android.intent.action.VIEW"/>
- *   <category android:name="android.intent.category.DEFAULT"/>
- *   <category android:name="android.intent.category.BROWSABLE"/>
- *   <data android:scheme="https"
- *          android:host="www.example.com"
- *          android:path="/oauth2redirect" />
- * </intent-filter>
+ * <action android:name="android.intent.action.VIEW"></action>
+ * <category android:name="android.intent.category.DEFAULT"></category>
+ * <category android:name="android.intent.category.BROWSABLE"></category>
+ * <data android:scheme="https" android:host="www.example.com" android:path="/oauth2redirect"></data></intent-filter>
+ *
  * ```
  */
-public class RedirectUriReceiverActivity extends AppCompatActivity {
-
-    @Override
-    public void onCreate(Bundle savedInstanceBundle) {
-        super.onCreate(savedInstanceBundle);
+class RedirectUriReceiverActivity : AppCompatActivity() {
+    public override fun onCreate(savedInstanceBundle: Bundle?) {
+        super.onCreate(savedInstanceBundle)
 
         // while this does not appear to be achieving much, handling the redirect in this way
         // ensures that we can remove the browser tab from the back stack. See the documentation
         // on AuthorizationManagementActivity for more details.
-        startActivity(AuthorizationManagementActivity.createResponseHandlingIntent(
-                this, getIntent().getData()));
-        finish();
+        startActivity(createResponseHandlingIntent(this, intent.data))
+        finish()
     }
-
 }

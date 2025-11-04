@@ -11,168 +11,216 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package net.openid.appauth.internal
 
-package net.openid.appauth.internal;
+import android.util.Log
+import net.openid.appauth.internal.Logger.Companion.debug
+import net.openid.appauth.internal.Logger.Companion.debugWithStack
+import net.openid.appauth.internal.Logger.Companion.error
+import net.openid.appauth.internal.Logger.Companion.info
+import net.openid.appauth.internal.Logger.Companion.instance
+import net.openid.appauth.internal.Logger.Companion.verbose
+import net.openid.appauth.internal.Logger.Companion.warn
+import net.openid.appauth.internal.Logger.LogWrapper
+import org.junit.After
+import org.junit.Before
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.mockito.ArgumentMatchers
+import org.mockito.Mock
+import org.mockito.Mockito
+import org.mockito.MockitoAnnotations
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+import java.lang.AutoCloseable
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-
-import android.util.Log;
-
-
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
-import org.robolectric.RobolectricTestRunner;
-import org.robolectric.annotation.Config;
-
-@RunWith(RobolectricTestRunner.class)
-@Config(sdk = 16)
-public final class LoggerTest {
-
-    private static final int INT = 100;
-
-    private AutoCloseable mMockitoCloseable;
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [16])
+class LoggerTest {
+    private var mockitoCloseable: AutoCloseable? = null
 
     @Mock
-    private Logger.LogWrapper mMockLockWrap;
+    private val mockLockWrap: LogWrapper? = null
 
     @Before
-    public void setUp() {
-        mMockitoCloseable = MockitoAnnotations.openMocks(this);
+    fun setUp() {
+        mockitoCloseable = MockitoAnnotations.openMocks(this)
     }
 
     @After
-    public void tearDown() throws Exception {
-        Logger.setInstance(null);
-        mMockitoCloseable.close();
+    @Throws(Exception::class)
+    fun tearDown() {
+        mockitoCloseable!!.close()
     }
 
     @Test
-    public void testVerbose_whenVerboseLevel() throws Exception {
-        configureLog(Log.VERBOSE);
-        Logger.verbose("Test");
-        verify(mMockLockWrap).println(Log.VERBOSE, Logger.LOG_TAG, "Test");
+    @Throws(Exception::class)
+    fun testVerbose_whenVerboseLevel() {
+        configureLog(Log.VERBOSE)
+        verbose("Test")
+        Mockito.verify(mockLockWrap!!).println(Log.VERBOSE, Logger.LOG_TAG, "Test")
     }
 
     @Test
-    public void testVerbose_whenDebugLevel() throws Exception {
-        configureLog(Log.DEBUG);
-        Logger.verbose("Test");
-        verify(mMockLockWrap, never()).println(anyInt(), anyString(), anyString());
+    @Throws(Exception::class)
+    fun testVerbose_whenDebugLevel() {
+        configureLog(Log.DEBUG)
+        verbose("Test")
+        Mockito.verify(mockLockWrap!!, Mockito.never()).println(
+            ArgumentMatchers.anyInt(),
+            ArgumentMatchers.anyString(),
+            ArgumentMatchers.anyString()
+        )
     }
 
     @Test
-    public void testDebug_whenVerboseLevel() throws Exception {
-        configureLog(Log.VERBOSE);
-        Logger.debug("Test");
-        verify(mMockLockWrap).println(Log.DEBUG, Logger.LOG_TAG, "Test");
+    @Throws(Exception::class)
+    fun testDebug_whenVerboseLevel() {
+        configureLog(Log.VERBOSE)
+        debug("Test")
+        Mockito.verify(mockLockWrap!!).println(Log.DEBUG, Logger.LOG_TAG, "Test")
     }
 
     @Test
-    public void testDebug_withMessageParams() throws Exception {
-        configureLog(Log.VERBOSE);
-        Logger.debug("Test %s %d", "extra", INT);
-        verify(mMockLockWrap).println(Log.DEBUG, Logger.LOG_TAG, "Test extra 100");
+    @Throws(Exception::class)
+    fun testDebug_withMessageParams() {
+        configureLog(Log.VERBOSE)
+        debug("Test %s %d", "extra", INT)
+        Mockito.verify(mockLockWrap!!)
+            .println(Log.DEBUG, Logger.LOG_TAG, "Test extra 100")
     }
 
     @Test
-    public void testDebugWithStack() throws Exception {
-        configureLog(Log.VERBOSE);
-        Logger.debugWithStack(new Exception(), "Bad things happened in %s", "MyClass");
-        verify(mMockLockWrap).println(Log.DEBUG, Logger.LOG_TAG,
-                "Bad things happened in MyClass\nSTACK");
+    @Throws(Exception::class)
+    fun testDebugWithStack() {
+        configureLog(Log.VERBOSE)
+        debugWithStack(Exception(), "Bad things happened in %s", "MyClass")
+        Mockito.verify(mockLockWrap!!).println(
+            Log.DEBUG, Logger.LOG_TAG,
+            "Bad things happened in MyClass\nSTACK"
+        )
     }
 
     @Test
-    public void testDebug_whenDebugLevel() throws Exception {
-        configureLog(Log.DEBUG);
-        Logger.debug("Test");
-        verify(mMockLockWrap).println(Log.DEBUG, Logger.LOG_TAG, "Test");
+    @Throws(Exception::class)
+    fun testDebug_whenDebugLevel() {
+        configureLog(Log.DEBUG)
+        debug("Test")
+        Mockito.verify(mockLockWrap!!).println(Log.DEBUG, Logger.LOG_TAG, "Test")
     }
 
     @Test
-    public void testDebug_whenInfoLevel() throws Exception {
-        configureLog(Log.INFO);
-        Logger.debug("Test");
-        verify(mMockLockWrap, never()).println(anyInt(), anyString(), anyString());
+    @Throws(Exception::class)
+    fun testDebug_whenInfoLevel() {
+        configureLog(Log.INFO)
+        debug("Test")
+        Mockito.verify(mockLockWrap!!, Mockito.never()).println(
+            ArgumentMatchers.anyInt(),
+            ArgumentMatchers.anyString(),
+            ArgumentMatchers.anyString()
+        )
     }
 
     @Test
-    public void testInfo_whenDebugLevel() throws Exception {
-        configureLog(Log.DEBUG);
-        Logger.info("Test");
-        verify(mMockLockWrap).println(Log.INFO, Logger.LOG_TAG, "Test");
+    @Throws(Exception::class)
+    fun testInfo_whenDebugLevel() {
+        configureLog(Log.DEBUG)
+        info("Test")
+        Mockito.verify(mockLockWrap!!).println(Log.INFO, Logger.LOG_TAG, "Test")
     }
 
     @Test
-    public void testInfo_whenInfoLevel() throws Exception {
-        configureLog(Log.INFO);
-        Logger.info("Test");
-        verify(mMockLockWrap).println(Log.INFO, Logger.LOG_TAG, "Test");
+    @Throws(Exception::class)
+    fun testInfo_whenInfoLevel() {
+        configureLog(Log.INFO)
+        info("Test")
+        Mockito.verify(mockLockWrap!!).println(Log.INFO, Logger.LOG_TAG, "Test")
     }
 
     @Test
-    public void testInfo_whenWarnLevel() throws Exception {
-        configureLog(Log.WARN);
-        Logger.info("Test");
-        verify(mMockLockWrap, never()).println(anyInt(), anyString(), anyString());
+    @Throws(Exception::class)
+    fun testInfo_whenWarnLevel() {
+        configureLog(Log.WARN)
+        info("Test")
+        Mockito.verify(mockLockWrap!!, Mockito.never()).println(
+            ArgumentMatchers.anyInt(),
+            ArgumentMatchers.anyString(),
+            ArgumentMatchers.anyString()
+        )
     }
 
     @Test
-    public void testWarn_whenInfoLevel() throws Exception {
-        configureLog(Log.INFO);
-        Logger.warn("Test");
-        verify(mMockLockWrap).println(Log.WARN, Logger.LOG_TAG, "Test");
+    @Throws(Exception::class)
+    fun testWarn_whenInfoLevel() {
+        configureLog(Log.INFO)
+        warn("Test")
+        Mockito.verify(mockLockWrap!!).println(Log.WARN, Logger.LOG_TAG, "Test")
     }
 
     @Test
-    public void testWarn_whenWarnLevel() throws Exception {
-        configureLog(Log.WARN);
-        Logger.warn("Test");
-        verify(mMockLockWrap).println(Log.WARN, Logger.LOG_TAG, "Test");
+    @Throws(Exception::class)
+    fun testWarn_whenWarnLevel() {
+        configureLog(Log.WARN)
+        warn("Test")
+        Mockito.verify(mockLockWrap!!).println(Log.WARN, Logger.LOG_TAG, "Test")
     }
 
     @Test
-    public void testWarn_whenErrorLevel() throws Exception {
-        configureLog(Log.ERROR);
-        Logger.warn("Test");
-        verify(mMockLockWrap, never()).println(anyInt(), anyString(), anyString());
+    @Throws(Exception::class)
+    fun testWarn_whenErrorLevel() {
+        configureLog(Log.ERROR)
+        warn("Test")
+        Mockito.verify(mockLockWrap!!, Mockito.never()).println(
+            ArgumentMatchers.anyInt(),
+            ArgumentMatchers.anyString(),
+            ArgumentMatchers.anyString()
+        )
     }
 
     @Test
-    public void testError_whenWarnLevel() throws Exception {
-        configureLog(Log.WARN);
-        Logger.error("Test");
-        verify(mMockLockWrap).println(Log.ERROR, Logger.LOG_TAG, "Test");
+    @Throws(Exception::class)
+    fun testError_whenWarnLevel() {
+        configureLog(Log.WARN)
+        error("Test")
+        Mockito.verify(mockLockWrap!!).println(Log.ERROR, Logger.LOG_TAG, "Test")
     }
 
     @Test
-    public void testError_whenErrorLevel() throws Exception {
-        configureLog(Log.ERROR);
-        Logger.error("Test");
-        verify(mMockLockWrap).println(Log.ERROR, Logger.LOG_TAG, "Test");
+    @Throws(Exception::class)
+    fun testError_whenErrorLevel() {
+        configureLog(Log.ERROR)
+        error("Test")
+        Mockito.verify(mockLockWrap!!).println(Log.ERROR, Logger.LOG_TAG, "Test")
     }
 
     @Test
-    public void testError_whenAssertLevel() throws Exception {
-        configureLog(Log.ASSERT);
-        Logger.error("Test");
-        verify(mMockLockWrap, never()).println(anyInt(), anyString(), anyString());
+    @Throws(Exception::class)
+    fun testError_whenAssertLevel() {
+        configureLog(Log.ASSERT)
+        error("Test")
+        Mockito.verify(mockLockWrap!!, Mockito.never()).println(
+            ArgumentMatchers.anyInt(),
+            ArgumentMatchers.anyString(),
+            ArgumentMatchers.anyString()
+        )
     }
 
-    private void configureLog(int minLevel) {
-        for (int level = Log.VERBOSE; level <= Log.ASSERT; level++) {
-            when(mMockLockWrap.isLoggable(Logger.LOG_TAG, level)).thenReturn(level >= minLevel);
+    private fun configureLog(minLevel: Int) {
+        for (level in Log.VERBOSE..Log.ASSERT) {
+            Mockito.`when`(mockLockWrap!!.isLoggable(Logger.LOG_TAG, level))
+                .thenReturn(level >= minLevel)
         }
-        when(mMockLockWrap.getStackTraceString(any(Throwable.class))).thenReturn("STACK");
-        Logger.setInstance(new Logger(mMockLockWrap));
+
+        Mockito.`when`(
+            mockLockWrap!!.getStackTraceString(
+                ArgumentMatchers.any(Throwable::class.java)
+            )
+        ).thenReturn("STACK")
+
+        instance = Logger(mockLockWrap)
+    }
+
+    companion object {
+        private const val INT = 100
     }
 }

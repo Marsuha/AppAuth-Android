@@ -11,90 +11,88 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package net.openid.appauth.browser
 
-package net.openid.appauth.browser;
+import net.openid.appauth.browser.Browsers.Chrome.customTab
+import net.openid.appauth.browser.Browsers.Chrome.standaloneBrowser
+import org.assertj.core.api.Assertions.assertThat
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
-import static org.assertj.core.api.Assertions.assertThat;
-
-import com.google.common.collect.Sets;
-
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.robolectric.RobolectricTestRunner;
-import org.robolectric.annotation.Config;
-
-@RunWith(RobolectricTestRunner.class)
-@Config(sdk = 16)
-public class BrowserDescriptorTest {
-
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [16])
+class BrowserDescriptorTest {
     @Test
-    public void testEquals_toNull() {
-        assertThat(Browsers.Chrome.standaloneBrowser("45")).isNotEqualTo(null);
+    fun testEquals_toNull() {
+        assertThat(standaloneBrowser("45")).isNotEqualTo(null)
     }
 
     @Test
-    public void testEquals_toSelf() {
-        BrowserDescriptor browser = Browsers.Chrome.standaloneBrowser("45");
-        assertThat(browser).isEqualTo(browser);
+    fun testEquals_toSelf() {
+        val browser = standaloneBrowser("45")
+        assertThat(browser).isEqualTo(browser)
     }
 
     @Test
-    public void testEquals_toEquivalent() {
-        BrowserDescriptor a = Browsers.Chrome.standaloneBrowser("45");
-        BrowserDescriptor b = Browsers.Chrome.standaloneBrowser("45");
-        assertThat(a).isEqualTo(b);
+    fun testEquals_toEquivalent() {
+        val a = standaloneBrowser("45")
+        val b = standaloneBrowser("45")
+        assertThat(a).isEqualTo(b)
     }
 
     @Test
-    public void testEquals_differentVersion() {
-        BrowserDescriptor a = Browsers.Chrome.standaloneBrowser("45");
-        BrowserDescriptor b = Browsers.Chrome.standaloneBrowser("46");
-        assertThat(a).isNotEqualTo(b);
+    fun testEquals_differentVersion() {
+        val a = standaloneBrowser("45")
+        val b = standaloneBrowser("46")
+        assertThat(a).isNotEqualTo(b)
     }
 
     @Test
-    public void testEquals_differentCustomTabSetting() {
-        BrowserDescriptor a = Browsers.Chrome.standaloneBrowser("45");
-        BrowserDescriptor b = Browsers.Chrome.customTab("45");
-        assertThat(a).isNotEqualTo(b);
+    fun testEquals_differentCustomTabSetting() {
+        val a = standaloneBrowser("45")
+        val b = customTab("45")
+        assertThat(a).isNotEqualTo(b)
     }
 
     @Test
-    public void testEquals_differentSignatures() {
-        BrowserDescriptor a = Browsers.Chrome.standaloneBrowser("45");
-        @SuppressWarnings("unchecked")
-        BrowserDescriptor b = new BrowserDescriptor(
-                a.packageName,
-                Sets.newHashSet("DIFFERENT_SIGNATURE"),
-                a.version,
-                a.useCustomTab);
-        assertThat(a).isNotEqualTo(b);
+    fun testEquals_differentSignatures() {
+        val a = standaloneBrowser("45")
+        val b = BrowserDescriptor(
+            a.packageName,
+            setOf("DIFFERENT_SIGNATURE"),
+            a.version,
+            a.useCustomTab
+        )
+        assertThat(a).isNotEqualTo(b)
     }
 
     @Test
-    public void testEquals_differentPackageNames() {
-        BrowserDescriptor a = Browsers.Chrome.standaloneBrowser("45");
-        BrowserDescriptor b = new BrowserDescriptor(
-                Browsers.Firefox.PACKAGE_NAME,
-                a.signatureHashes,
-                a.version,
-                a.useCustomTab);
-        assertThat(a).isNotEqualTo(b);
+    fun testEquals_differentPackageNames() {
+        val a = standaloneBrowser("45")
+        val b = BrowserDescriptor(
+            Browsers.Firefox.PACKAGE_NAME,
+            a.signatureHashes,
+            a.version,
+            a.useCustomTab
+        )
+        assertThat(a).isNotEqualTo(b)
     }
 
     @Test
-    public void testHashCode_equivalent() {
-        BrowserDescriptor a = Browsers.Chrome.standaloneBrowser("45");
-        BrowserDescriptor b = Browsers.Chrome.standaloneBrowser("45");
+    fun testHashCode_equivalent() {
+        val a = standaloneBrowser("45")
+        val b = standaloneBrowser("45")
 
-        assertThat(a.hashCode()).isEqualTo(b.hashCode());
+        assertThat(a.hashCode()).isEqualTo(b.hashCode())
     }
 
     @Test
-    public void testHashCode_notEquivalent() {
-        BrowserDescriptor a = Browsers.Chrome.standaloneBrowser("45");
-        BrowserDescriptor b = Browsers.Chrome.standaloneBrowser("46");
+    fun testHashCode_notEquivalent() {
+        val a = standaloneBrowser("45")
+        val b = standaloneBrowser("46")
 
-        assertThat(a.hashCode()).isNotEqualTo(b.hashCode());
+        assertThat(a.hashCode()).isNotEqualTo(b.hashCode())
     }
 }

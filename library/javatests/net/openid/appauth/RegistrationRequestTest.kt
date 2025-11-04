@@ -11,229 +11,223 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package net.openid.appauth
 
-package net.openid.appauth;
+import android.net.Uri
+import net.openid.appauth.TestValues.TEST_APP_REDIRECT_URI
+import net.openid.appauth.TestValues.TEST_APP_SCHEME
+import net.openid.appauth.TestValues.testServiceConfig
+import org.assertj.core.api.Assertions.assertThat
+import org.json.JSONException
+import org.json.JSONObject
+import org.junit.Assert
+import org.junit.Before
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
-import android.net.Uri;
-
-import org.json.JSONException;
-import org.json.JSONObject;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.robolectric.RobolectricTestRunner;
-import org.robolectric.annotation.Config;
-
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
-import static net.openid.appauth.TestValues.TEST_APP_REDIRECT_URI;
-import static net.openid.appauth.TestValues.TEST_APP_SCHEME;
-import static net.openid.appauth.TestValues.getTestServiceConfig;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.Assert.assertEquals;
-
-@RunWith(RobolectricTestRunner.class)
-@Config(sdk = 16)
-public class RegistrationRequestTest {
-
-    private static final Map<String, String> TEST_ADDITIONAL_PARAMS;
-
-    static {
-        TEST_ADDITIONAL_PARAMS = new HashMap<>();
-        TEST_ADDITIONAL_PARAMS.put("test_key1", "test_value1");
-        TEST_ADDITIONAL_PARAMS.put("test_key2", "test_value2");
-    }
-
-    private static final String TEST_JSON = "{\n"
-            + " \"application_type\": \"" + RegistrationRequest.APPLICATION_TYPE_NATIVE + "\",\n"
-            + " \"redirect_uris\": [\"" + TEST_APP_REDIRECT_URI + "\"],\n"
-            + " \"subject_type\": \"" + RegistrationRequest.SUBJECT_TYPE_PAIRWISE + "\",\n"
-            + " \"response_types\": [\"" + ResponseTypeValues.ID_TOKEN + "\"],\n"
-            + " \"grant_types\": [\"" + GrantTypeValues.IMPLICIT + "\"]\n"
-            + "}";
-
-    public static final Uri TEST_JWKS_URI = Uri.parse("https://mydomain/path/keys");
-    private static final String TEST_JWKS = "{\n"
-        + " \"keys\": [\n"
-        + "  {\n"
-        + "   \"kty\": \"RSA\",\n"
-        + "   \"kid\": \"key1\",\n"
-        + "   \"n\": \"AJnc...L0HU=\",\n"
-        + "   \"e\": \"AQAB\"\n"
-        + "  }\n"
-        + " ]\n"
-        + "}";
-
-
-    private RegistrationRequest.Builder mMinimalRequestBuilder;
-    private RegistrationRequest.Builder mMaximalRequestBuilder;
-    private JSONObject mJson;
-    private List<Uri> mRedirectUris;
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [16])
+class RegistrationRequestTest {
+    private lateinit var minimalRequestBuilder: RegistrationRequest.Builder
+    private lateinit var maximalRequestBuilder: RegistrationRequest.Builder
+    private lateinit var json: JSONObject
+    private lateinit var redirectUris: List<Uri>
 
     @Before
-    public void setUp() throws JSONException {
-        mRedirectUris = Arrays.asList(TEST_APP_REDIRECT_URI);
-        mMinimalRequestBuilder = new RegistrationRequest.Builder(
-                getTestServiceConfig(), mRedirectUris);
-        mMaximalRequestBuilder = new RegistrationRequest.Builder(
-                getTestServiceConfig(), mRedirectUris)
-                .setResponseTypeValues(ResponseTypeValues.ID_TOKEN)
-                .setGrantTypeValues(GrantTypeValues.IMPLICIT)
-                .setSubjectType(RegistrationRequest.SUBJECT_TYPE_PAIRWISE);
-        mJson = new JSONObject(TEST_JSON);
+    @Throws(JSONException::class)
+    fun setUp() {
+        redirectUris = listOf(TEST_APP_REDIRECT_URI)
+        minimalRequestBuilder = RegistrationRequest.Builder(testServiceConfig, redirectUris)
+
+        maximalRequestBuilder = RegistrationRequest.Builder(testServiceConfig, redirectUris)
+            .setResponseTypeValues(ResponseTypeValues.ID_TOKEN)
+            .setGrantTypeValues(GrantTypeValues.IMPLICIT)
+            .setSubjectType(RegistrationRequest.SUBJECT_TYPE_PAIRWISE)
+
+        json = JSONObject(TEST_JSON)
     }
 
     @Test
-    public void testBuilder() {
-        assertValues(mMinimalRequestBuilder.build());
-    }
-
-    @Test(expected = NullPointerException.class)
-    public void testBuild_nullConfiguration() {
-        new RegistrationRequest.Builder(null, mRedirectUris).build();
-    }
-
-    @Test(expected = NullPointerException.class)
-    public void testBuild_nullRedirectUri() {
-        new RegistrationRequest.Builder(getTestServiceConfig(), null)
-                .build();
+    fun testBuilder() {
+        assertValues(minimalRequestBuilder.build())
     }
 
     @Test
-    public void testBuilder_setRedirectUriValues() {
-        Uri redirect1 = Uri.parse(TEST_APP_SCHEME + ":/callback1");
-        Uri redirect2 = Uri.parse(TEST_APP_SCHEME + ":/callback2");
-        mMinimalRequestBuilder.setRedirectUriValues(redirect1, redirect2);
-        RegistrationRequest request = mMinimalRequestBuilder.build();
-        assertThat(request.redirectUris.containsAll(Arrays.asList(redirect1, redirect2))).isTrue();
+    fun testBuilder_setRedirectUriValues() {
+        val redirect1 = Uri.parse("$TEST_APP_SCHEME:/callback1")
+        val redirect2 = Uri.parse("$TEST_APP_SCHEME:/callback2")
+        minimalRequestBuilder.setRedirectUriValues(redirect1, redirect2)
+        val request = minimalRequestBuilder.build()
+        assertThat(request.redirectUris.containsAll(listOf(redirect1, redirect2))).isTrue()
     }
 
-    @Test(expected = IllegalArgumentException.class)
-    public void testBuilder_setAdditionalParams_withBuiltInParam() {
-        Map<String, String> additionalParams = new HashMap<>();
-        additionalParams.put(RegistrationRequest.PARAM_APPLICATION_TYPE, "web");
-        mMinimalRequestBuilder.setAdditionalParameters(additionalParams);
-    }
-
-    @Test
-    public void testApplicationTypeIsNativeByDefault() {
-        RegistrationRequest request = mMinimalRequestBuilder.build();
-        assertThat(request.applicationType).isEqualTo(RegistrationRequest.APPLICATION_TYPE_NATIVE);
+    @Test(expected = IllegalArgumentException::class)
+    fun testBuilder_setAdditionalParams_withBuiltInParam() {
+        val additionalParams = mapOf(RegistrationRequest.PARAM_APPLICATION_TYPE to "web")
+        minimalRequestBuilder.setAdditionalParameters(additionalParams)
     }
 
     @Test
-    public void testToJsonString_withAdditionalParameters() throws JSONException {
-        RegistrationRequest request = mMinimalRequestBuilder
-                .setAdditionalParameters(TEST_ADDITIONAL_PARAMS)
-                .build();
-        String jsonStr = request.toJsonString();
-
-        JSONObject json = new JSONObject(jsonStr);
-        for (Map.Entry<String, String> param : TEST_ADDITIONAL_PARAMS.entrySet()) {
-            assertThat(json.get(param.getKey())).isEqualTo(param.getValue());
-        }
-
-        assertThat(request.applicationType).isEqualTo(RegistrationRequest.APPLICATION_TYPE_NATIVE);
+    fun testApplicationTypeIsNativeByDefault() {
+        val request = minimalRequestBuilder.build()
+        assertThat(request.applicationType).isEqualTo(RegistrationRequest.APPLICATION_TYPE_NATIVE)
     }
 
     @Test
-    public void testToJsonString() throws JSONException {
-        RegistrationRequest request = mMaximalRequestBuilder.build();
-        String jsonStr = request.toJsonString();
-        assertMaximalValuesInJson(request, new JSONObject(jsonStr));
+    @Throws(JSONException::class)
+    fun testToJsonString_withAdditionalParameters() {
+        val request = minimalRequestBuilder
+            .setAdditionalParameters(TEST_ADDITIONAL_PARAMS)
+            .build()
+
+        val jsonStr = request.toJsonString()
+
+        val json = JSONObject(jsonStr)
+        TEST_ADDITIONAL_PARAMS.forEach { assertThat(json.get(it.key)).isEqualTo(it.value) }
+
+        assertThat(request.applicationType)
+            .isEqualTo(RegistrationRequest.APPLICATION_TYPE_NATIVE)
     }
 
     @Test
-    public void testToJsonString_withJwksUri() throws JSONException {
-        RegistrationRequest request = mMinimalRequestBuilder
+    @Throws(JSONException::class)
+    fun testToJsonString() {
+        val request = maximalRequestBuilder.build()
+        val jsonStr = request.toJsonString()
+        assertMaximalValuesInJson(request, JSONObject(jsonStr))
+    }
+
+    @Test
+    @Throws(JSONException::class)
+    fun testToJsonString_withJwksUri() {
+        val request = minimalRequestBuilder
             .setJwksUri(TEST_JWKS_URI)
-            .build();
+            .build()
 
-        String jsonStr = request.toJsonString();
-        JSONObject json = new JSONObject(jsonStr);
+        val jsonStr = request.toJsonString()
+        val json = JSONObject(jsonStr)
 
         assertThat(Uri.parse(json.getString(RegistrationRequest.PARAM_JWKS_URI)))
-            .isEqualTo(TEST_JWKS_URI);
+            .isEqualTo(TEST_JWKS_URI)
     }
 
 
     @Test
-    public void testToJsonString_withJwks() throws JSONException {
-        RegistrationRequest request = mMinimalRequestBuilder
-            .setJwks(new JSONObject(TEST_JWKS))
-            .build();
-        assertThat(request.jwks).isNotNull();
+    @Throws(JSONException::class)
+    fun testToJsonString_withJwks() {
+        val request = minimalRequestBuilder
+            .setJwks(JSONObject(TEST_JWKS))
+            .build()
 
-        String jsonStr = request.toJsonString();
-        JSONObject json = new JSONObject(jsonStr);
+        assertThat(request.jwks).isNotNull()
+
+        val jsonStr = request.toJsonString()
+        val json = JSONObject(jsonStr)
 
         assertThat(json.getJSONObject(RegistrationRequest.PARAM_JWKS).toString())
-            .isEqualTo(request.jwks.toString());
+            .isEqualTo(request.jwks.toString())
     }
 
     @Test
-    public void testSerialize() throws JSONException {
-        RegistrationRequest request = mMaximalRequestBuilder.build();
-        JSONObject json = request.jsonSerialize();
-        assertMaximalValuesInJson(request, json);
+    @Throws(JSONException::class)
+    fun testSerialize() {
+        val request = maximalRequestBuilder.build()
+        val json = request.jsonSerialize()
+        assertMaximalValuesInJson(request, json)
         assertThat(json.getJSONObject(RegistrationRequest.KEY_CONFIGURATION).toString())
-                .isEqualTo(request.configuration.toJson().toString());
+            .isEqualTo(request.configuration.toJson().toString())
     }
 
     @Test
-    public void testSerialize_withAdditionalParameters() throws JSONException {
-        Map<String, String> additionalParameters = Collections.singletonMap("test1", "value1");
-        RegistrationRequest request = mMaximalRequestBuilder
-                .setAdditionalParameters(additionalParameters).build();
-        JSONObject json = request.jsonSerialize();
-        assertMaximalValuesInJson(request, json);
-        assertThat(JsonUtil.getStringMap(json, RegistrationRequest.KEY_ADDITIONAL_PARAMETERS))
-                .isEqualTo(additionalParameters);
+    @Throws(JSONException::class)
+    fun testSerialize_withAdditionalParameters() {
+        val additionalParameters = mapOf("test1" to "value1")
+        val request = maximalRequestBuilder.setAdditionalParameters(additionalParameters).build()
+        val json = request.jsonSerialize()
+        assertMaximalValuesInJson(request, json)
+        assertThat(json.getStringMap(RegistrationRequest.KEY_ADDITIONAL_PARAMETERS))
+            .isEqualTo(additionalParameters)
     }
 
     @Test
-    public void testDeserialize() throws JSONException {
-        mJson.put(RegistrationRequest.KEY_CONFIGURATION, getTestServiceConfig().toJson());
-        RegistrationRequest request = RegistrationRequest.jsonDeserialize(mJson);
-        assertThat(request.configuration.toJsonString())
-                .isEqualTo(getTestServiceConfig().toJsonString());
-        assertMaximalValuesInJson(request, mJson);
+    @Throws(JSONException::class)
+    fun testDeserialize() {
+        json.put(RegistrationRequest.KEY_CONFIGURATION, testServiceConfig.toJson())
+        val request = RegistrationRequest.jsonDeserialize(json)
+        assertThat(request.configuration.toJsonString()).isEqualTo(testServiceConfig.toJsonString())
+        assertMaximalValuesInJson(request, json)
     }
 
     @Test
-    public void testDeserialize_withAdditionalParameters() throws JSONException {
-        mJson.put(RegistrationRequest.KEY_CONFIGURATION, getTestServiceConfig().toJson());
-        Map<String, String> additionalParameters = new HashMap<>();
-        additionalParameters.put("key1", "value1");
-        additionalParameters.put("key2", "value2");
-        mJson.put(RegistrationRequest.KEY_ADDITIONAL_PARAMETERS,
-                JsonUtil.mapToJsonObject(additionalParameters));
-        RegistrationRequest request = RegistrationRequest.jsonDeserialize(mJson);
-        assertThat(request.additionalParameters).isEqualTo(additionalParameters);
+    @Throws(JSONException::class)
+    fun testDeserialize_withAdditionalParameters() {
+        json.put(RegistrationRequest.KEY_CONFIGURATION, testServiceConfig.toJson())
+        val additionalParameters = mapOf("key1" to "value1", "key2" to "value2")
+
+        json.put(
+            RegistrationRequest.KEY_ADDITIONAL_PARAMETERS,
+            additionalParameters.toJsonObject()
+        )
+
+        val request = RegistrationRequest.jsonDeserialize(json)
+        assertThat(request.additionalParameters).isEqualTo(additionalParameters)
     }
 
-    private void assertValues(RegistrationRequest request) {
-        assertEquals("unexpected redirect URI", TEST_APP_REDIRECT_URI,
-                request.redirectUris.iterator().next());
-        assertEquals("unexpected application type", RegistrationRequest.APPLICATION_TYPE_NATIVE,
-                request.applicationType);
+    private fun assertValues(request: RegistrationRequest) {
+        Assert.assertEquals(
+            "unexpected redirect URI", TEST_APP_REDIRECT_URI,
+            request.redirectUris.iterator().next()
+        )
+        Assert.assertEquals(
+            "unexpected application type", RegistrationRequest.APPLICATION_TYPE_NATIVE,
+            request.applicationType
+        )
     }
 
-    private void assertMaximalValuesInJson(RegistrationRequest request, JSONObject json)
-            throws JSONException {
+    @Throws(JSONException::class)
+    private fun assertMaximalValuesInJson(request: RegistrationRequest, json: JSONObject) {
         assertThat(json.get(RegistrationRequest.PARAM_REDIRECT_URIS))
-                .isEqualTo(JsonUtil.toJsonArray(request.redirectUris));
+            .isEqualTo(request.redirectUris.toJsonArray())
+
         assertThat(json.get(RegistrationRequest.PARAM_APPLICATION_TYPE))
-                .isEqualTo(RegistrationRequest.APPLICATION_TYPE_NATIVE);
+            .isEqualTo(RegistrationRequest.APPLICATION_TYPE_NATIVE)
+
         assertThat(json.get(RegistrationRequest.PARAM_RESPONSE_TYPES))
-                .isEqualTo(JsonUtil.toJsonArray(request.responseTypes));
+            .isEqualTo(request.responseTypes?.toJsonArray())
+
         assertThat(json.get(RegistrationRequest.PARAM_GRANT_TYPES))
-                .isEqualTo(JsonUtil.toJsonArray(request.grantTypes));
+            .isEqualTo(request.grantTypes?.toJsonArray())
+
         assertThat(json.get(RegistrationRequest.PARAM_SUBJECT_TYPE))
-                .isEqualTo(request.subjectType);
+            .isEqualTo(request.subjectType)
+    }
+
+    companion object {
+        private val TEST_ADDITIONAL_PARAMS = mapOf(
+            "test_key1" to "test_value1",
+            "test_key2" to "test_value2"
+        )
+
+        private val TEST_JSON = ("{\n"
+                + " \"application_type\": \"" + RegistrationRequest.APPLICATION_TYPE_NATIVE + "\",\n"
+                + " \"redirect_uris\": [\"" + TEST_APP_REDIRECT_URI + "\"],\n"
+                + " \"subject_type\": \"" + RegistrationRequest.SUBJECT_TYPE_PAIRWISE + "\",\n"
+                + " \"response_types\": [\"" + ResponseTypeValues.ID_TOKEN + "\"],\n"
+                + " \"grant_types\": [\"" + GrantTypeValues.IMPLICIT + "\"]\n"
+                + "}")
+
+        val TEST_JWKS_URI: Uri = Uri.parse("https://mydomain/path/keys")
+        private const val TEST_JWKS = ("{\n"
+                + " \"keys\": [\n"
+                + "  {\n"
+                + "   \"kty\": \"RSA\",\n"
+                + "   \"kid\": \"key1\",\n"
+                + "   \"n\": \"AJnc...L0HU=\",\n"
+                + "   \"e\": \"AQAB\"\n"
+                + "  }\n"
+                + " ]\n"
+                + "}")
     }
 }

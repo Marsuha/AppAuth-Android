@@ -11,19 +11,12 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-package net.openid.appauth;
+package net.openid.appauth
 
 /**
  * Default implementation of clock which wraps `System.currentTimeMillis()`.
  */
-class SystemClock implements Clock {
-    public static final SystemClock INSTANCE = new SystemClock();
-
-    private SystemClock() {}
-
-    @Override
-    public long getCurrentTimeMillis() {
-        return System.currentTimeMillis();
-    }
+object SystemClock : Clock {
+    override val currentTimeMillis: Long
+        get() = System.currentTimeMillis()
 }

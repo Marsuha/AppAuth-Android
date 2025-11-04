@@ -11,90 +11,78 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package net.openid.appauth
 
-package net.openid.appauth;
+import net.openid.appauth.CodeVerifierUtil.checkCodeVerifier
+import net.openid.appauth.CodeVerifierUtil.generateRandomCodeVerifier
+import org.assertj.core.api.Assertions.assertThat
+import org.junit.Assert
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+import java.security.SecureRandom
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.Assert.fail;
-
-import java.security.SecureRandom;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.robolectric.RobolectricTestRunner;
-import org.robolectric.annotation.Config;
-
-@RunWith(RobolectricTestRunner.class)
-@Config(sdk = 16)
-public class CodeVerifierUtilTest {
-
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [16])
+class CodeVerifierUtilTest {
     @Test
-    public void checkCodeVerifier_tooShort_throwsException() {
-        String codeVerifier = createString(CodeVerifierUtil.MIN_CODE_VERIFIER_LENGTH - 1);
+    fun checkCodeVerifier_tooShort_throwsException() {
+        val codeVerifier = createString(CodeVerifierUtil.MIN_CODE_VERIFIER_LENGTH - 1)
         try {
-            CodeVerifierUtil.checkCodeVerifier(codeVerifier);
-            fail("expected exception not thrown");
-        } catch (IllegalArgumentException ex) {
-            assertThat(ex.getMessage())
-                .isEqualTo("codeVerifier length is shorter than allowed by the PKCE specification");
+            checkCodeVerifier(codeVerifier)
+            Assert.fail("expected exception not thrown")
+        } catch (ex: IllegalArgumentException) {
+            assertThat(ex.message)
+                .isEqualTo("codeVerifier length is shorter than allowed by the PKCE specification")
         }
     }
 
     @Test
-    public void checkCodeVerifier_tooLong_throwsException() {
-        String codeVerifier = createString(CodeVerifierUtil.MAX_CODE_VERIFIER_LENGTH + 1);
+    fun checkCodeVerifier_tooLong_throwsException() {
+        val codeVerifier = createString(CodeVerifierUtil.MAX_CODE_VERIFIER_LENGTH + 1)
         try {
-            CodeVerifierUtil.checkCodeVerifier(codeVerifier);
-            fail("expected exception not thrown");
-        } catch (IllegalArgumentException ex) {
-            assertThat(ex.getMessage())
-                .isEqualTo("codeVerifier length is longer than allowed by the PKCE specification");
+            checkCodeVerifier(codeVerifier)
+            Assert.fail("expected exception not thrown")
+        } catch (ex: IllegalArgumentException) {
+            assertThat(ex.message)
+                .isEqualTo("codeVerifier length is longer than allowed by the PKCE specification")
         }
     }
 
     @Test
-    public void generateRandomCodeVerifier_nullEntropySource_throwsException() {
+    fun generateRandomCodeVerifier_tooLittleEntropy_throwsException() {
         try {
-            CodeVerifierUtil.generateRandomCodeVerifier(
-                null,
-                CodeVerifierUtil.MIN_CODE_VERIFIER_ENTROPY);
-            fail("expected exception not thrown");
-        } catch (NullPointerException ex) {
-            assertThat(ex.getMessage())
-                .isEqualTo("entropySource cannot be null");
+            generateRandomCodeVerifier(
+                SecureRandom(),
+                CodeVerifierUtil.MIN_CODE_VERIFIER_ENTROPY - 1
+            )
+            Assert.fail("expected exception not thrown")
+        } catch (ex: IllegalArgumentException) {
+            assertThat(ex.message)
+                .isEqualTo("entropyBytes is less than the minimum permitted")
         }
     }
 
     @Test
-    public void generateRandomCodeVerifier_tooLittleEntropy_throwsException() {
+    fun generateRandomCodeVerifier_tooMuchEntropy_throwsException() {
         try {
-            CodeVerifierUtil.generateRandomCodeVerifier(
-                new SecureRandom(),
-                CodeVerifierUtil.MIN_CODE_VERIFIER_ENTROPY - 1);
-            fail("expected exception not thrown");
-        } catch (IllegalArgumentException ex) {
-            assertThat(ex.getMessage())
-                .isEqualTo("entropyBytes is less than the minimum permitted");
+            generateRandomCodeVerifier(
+                SecureRandom(),
+                CodeVerifierUtil.MAX_CODE_VERIFIER_ENTROPY + 1
+            )
+            Assert.fail("expected exception not thrown")
+        } catch (ex: IllegalArgumentException) {
+            assertThat(ex.message)
+                .isEqualTo("entropyBytes is greater than the maximum permitted")
         }
     }
 
-    @Test
-    public void generateRandomCodeVerifier_tooMuchEntropy_throwsException() {
-        try {
-            CodeVerifierUtil.generateRandomCodeVerifier(
-                new SecureRandom(),
-                CodeVerifierUtil.MAX_CODE_VERIFIER_ENTROPY + 1);
-            fail("expected exception not thrown");
-        } catch (IllegalArgumentException ex) {
-            assertThat(ex.getMessage())
-                .isEqualTo("entropyBytes is greater than the maximum permitted");
+    private fun createString(length: Int): String {
+        val strChars = CharArray(length)
+        for (i in strChars.indices) {
+            strChars[i] = 'a'
         }
-    }
-
-    private String createString(int length) {
-        char[] strChars = new char[length];
-        for (int i = 0; i < strChars.length; i++) {
-            strChars[i] = 'a';
-        }
-        return new String(strChars);
+        return String(strChars)
     }
 }

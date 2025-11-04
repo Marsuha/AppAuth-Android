@@ -11,38 +11,30 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package net.openid.appauth
 
-package net.openid.appauth;
-
-import android.content.Intent;
-import androidx.annotation.NonNull;
-
-import org.json.JSONObject;
+import android.content.Intent
+import org.json.JSONObject
 
 /**
  * A base response for session management models
- * {@link AuthorizationResponse}
- * {@link EndSessionResponse}
+ * [AuthorizationResponse] and [EndSessionResponse]
  */
-public abstract class AuthorizationManagementResponse {
+sealed interface AuthorizationManagementResponse {
+    val state: String?
 
-    public abstract String getState();
-
-    public abstract Intent toIntent();
+    fun toIntent(): Intent
 
     /**
      * Produces a JSON representation of the request for persistent storage or local transmission
      * (e.g. between activities).
      */
-    public abstract JSONObject jsonSerialize();
+    fun jsonSerialize(): JSONObject
 
     /**
      * Produces a JSON representation of the end session response for persistent storage or local
      * transmission (e.g. between activities). This method is just a convenience wrapper
-     * for {@link #jsonSerialize()}, converting the JSON object to its string form.
+     * for [.jsonSerialize], converting the JSON object to its string form.
      */
-    @NonNull
-    public String jsonSerializeString() {
-        return jsonSerialize().toString();
-    }
+    fun jsonSerializeString() = jsonSerialize().toString()
 }

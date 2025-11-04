@@ -11,166 +11,126 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package net.openid.appauth.browser
 
-package net.openid.appauth.browser;
-
-import android.content.ComponentName;
-import android.content.Context;
-import android.net.Uri;
-import android.os.Bundle;
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
-import androidx.annotation.WorkerThread;
-import androidx.browser.customtabs.CustomTabsCallback;
-import androidx.browser.customtabs.CustomTabsClient;
-import androidx.browser.customtabs.CustomTabsIntent;
-import androidx.browser.customtabs.CustomTabsServiceConnection;
-import androidx.browser.customtabs.CustomTabsSession;
-
-import net.openid.appauth.internal.Logger;
-import net.openid.appauth.internal.UriUtil;
-
-import java.lang.ref.WeakReference;
-import java.util.List;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
+import android.content.ComponentName
+import android.content.Context
+import android.net.Uri
+import androidx.annotation.VisibleForTesting
+import androidx.browser.customtabs.CustomTabsCallback
+import androidx.browser.customtabs.CustomTabsClient
+import androidx.browser.customtabs.CustomTabsIntent
+import androidx.browser.customtabs.CustomTabsServiceConnection
+import androidx.browser.customtabs.CustomTabsSession
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import net.openid.appauth.internal.Logger
+import net.openid.appauth.internal.toCustomTabUriBundle
+import java.lang.ref.WeakReference
+import kotlin.time.Duration.Companion.seconds
 
 /**
- * Hides the details of establishing connections and sessions with custom tabs, to make testing
- * easier.
+ * Manages the lifecycle and interactions with a Custom Tabs service using Kotlin Coroutines.
+ *
+ * @param context The application context used to bind to the Custom Tabs service.
  */
-public class CustomTabManager {
+class CustomTabManager(context: Context) {
+    private val contextRef = WeakReference(context)
+    private val context get() = contextRef.get()
+    private var clientDeferred = CompletableDeferred<CustomTabsClient>()
+    private var connection: CustomTabsServiceConnection? = null
 
     /**
-     * Wait for at most this amount of time for the browser connection to be established.
+     * Binds to the Custom Tabs service for the specified browser package.
+     *
+     * @param browserPackage The package name of the browser to bind to.
      */
-    private static final long CLIENT_WAIT_TIME = 1L;
+    fun bind(browserPackage: String) {
+        if (connection != null) return
 
-    @NonNull
-    private final WeakReference<Context> mContextRef;
-
-    @NonNull
-    private final AtomicReference<CustomTabsClient> mClient;
-
-    @NonNull
-    private final CountDownLatch mClientLatch;
-
-    @Nullable
-    private CustomTabsServiceConnection mConnection;
-
-    public CustomTabManager(@NonNull Context context) {
-        mContextRef = new WeakReference<>(context);
-        mClient = new AtomicReference<>();
-        mClientLatch = new CountDownLatch(1);
-    }
-
-    public synchronized void bind(@NonNull String browserPackage) {
-        if (mConnection != null) {
-            return;
-        }
-
-        mConnection = new CustomTabsServiceConnection() {
-            @Override
-            public void onServiceDisconnected(ComponentName componentName) {
-                Logger.debug("CustomTabsService is disconnected");
-                setClient(null);
+        connection = object : CustomTabsServiceConnection() {
+            override fun onServiceDisconnected(componentName: ComponentName?) {
+                Logger.debug("CustomTabsService is disconnected")
+                clientDeferred.cancel()
+                clientDeferred = CompletableDeferred()
             }
 
-            @Override
-            public void onCustomTabsServiceConnected(ComponentName componentName,
-                                                     CustomTabsClient customTabsClient) {
-                Logger.debug("CustomTabsService is connected");
-                customTabsClient.warmup(0);
-                setClient(customTabsClient);
+            override fun onCustomTabsServiceConnected(
+                name: ComponentName,
+                customTabsClient: CustomTabsClient
+            ) {
+                Logger.debug("CustomTabsService is connected")
+                customTabsClient.warmup(0)
+                clientDeferred.complete(customTabsClient)
+            }
+        }
+
+        this@CustomTabManager.context?.let {
+            if (!CustomTabsClient.bindCustomTabsService(it, browserPackage, connection!!)) {
+                Logger.info("Unable to bind custom tabs service")
+            }
+        } ?: Logger.info("Unable to bind custom tabs service")
+    }
+
+    /**
+     * Creates a builder for a Custom Tabs intent.
+     *
+     * @param possibleUris Optional URIs to prefetch.
+     * @return A builder for creating a Custom Tabs intent.
+     */
+    suspend fun createTabBuilder(vararg possibleUris: Uri?): CustomTabsIntent.Builder =
+        CustomTabsIntent.Builder(createSession(null, *possibleUris))
+
+    /**
+     * Unbinds from the Custom Tabs service and releases resources.
+     */
+    fun dispose() {
+        connection?.let { this@CustomTabManager.context?.unbindService(it) }
+        clientDeferred.cancel()
+        Logger.debug("CustomTabsService is disconnected")
+    }
+
+    /**
+     * Creates a Custom Tabs session for preloading and launching URLs.
+     *
+     * @param callbacks Optional callbacks for session events.
+     * @param possibleUris Optional URIs to prefetch.
+     * @return A CustomTabsSession instance, or null if creation failed.
+     */
+    suspend fun createSession(
+        callbacks: CustomTabsCallback?,
+        vararg possibleUris: Uri?
+    ): CustomTabsSession? = withContext(Dispatchers.IO) {
+        getClient()?.let { client ->
+            val session = client.newSession(callbacks) ?: run {
+                Logger.warn("Failed to create custom tabs session through custom tabs client")
+                return@withContext null
             }
 
-            private void setClient(@Nullable CustomTabsClient client) {
-                mClient.set(client);
-                mClientLatch.countDown();
+            if (possibleUris.isNotEmpty()) {
+                session.mayLaunchUrl(
+                    possibleUris[0],
+                    null,
+                    possibleUris.toCustomTabUriBundle(1)
+                )
             }
-        };
 
-        Context context = mContextRef.get();
-        if (context == null || !CustomTabsClient.bindCustomTabsService(
-                context,
-                browserPackage,
-                mConnection)) {
-            // this is expected if the browser does not support custom tabs
-            Logger.info("Unable to bind custom tabs service");
-            mClientLatch.countDown();
+            session
         }
     }
 
     /**
-     * Creates a {@link androidx.browser.customtabs.CustomTabsIntent.Builder custom tab builder},
-     * with an optional list of optional URIs that may be requested. The URI list
-     * should be ordered such that the most likely URI to be requested is first. If the selected
-     * browser does not support custom tabs, then the URI list has no effect.
+     * Gets the CustomTabsClient instance, waiting if necessary.
+     *
+     * @return The CustomTabsClient instance, or null if unavailable.
      */
-    @WorkerThread
-    @NonNull
-    public CustomTabsIntent.Builder createTabBuilder(@Nullable Uri... possibleUris) {
-        return new CustomTabsIntent.Builder(createSession(null, possibleUris));
-    }
+    @VisibleForTesting
+    suspend fun getClient(): CustomTabsClient? =
+        withTimeoutOrNull(CLIENT_WAIT_TIME.seconds) { clientDeferred.await() }
 
-    public synchronized void dispose() {
-        if (mConnection == null) {
-            return;
-        }
-
-        Context context = mContextRef.get();
-        if (context != null) {
-            context.unbindService(mConnection);
-        }
-
-        mClient.set(null);
-        Logger.debug("CustomTabsService is disconnected");
-    }
-
-    /**
-     * Creates a {@link androidx.browser.customtabs.CustomTabsSession custom tab session} for
-     * use with a custom tab intent, with optional callbacks and optional list of URIs that may
-     * be requested. The URI list should be ordered such that the most likely URI to be requested
-     * is first. If no custom tab supporting browser is available, this will return {@code null}.
-     */
-    @WorkerThread
-    @Nullable
-    public CustomTabsSession createSession(
-            @Nullable CustomTabsCallback callbacks,
-            @Nullable Uri... possibleUris) {
-        CustomTabsClient client = getClient();
-        if (client == null) {
-            return null;
-        }
-
-        CustomTabsSession session = client.newSession(callbacks);
-        if (session == null) {
-            Logger.warn("Failed to create custom tabs session through custom tabs client");
-            return null;
-        }
-
-        if (possibleUris != null && possibleUris.length > 0) {
-            List<Bundle> additionalUris = UriUtil.toCustomTabUriBundle(possibleUris, 1);
-            session.mayLaunchUrl(possibleUris[0], null, additionalUris);
-        }
-
-        return session;
-    }
-
-    /**
-     * Retrieve the custom tab client used to communicate with the custom tab supporting browser,
-     * if available.
-     */
-    @WorkerThread
-    public CustomTabsClient getClient() {
-        try {
-            mClientLatch.await(CLIENT_WAIT_TIME, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
-            Logger.info("Interrupted while waiting for browser connection");
-            mClientLatch.countDown();
-        }
-
-        return mClient.get();
+    companion object {
+        private const val CLIENT_WAIT_TIME = 1L
     }
 }

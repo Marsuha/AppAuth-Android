@@ -11,64 +11,63 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package net.openid.appauth
 
-package net.openid.appauth;
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.mockito.Mockito
+import org.mockito.kotlin.doThrow
+import org.mockito.kotlin.whenever
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+import java.io.ByteArrayInputStream
+import java.io.IOException
+import java.io.InputStream
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.mock;
-
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.robolectric.RobolectricTestRunner;
-import org.robolectric.annotation.Config;
-
-@RunWith(RobolectricTestRunner.class)
-@Config(sdk = 16)
-public class UtilsTest {
-
-    private static final String TEST_STRING = "test_string\nwith a new line";
-    private static boolean sIsClosed = false;
-
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [16])
+class UtilsTest {
     @Test
-    public void testCloseQuietly_close() {
-        InputStream in = new ByteArrayInputStream(TEST_STRING.getBytes()) {
-            @Override
-            public void close() throws IOException {
-                sIsClosed = true;
-                super.close();
+    fun testCloseQuietly_close() {
+        val `in`: InputStream = object : ByteArrayInputStream(TEST_STRING.toByteArray()) {
+            @Throws(IOException::class)
+            override fun close() {
+                sIsClosed = true
+                super.close()
             }
-        };
-        Utils.closeQuietly(in);
-        assertTrue(sIsClosed);
+        }
+
+        `in`.closeQuietly()
+        assertTrue(sIsClosed)
     }
 
     @Test
-    public void testCloseQuietly_closed() throws Exception {
-        InputStream in = new ByteArrayInputStream(TEST_STRING.getBytes());
-        in.close();
-        Utils.closeQuietly(in);
+    @Throws(Exception::class)
+    fun testCloseQuietly_closed() {
+        val `in`: InputStream = ByteArrayInputStream(TEST_STRING.toByteArray())
+        `in`.close()
+        `in`.closeQuietly()
     }
 
     @Test
-    public void testCloseQuietly_throw() throws Exception {
-        InputStream in = mock(InputStream.class);
-        doThrow(new IOException()).when(in).close();
-        Utils.closeQuietly(in);
+    @Throws(Exception::class)
+    fun testCloseQuietly_throw() {
+        val `in` = Mockito.mock(InputStream::class.java)
+        doThrow(IOException()).whenever(`in`).close()
+        `in`.closeQuietly()
     }
 
     @Test
-    public void testReadInputStream() throws Exception {
-        InputStream in = new ByteArrayInputStream(TEST_STRING.getBytes());
-        assertEquals(TEST_STRING, Utils.readInputStream(in));
+    @Throws(Exception::class)
+    fun testReadInputStream() {
+        val `in`: InputStream = ByteArrayInputStream(TEST_STRING.toByteArray())
+        assertEquals(TEST_STRING, `in`.readString())
     }
 
-    @Test(expected = IOException.class)
-    public void testReadInputStream_throw() throws Exception{
-        Utils.readInputStream(null);
+    companion object {
+        private const val TEST_STRING = "test_string\nwith a new line"
+        private var sIsClosed = false
     }
 }

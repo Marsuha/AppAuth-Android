@@ -11,126 +11,91 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package net.openid.appauth
 
-package net.openid.appauth;
-
-import androidx.annotation.NonNull;
-
-import net.openid.appauth.browser.AnyBrowserMatcher;
-import net.openid.appauth.browser.BrowserMatcher;
-import net.openid.appauth.connectivity.ConnectionBuilder;
-import net.openid.appauth.connectivity.DefaultConnectionBuilder;
+import net.openid.appauth.browser.AnyBrowserMatcher
+import net.openid.appauth.browser.BrowserMatcher
+import net.openid.appauth.connectivity.ConnectionBuilder
+import net.openid.appauth.connectivity.DefaultConnectionBuilder
 
 /**
  * Defines configuration properties that control the behavior of the AppAuth library, independent
  * of the OAuth2 specific details that are described.
  */
-public class AppAuthConfiguration {
-
-    /**
-     * The default configuration that is used if no configuration is explicitly specified
-     * when constructing an {@link AuthorizationService}.
-     */
-    public static final AppAuthConfiguration DEFAULT =
-            new AppAuthConfiguration.Builder().build();
-
-    @NonNull
-    private final BrowserMatcher mBrowserMatcher;
-
-    @NonNull
-    private final ConnectionBuilder mConnectionBuilder;
-
-    private final boolean mSkipIssuerHttpsCheck;
-
-    private AppAuthConfiguration(
-            @NonNull BrowserMatcher browserMatcher,
-            @NonNull ConnectionBuilder connectionBuilder,
-            Boolean skipIssuerHttpsCheck) {
-        mBrowserMatcher = browserMatcher;
-        mConnectionBuilder = connectionBuilder;
-        mSkipIssuerHttpsCheck = skipIssuerHttpsCheck;
-    }
-
+class AppAuthConfiguration private constructor(
     /**
      * Controls which browsers can be used for the authorization flow.
      */
-    @NonNull
-    public BrowserMatcher getBrowserMatcher() {
-        return mBrowserMatcher;
-    }
-
+    val browserMatcher: BrowserMatcher,
     /**
-     * Creates {@link java.net.HttpURLConnection} instances for use in token requests and related
+     * Creates [java.net.HttpURLConnection] instances for use in token requests and related
      * interactions with the authorization service.
      */
-    @NonNull
-    public ConnectionBuilder getConnectionBuilder() {
-        return mConnectionBuilder;
-    }
-
+    val connectionBuilder: ConnectionBuilder,
     /**
-     * Returns <code>true</code> if issuer https validation is disabled, otherwise
-     * <code>false</code>.
+     * Returns `true` if issuer https validation is disabled, otherwise
+     * `false`.
      *
-     * @see Builder#setSkipIssuerHttpsCheck(Boolean)
+     * @see Builder.setSkipIssuerHttpsCheck
      */
-    public boolean getSkipIssuerHttpsCheck() { return mSkipIssuerHttpsCheck; }
-
+    val skipIssuerHttpsCheck: Boolean
+) {
     /**
-     * Creates {@link AppAuthConfiguration} instances.
+     * Creates [AppAuthConfiguration] instances.
      */
-    public static class Builder {
-
-        private BrowserMatcher mBrowserMatcher = AnyBrowserMatcher.INSTANCE;
-        private ConnectionBuilder mConnectionBuilder = DefaultConnectionBuilder.INSTANCE;
-        private boolean mSkipIssuerHttpsCheck;
-        private boolean mSkipNonceVerification;
+    class Builder {
+        private var mBrowserMatcher: BrowserMatcher = AnyBrowserMatcher
+        private var mConnectionBuilder: ConnectionBuilder = DefaultConnectionBuilder
+        private var mSkipIssuerHttpsCheck = false
+        private val mSkipNonceVerification = false
 
         /**
          * Specify the browser matcher to use, which controls the browsers that can be used
          * for authorization.
          */
-        @NonNull
-        public Builder setBrowserMatcher(@NonNull BrowserMatcher browserMatcher) {
-            Preconditions.checkNotNull(browserMatcher, "browserMatcher cannot be null");
-            mBrowserMatcher = browserMatcher;
-            return this;
+        fun setBrowserMatcher(browserMatcher: BrowserMatcher): Builder {
+            mBrowserMatcher = browserMatcher
+            return this
         }
 
         /**
-         * Specify the connection builder to use, which creates {@link java.net.HttpURLConnection}
+         * Specify the connection builder to use, which creates [java.net.HttpURLConnection]
          * instances for use in direct communication with the authorization service.
          */
-        @NonNull
-        public Builder setConnectionBuilder(@NonNull ConnectionBuilder connectionBuilder) {
-            Preconditions.checkNotNull(connectionBuilder, "connectionBuilder cannot be null");
-            mConnectionBuilder = connectionBuilder;
-            return this;
+        fun setConnectionBuilder(connectionBuilder: ConnectionBuilder): Builder {
+            mConnectionBuilder = connectionBuilder
+            return this
         }
 
         /**
          * Disables https validation for the issuer identifier.
          *
-         * <p>NOTE: Disabling issuer https validation implies the app is running against an
+         *
+         * NOTE: Disabling issuer https validation implies the app is running against an
          * insecure environment. Enabling this option is only recommended for testing purposes.
          */
-        public Builder setSkipIssuerHttpsCheck(Boolean skipIssuerHttpsCheck) {
-            mSkipIssuerHttpsCheck = skipIssuerHttpsCheck;
-            return this;
+        fun setSkipIssuerHttpsCheck(skipIssuerHttpsCheck: Boolean): Builder {
+            mSkipIssuerHttpsCheck = skipIssuerHttpsCheck
+            return this
         }
 
         /**
          * Creates the instance from the configured properties.
          */
-        @NonNull
-        public AppAuthConfiguration build() {
-            return new AppAuthConfiguration(
+        fun build(): AppAuthConfiguration {
+            return AppAuthConfiguration(
                 mBrowserMatcher,
                 mConnectionBuilder,
                 mSkipIssuerHttpsCheck
-            );
+            )
         }
+    }
 
-
+    companion object {
+        /**
+         * The default configuration that is used if no configuration is explicitly specified
+         * when constructing an [AuthorizationService].
+         */
+        val DEFAULT: AppAuthConfiguration = Builder().build()
     }
 }

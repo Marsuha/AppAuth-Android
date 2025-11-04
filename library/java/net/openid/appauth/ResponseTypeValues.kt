@@ -11,42 +11,34 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-package net.openid.appauth;
+package net.openid.appauth
 
 /**
  * The response type values defined by the
  * [OAuth 2.0](https://tools.ietf.org/html/rfc6749) and
  * [OpenID Connect Core 1.0](http://openid.net/specs/openid-connect-core-1_0.html)
- * specifications, used in {@link AuthorizationRequest authorization} and
- * {@link RegistrationRequest dynamic client registration} requests.
+ * specifications, used in [authorization][AuthorizationRequest] and
+ * [dynamic client registration][RegistrationRequest] requests.
  */
-public final class ResponseTypeValues {
+object ResponseTypeValues {
     /**
      * For requesting an authorization code.
      *
-     * @see "The OAuth 2.0 Authorization Framework (RFC 6749), Section 3.1.1
-     * <https://tools.ietf.org/html/rfc6749#section-3.1.1>"
+     * @see "The OAuth 2.0 Authorization Framework
      */
-    public static final String CODE = "code";
+    const val CODE: String = "code"
 
     /**
      * For requesting an access token via an implicit grant.
      *
-     * @see "The OAuth 2.0 Authorization Framework (RFC 6749), Section 3.1.1
-     * <https://tools.ietf.org/html/rfc6749#section-3.1.1>"
+     * @see "The OAuth 2.0 Authorization Framework
      */
-    public static final String TOKEN = "token";
+    const val TOKEN: String = "token"
 
     /**
      * For requesting an OpenID Conenct ID Token.
      *
-     * @see "The OAuth 2.0 Authorization Framework (RFC 6749), Section 3.1.1
-     * <https://tools.ietf.org/html/rfc6749#section-3.1.1>"
+     * @see "The OAuth 2.0 Authorization Framework
      */
-    public static final String ID_TOKEN = "id_token";
-
-    private ResponseTypeValues() {
-        throw new IllegalStateException("This type is not intended to be instantiated");
-    }
+    const val ID_TOKEN: String = "id_token"
 }

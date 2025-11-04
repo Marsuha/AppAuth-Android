@@ -11,9 +11,8 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 /**
  * Defines an abstraction of browsers and mechanisms by which an app can control which browser
  * will be used by AppAuth for authorization.
  */
-package net.openid.appauth.browser;
+package net.openid.appauth.browser

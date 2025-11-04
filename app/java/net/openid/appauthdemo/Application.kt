@@ -11,19 +11,18 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package net.openid.appauthdemo
 
-package net.openid.appauthdemo;
-
-import androidx.appcompat.app.AppCompatDelegate;
+import android.app.Application
+import androidx.appcompat.app.AppCompatDelegate
 
 /**
  * Application object; ensures that the support library is correctly configured for use of
  * vector drawables.
  */
-public final class Application extends android.app.Application {
-    @Override
-    public void onCreate() {
-        super.onCreate();
-        AppCompatDelegate.setCompatVectorFromResourcesEnabled(true);
+class Application : Application() {
+    override fun onCreate() {
+        super.onCreate()
+        AppCompatDelegate.setCompatVectorFromResourcesEnabled(true)
     }
 }

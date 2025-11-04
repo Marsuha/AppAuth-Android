@@ -11,324 +11,181 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package net.openid.appauth
 
-package net.openid.appauth;
-
-import static net.openid.appauth.AdditionalParamsProcessor.checkAdditionalParams;
-import static net.openid.appauth.Preconditions.checkNotEmpty;
-import static net.openid.appauth.Preconditions.checkNotNull;
-import static net.openid.appauth.Preconditions.checkNullOrNotEmpty;
-
-import android.net.Uri;
-import android.text.TextUtils;
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
-import androidx.annotation.VisibleForTesting;
-
-import org.json.JSONException;
-import org.json.JSONObject;
-
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.Map.Entry;
-import java.util.Set;
+import android.net.Uri
+import androidx.annotation.VisibleForTesting
+import net.openid.appauth.AuthorizationServiceConfiguration.Companion.fromJson
+import net.openid.appauth.CodeVerifierUtil.checkCodeVerifier
+import net.openid.appauth.GrantTypeValues.AUTHORIZATION_CODE
+import net.openid.appauth.GrantTypeValues.REFRESH_TOKEN
+import org.json.JSONException
+import org.json.JSONObject
 
 /**
  * An OAuth2 token request. These are used to exchange codes for tokens, or exchange a refresh
  * token for updated tokens.
  *
- * @see "The OAuth 2.0 Authorization Framework (RFC 6749), Section 4.1.3
- * <https://tools.ietf.org/html/rfc6749#section-4.1.3>"
+ * @see "The OAuth 2.0 Authorization Framework
  */
-public class TokenRequest {
-
-    @VisibleForTesting
-    static final String KEY_CONFIGURATION = "configuration";
-    @VisibleForTesting
-    static final String KEY_CLIENT_ID = "clientId";
-    @VisibleForTesting
-    static final String KEY_NONCE = "nonce";
-    @VisibleForTesting
-    static final String KEY_GRANT_TYPE = "grantType";
-    @VisibleForTesting
-    static final String KEY_REDIRECT_URI = "redirectUri";
-    @VisibleForTesting
-    static final String KEY_SCOPE = "scope";
-    @VisibleForTesting
-    static final String KEY_AUTHORIZATION_CODE = "authorizationCode";
-    @VisibleForTesting
-    static final String KEY_REFRESH_TOKEN = "refreshToken";
-    @VisibleForTesting
-    static final String KEY_CODE_VERIFIER = "codeVerifier";
-    @VisibleForTesting
-    static final String KEY_ADDITIONAL_PARAMETERS = "additionalParameters";
-
-    public static final String PARAM_CLIENT_ID = "client_id";
-
-    @VisibleForTesting
-    static final String PARAM_CODE = "code";
-
-    @VisibleForTesting
-    static final String PARAM_CODE_VERIFIER = "code_verifier";
-
-    @VisibleForTesting
-    static final String PARAM_GRANT_TYPE = "grant_type";
-
-    @VisibleForTesting
-    static final String PARAM_REDIRECT_URI = "redirect_uri";
-
-    @VisibleForTesting
-    static final String PARAM_REFRESH_TOKEN = "refresh_token";
-
-    @VisibleForTesting
-    static final String PARAM_SCOPE = "scope";
-
-    private static final Set<String> BUILT_IN_PARAMS = Collections.unmodifiableSet(
-            new HashSet<>(Arrays.asList(
-                    PARAM_CLIENT_ID,
-                    PARAM_CODE,
-                    PARAM_CODE_VERIFIER,
-                    PARAM_GRANT_TYPE,
-                    PARAM_REDIRECT_URI,
-                    PARAM_REFRESH_TOKEN,
-                    PARAM_SCOPE)));
-
-
+@Suppress("unused")
+class TokenRequest private constructor(
     /**
-     * The grant type used when requesting an access token using a username and password.
-     * This grant type is not directly supported by this library.
-     *
-     * @see "The OAuth 2.0 Authorization Framework (RFC 6749), Section 4.3.2
-     * <https://tools.ietf.org/html/rfc6749#section-4.3.2>"
-     */
-    public static final String GRANT_TYPE_PASSWORD = "password";
-
-    /**
-     * The grant type used when requesting an access token using client credentials, typically
-     * TLS client certificates. This grant type is not directly supported by this library.
-     *
-     * @see "The OAuth 2.0 Authorization Framework (RFC 6749), Section 4.4.2
-     * <https://tools.ietf.org/html/rfc6749#section-4.4.2>"
-     */
-    public static final String GRANT_TYPE_CLIENT_CREDENTIALS = "client_credentials";
-
-    /**
-     * The service's {@link AuthorizationServiceConfiguration configuration}.
+     * The service's [configuration][AuthorizationServiceConfiguration].
      * This configuration specifies how to connect to a particular OAuth provider.
      * Configurations may be
-     * {@link
-     * AuthorizationServiceConfiguration#AuthorizationServiceConfiguration(Uri, Uri, Uri, Uri)
-     * created manually}, or
-     * {@link AuthorizationServiceConfiguration#fetchFromUrl(Uri,
-     * AuthorizationServiceConfiguration.RetrieveConfigurationCallback)
-     * via an OpenID Connect Discovery Document}.
+     * [ ][AuthorizationServiceConfiguration], or
+     * [ via an OpenID Connect Discovery Document][AuthorizationServiceConfiguration.fetchFromUrl].
      */
-    @NonNull
-    public final AuthorizationServiceConfiguration configuration;
-
-    /**
-     * The (optional) nonce associated with the current session.
-     */
-    @Nullable
-    public final String nonce;
-
+    @JvmField val configuration: AuthorizationServiceConfiguration,
     /**
      * The client identifier.
      *
-     * @see "The OAuth 2.0 Authorization Framework (RFC 6749), Section 4
-     * <https://tools.ietf.org/html/rfc6749#section-4>"
-     * @see "The OAuth 2.0 Authorization Framework (RFC 6749), Section 4.1.1
-     * <https://tools.ietf.org/html/rfc6749#section-4.1.1>"
+     * @see "The OAuth 2.0 Authorization Framework
+     * @see "The OAuth 2.0 Authorization Framework
      */
-    @NonNull
-    public final String clientId;
-
+    @JvmField val clientId: String,
+    /**
+     * The (optional) nonce associated with the current session.
+     */
+    @JvmField val nonce: String?,
     /**
      * The type of token being sent to the token endpoint.
      *
-     * @see "The OAuth 2.0 Authorization Framework (RFC 6749), Section 4.1.3
-     * <https://tools.ietf.org/html/rfc6749#section-4.1.3>"
+     * @see "The OAuth 2.0 Authorization Framework
      */
-    @NonNull
-    public final String grantType;
-
+    @JvmField val grantType: String,
     /**
      * The client's redirect URI. Required if this token request is to exchange an authorization
      * code for one or more tokens, and must be identical to the value specified in the original
      * authorization request.
      *
-     * @see "The OAuth 2.0 Authorization Framework (RFC 6749), Section 3.1.2
-     * <https://tools.ietf.org/html/rfc6749#section-3.1.2>"
-     * @see "The OAuth 2.0 Authorization Framework (RFC 6749), Section 4.1.3
-     * <https://tools.ietf.org/html/rfc6749#section-4.1.3>"
+     * @see "The OAuth 2.0 Authorization Framework
+     * @see "The OAuth 2.0 Authorization Framework
      */
-    @Nullable
-    public final Uri redirectUri;
-
-    /**
-     * An authorization code to be exchanged for one or more tokens.
-     *
-     * @see "The OAuth 2.0 Authorization Framework (RFC 6749), Section 4.1.3
-     * <https://tools.ietf.org/html/rfc6749#section-4.1.3>"
-     */
-    @Nullable
-    public final String authorizationCode;
-
+    val redirectUri: Uri?,
     /**
      * A space-delimited set of scopes used to determine the scope of any returned tokens.
      *
-     * @see "The OAuth 2.0 Authorization Framework (RFC 6749), Section 3.3
-     * <https://tools.ietf.org/html/rfc6749#section-3.3>"
-     * @see "The OAuth 2.0 Authorization Framework (RFC 6749), Section 6
-     * <https://tools.ietf.org/html/rfc6749#section-6>"
+     * @see "The OAuth 2.0 Authorization Framework
+     * @see "The OAuth 2.0 Authorization Framework
      */
-    @Nullable
-    public final String scope;
-
+    @JvmField val scope: String?,
+    /**
+     * An authorization code to be exchanged for one or more tokens.
+     *
+     * @see "The OAuth 2.0 Authorization Framework
+     */
+    @JvmField val authorizationCode: String?,
     /**
      * A refresh token to be exchanged for a new token.
      *
-     * @see "The OAuth 2.0 Authorization Framework (RFC 6749), Section 6
-     * <https://tools.ietf.org/html/rfc6749#section-6>"
+     * @see "The OAuth 2.0 Authorization Framework
      */
-    @Nullable
-    public final String refreshToken;
-
+    @JvmField val refreshToken: String?,
     /**
      * The code verifier that was used to generate the challenge in the original authorization
      * request, if one was used.
      *
-     * @see "Proof Key for Code Exchange by OAuth Public Clients (RFC 7636), Section 4
-     * <https://tools.ietf.org/html/rfc7636#section-4>"
+     * @see "Proof Key for Code Exchange by OAuth Public Clients
      */
-    @Nullable
-    public final String codeVerifier;
-
+    @JvmField val codeVerifier: String?,
     /**
      * Additional parameters to be passed as part of the request.
      */
-    @NonNull
-    public final Map<String, String> additionalParameters;
-
+    val additionalParameters: Map<String, String>
+) {
     /**
-     * Creates instances of {@link TokenRequest}.
+     * Creates instances of [TokenRequest].
      */
-    public static final class Builder {
+    class Builder(
+        configuration: AuthorizationServiceConfiguration,
+        clientId: String
+    ) {
+        private var mConfiguration: AuthorizationServiceConfiguration = configuration
 
-        @NonNull
-        private AuthorizationServiceConfiguration mConfiguration;
+        private var mClientId: String = clientId
 
-        @NonNull
-        private String mClientId;
+        private var mNonce: String? = null
 
-        @Nullable
-        private String mNonce;
+        private var mGrantType: String? = null
 
-        @Nullable
-        private String mGrantType;
+        private var mRedirectUri: Uri? = null
 
-        @Nullable
-        private Uri mRedirectUri;
+        private var mScope: String? = null
 
-        @Nullable
-        private String mScope;
+        private var mAuthorizationCode: String? = null
 
-        @Nullable
-        private String mAuthorizationCode;
+        private var mRefreshToken: String? = null
 
-        @Nullable
-        private String mRefreshToken;
+        private var mCodeVerifier: String? = null
 
-        @Nullable
-        private String mCodeVerifier;
-
-        @NonNull
-        private Map<String, String> mAdditionalParameters;
+        private var mAdditionalParameters: Map<String, String> = emptyMap()
 
         /**
          * Creates a token request builder with the specified mandatory properties.
          */
-        public Builder(
-                @NonNull AuthorizationServiceConfiguration configuration,
-                @NonNull String clientId) {
-            setConfiguration(configuration);
-            setClientId(clientId);
-            mAdditionalParameters = new LinkedHashMap<>();
+        init {
+            require(clientId.isNotEmpty()) { "clientId cannot be empty" }
         }
 
         /**
          * Specifies the authorization service configuration for the request, which must not
          * be null or empty.
          */
-        @NonNull
-        public Builder setConfiguration(@NonNull AuthorizationServiceConfiguration configuration) {
-            mConfiguration = checkNotNull(configuration);
-            return this;
+        fun setConfiguration(configuration: AuthorizationServiceConfiguration): Builder {
+            mConfiguration = configuration
+            return this
         }
 
         /**
          * Specifies the client ID for the token request, which must not be null or empty.
          */
-        @NonNull
-        public Builder setClientId(@NonNull String clientId) {
-            mClientId = checkNotEmpty(clientId, "clientId cannot be null or empty");
-            return this;
+        fun setClientId(clientId: String): Builder {
+            require(clientId.isNotEmpty()) { "clientId cannot be empty" }
+            mClientId = clientId
+            return this
         }
 
         /**
          * Specifies the (optional) nonce for the current session.
          */
-        @NonNull
-        public Builder setNonce(@Nullable String nonce) {
-            if (TextUtils.isEmpty(nonce)) {
-                mNonce = null;
-            } else {
-                this.mNonce = nonce;
-            }
-            return this;
+        fun setNonce(nonce: String?): Builder {
+            mNonce = nonce?.takeIf { it.isNotEmpty() }
+            return this
         }
 
         /**
          * Specifies the grant type for the request, which must not be null or empty.
          */
-        @NonNull
-        public Builder setGrantType(@NonNull String grantType) {
-            mGrantType = checkNotEmpty(grantType, "grantType cannot be null or empty");
-            return this;
+        fun setGrantType(grantType: String): Builder {
+            require(grantType.isNotEmpty()) { "grantType cannot be empty" }
+            mGrantType = grantType
+            return this
         }
 
         /**
          * Specifies the redirect URI for the request. This is required for authorization code
          * exchanges, but otherwise optional. If specified, the redirect URI must have a scheme.
          */
-        @NonNull
-        public Builder setRedirectUri(@Nullable Uri redirectUri) {
-            if (redirectUri != null) {
-                checkNotNull(redirectUri.getScheme(), "redirectUri must have a scheme");
-            }
-            mRedirectUri = redirectUri;
-            return this;
+        fun setRedirectUri(redirectUri: Uri?): Builder {
+            redirectUri?.let { checkNotNull(it.scheme) { "redirectUri must have a scheme" } }
+            mRedirectUri = redirectUri
+            return this
         }
 
         /**
          * Specifies the encoded scope string, which is a space-delimited set of
          * case-sensitive scope identifiers. Replaces any previously specified scope.
          *
-         * @see "The OAuth 2.0 Authorization Framework (RFC 6749), Section 3.3
-         * <https://tools.ietf.org/html/rfc6749#section-3.3>"
+         * @see "The OAuth 2.0 Authorization Framework
          */
-        @NonNull
-        public Builder setScope(@Nullable String scope) {
-            if (TextUtils.isEmpty(scope)) {
-                mScope = null;
-            } else {
-                setScopes(scope.split(" +"));
-            }
-            return this;
+        fun setScope(scope: String?): Builder {
+            if (!scope.isNullOrEmpty()) {
+                setScopes(*scope.split(" +").dropLastWhile { it.isEmpty() }.toTypedArray())
+            } else mScope = null
+
+            return this
         }
 
         /**
@@ -339,18 +196,12 @@ public class TokenRequest {
          * set of scopes specified _must_ be a subset of those already granted in
          * previous requests.
          *
-         * @see "The OAuth 2.0 Authorization Framework (RFC 6749), Section 3.3
-         * <https://tools.ietf.org/html/rfc6749#section-3.3>"
-         * @see "The OAuth 2.0 Authorization Framework (RFC 6749), Section 6
-         * <https://tools.ietf.org/html/rfc6749#section-6>"
+         * @see "The OAuth 2.0 Authorization Framework
+         * @see "The OAuth 2.0 Authorization Framework
          */
-        @NonNull
-        public Builder setScopes(String... scopes) {
-            if (scopes == null) {
-                scopes = new String[0];
-            }
-            setScopes(Arrays.asList(scopes));
-            return this;
+        fun setScopes(vararg scopes: String): Builder {
+            setScopes(listOf(*scopes))
+            return this
         }
 
         /**
@@ -361,15 +212,12 @@ public class TokenRequest {
          * set of scopes specified _must_ be a subset of those already granted in
          * previous requests.
          *
-         * @see "The OAuth 2.0 Authorization Framework (RFC 6749), Section 3.3
-         * <https://tools.ietf.org/html/rfc6749#section-3.3>"
-         * @see "The OAuth 2.0 Authorization Framework (RFC 6749), Section 6
-         * <https://tools.ietf.org/html/rfc6749#section-6>"
+         * @see "The OAuth 2.0 Authorization Framework
+         * @see "The OAuth 2.0 Authorization Framework
          */
-        @NonNull
-        public Builder setScopes(@Nullable Iterable<String> scopes) {
-            mScope = AsciiStringListUtil.iterableToString(scopes);
-            return this;
+        fun setScopes(scopes: Iterable<String>): Builder {
+            mScope = AsciiStringListUtil.iterableToString(scopes)
+            return this
         }
 
         /**
@@ -380,11 +228,10 @@ public class TokenRequest {
          * this authorization code for one or more tokens. If this is not intended, the grant type
          * should be explicitly set.
          */
-        @NonNull
-        public Builder setAuthorizationCode(@Nullable String authorizationCode) {
-            checkNullOrNotEmpty(authorizationCode, "authorization code must not be empty");
-            mAuthorizationCode = authorizationCode;
-            return this;
+        fun setAuthorizationCode(authorizationCode: String?): Builder {
+            authorizationCode?.let { require(it.isNotEmpty()) { "authorization code must not be empty" } }
+            mAuthorizationCode = authorizationCode
+            return this
         }
 
         /**
@@ -395,13 +242,10 @@ public class TokenRequest {
          * refresh token for a new token. If this is not intended, the grant type should be
          * explicit set.
          */
-        @NonNull
-        public Builder setRefreshToken(@Nullable String refreshToken) {
-            if (refreshToken != null) {
-                checkNotEmpty(refreshToken, "refresh token cannot be empty if defined");
-            }
-            mRefreshToken = refreshToken;
-            return this;
+        fun setRefreshToken(refreshToken: String?): Builder {
+            refreshToken?.let { require(it.isNotEmpty()) { "refresh token must not be empty" } }
+            mRefreshToken = refreshToken
+            return this
         }
 
         /**
@@ -409,197 +253,212 @@ public class TokenRequest {
          * the code verifier that was used to generate the challenge sent in the request that
          * produced the authorization code.
          */
-        public Builder setCodeVerifier(@Nullable String codeVerifier) {
-            if (codeVerifier != null) {
-                CodeVerifierUtil.checkCodeVerifier(codeVerifier);
-            }
-
-            mCodeVerifier = codeVerifier;
-            return this;
+        fun setCodeVerifier(codeVerifier: String?): Builder {
+            codeVerifier?.let { checkCodeVerifier(it) }
+            mCodeVerifier = codeVerifier
+            return this
         }
 
         /**
          * Specifies an additional set of parameters to be sent as part of the request.
          */
-        @NonNull
-        public Builder setAdditionalParameters(@Nullable Map<String, String> additionalParameters) {
-            mAdditionalParameters = checkAdditionalParams(additionalParameters, BUILT_IN_PARAMS);
-            return this;
+        fun setAdditionalParameters(additionalParameters: Map<String, String>?): Builder {
+            mAdditionalParameters = additionalParameters.checkAdditionalParams(BUILT_IN_PARAMS)
+            return this
         }
 
         /**
-         * Produces a {@link TokenRequest} instance, if all necessary values have been provided.
+         * Produces a [TokenRequest] instance, if all necessary values have been provided.
          */
-        @NonNull
-        public TokenRequest build() {
-            String grantType = inferGrantType();
+        fun build(): TokenRequest {
+            val grantType = inferGrantType()
 
-            if (GrantTypeValues.AUTHORIZATION_CODE.equals(grantType)) {
-                checkNotNull(mAuthorizationCode,
-                        "authorization code must be specified for grant_type = "
-                                + GrantTypeValues.AUTHORIZATION_CODE);
+            if (AUTHORIZATION_CODE == grantType) checkNotNull(mAuthorizationCode) {
+                "authorization code must be specified for grant_type = $AUTHORIZATION_CODE"
             }
 
-            if (GrantTypeValues.REFRESH_TOKEN.equals(grantType)) {
-                checkNotNull(mRefreshToken,
-                        "refresh token must be specified for grant_type = "
-                                + GrantTypeValues.REFRESH_TOKEN);
+            if (REFRESH_TOKEN == grantType) checkNotNull(mRefreshToken) {
+                "refresh token must be specified for grant_type = $REFRESH_TOKEN"
             }
 
 
-            if (grantType.equals(GrantTypeValues.AUTHORIZATION_CODE) && mRedirectUri == null) {
-                throw new IllegalStateException(
-                        "no redirect URI specified on token request for code exchange");
+            check(!(grantType == AUTHORIZATION_CODE && mRedirectUri == null)) {
+                "no redirect URI specified on token request for code exchange"
             }
 
-            return new TokenRequest(
-                    mConfiguration,
-                    mClientId,
-                    mNonce,
-                    grantType,
-                    mRedirectUri,
-                    mScope,
-                    mAuthorizationCode,
-                    mRefreshToken,
-                    mCodeVerifier,
-                    Collections.unmodifiableMap(mAdditionalParameters));
+            return TokenRequest(
+                mConfiguration,
+                mClientId,
+                mNonce,
+                grantType,
+                mRedirectUri,
+                mScope,
+                mAuthorizationCode,
+                mRefreshToken,
+                mCodeVerifier,
+                mAdditionalParameters
+            )
         }
 
-        private String inferGrantType() {
-            if (mGrantType != null) {
-                return mGrantType;
-            } else if (mAuthorizationCode != null) {
-                return GrantTypeValues.AUTHORIZATION_CODE;
-            } else if (mRefreshToken != null) {
-                return GrantTypeValues.REFRESH_TOKEN;
-            } else {
-                throw new IllegalStateException("grant type not specified and cannot be inferred");
-            }
+        private fun inferGrantType() = when {
+            mGrantType != null -> mGrantType!!
+            mAuthorizationCode != null -> AUTHORIZATION_CODE
+            mRefreshToken != null -> REFRESH_TOKEN
+            else -> throw IllegalStateException("grant type not specified and cannot be inferred")
         }
-    }
-
-    private TokenRequest(
-            @NonNull AuthorizationServiceConfiguration configuration,
-            @NonNull String clientId,
-            @Nullable String nonce,
-            @NonNull String grantType,
-            @Nullable Uri redirectUri,
-            @Nullable String scope,
-            @Nullable String authorizationCode,
-            @Nullable String refreshToken,
-            @Nullable String codeVerifier,
-            @NonNull Map<String, String> additionalParameters) {
-        this.configuration = configuration;
-        this.clientId = clientId;
-        this.nonce = nonce;
-        this.grantType = grantType;
-        this.redirectUri = redirectUri;
-        this.scope = scope;
-        this.authorizationCode = authorizationCode;
-        this.refreshToken = refreshToken;
-        this.codeVerifier = codeVerifier;
-        this.additionalParameters = additionalParameters;
     }
 
     /**
      * Derives the set of scopes from the consolidated, space-delimited scopes in the
-     * {@link #scope} field. If no scopes were specified for this request, the method will
-     * return `null`.
+     * [.scope] field. If no scopes were specified for this request, will return `null`.
      */
-    @Nullable
-    public Set<String> getScopeSet() {
-        return AsciiStringListUtil.stringToSet(scope);
-    }
+    val scopeSet: Set<String>?
+        get() = scope?.let { AsciiStringListUtil.stringToSet(it) }
 
     /**
      * Produces the set of request parameters for this query, which can be further
      * processed into a request body.
      */
-    @NonNull
-    public Map<String, String> getRequestParameters() {
-        Map<String, String> params = new HashMap<>();
-        params.put(PARAM_GRANT_TYPE, grantType);
-        putIfNotNull(params, PARAM_REDIRECT_URI, redirectUri);
-        putIfNotNull(params, PARAM_CODE, authorizationCode);
-        putIfNotNull(params, PARAM_REFRESH_TOKEN, refreshToken);
-        putIfNotNull(params, PARAM_CODE_VERIFIER, codeVerifier);
-        putIfNotNull(params, PARAM_SCOPE, scope);
-
-        for (Entry<String, String> param : additionalParameters.entrySet()) {
-            params.put(param.getKey(), param.getValue());
+    val requestParameters: Map<String, String>
+        get() = buildMap {
+            put(PARAM_GRANT_TYPE, grantType)
+            redirectUri?.let { put(PARAM_REDIRECT_URI, it.toString()) }
+            authorizationCode?.let { put(PARAM_CODE, it) }
+            refreshToken?.let { put(PARAM_REFRESH_TOKEN, it) }
+            codeVerifier?.let { put(PARAM_CODE_VERIFIER, it) }
+            scope?.let { put(PARAM_SCOPE, it) }
+            additionalParameters.forEach { put(it.key, it.value) }
         }
-
-        return params;
-    }
-
-    private void putIfNotNull(Map<String, String> map, String key, Object value) {
-        if (value != null) {
-            map.put(key, value.toString());
-        }
-    }
 
     /**
      * Produces a JSON string representation of the token request for persistent storage or
      * local transmission (e.g. between activities).
      */
-    @NonNull
-    public JSONObject jsonSerialize() {
-        JSONObject json = new JSONObject();
-        JsonUtil.put(json, KEY_CONFIGURATION, configuration.toJson());
-        JsonUtil.put(json, KEY_CLIENT_ID, clientId);
-        JsonUtil.putIfNotNull(json, KEY_NONCE, nonce);
-        JsonUtil.put(json, KEY_GRANT_TYPE, grantType);
-        JsonUtil.putIfNotNull(json, KEY_REDIRECT_URI, redirectUri);
-        JsonUtil.putIfNotNull(json, KEY_SCOPE, scope);
-        JsonUtil.putIfNotNull(json, KEY_AUTHORIZATION_CODE, authorizationCode);
-        JsonUtil.putIfNotNull(json, KEY_REFRESH_TOKEN, refreshToken);
-        JsonUtil.putIfNotNull(json, KEY_CODE_VERIFIER, codeVerifier);
-        JsonUtil.put(json, KEY_ADDITIONAL_PARAMETERS,
-                JsonUtil.mapToJsonObject(additionalParameters));
-        return json;
+    fun jsonSerialize() = JSONObject().apply {
+        put(KEY_CONFIGURATION, configuration.toJson())
+        put(KEY_CLIENT_ID, clientId)
+        nonce?.let { put(KEY_NONCE, it) }
+        put(KEY_GRANT_TYPE, grantType)
+        redirectUri?.let { put(KEY_REDIRECT_URI, it.toString()) }
+        scope?.let { put(KEY_SCOPE, it) }
+        authorizationCode?.let { put(KEY_AUTHORIZATION_CODE, it) }
+        refreshToken?.let { put(KEY_REFRESH_TOKEN, it) }
+        codeVerifier?.let { put(KEY_CODE_VERIFIER, it) }
+        put(KEY_ADDITIONAL_PARAMETERS, additionalParameters.toJsonObject())
     }
 
     /**
      * Produces a JSON string representation of the token request for persistent storage or
      * local transmission (e.g. between activities). This method is just a convenience wrapper
-     * for {@link #jsonSerialize()}, converting the JSON object to its string form.
+     * for [.jsonSerialize], converting the JSON object to its string form.
      */
-    @NonNull
-    public String jsonSerializeString() {
-        return jsonSerialize().toString();
-    }
+    fun jsonSerializeString() = jsonSerialize().toString()
 
-    /**
-     * Reads a token request from a JSON string representation produced by
-     * {@link #jsonSerialize()}.
-     * @throws JSONException if the provided JSON does not match the expected structure.
-     */
-    @NonNull
-    public static TokenRequest jsonDeserialize(JSONObject json) throws JSONException {
-        checkNotNull(json, "json object cannot be null");
+    companion object {
+        @VisibleForTesting
+        const val KEY_CONFIGURATION: String = "configuration"
 
-        return new TokenRequest(
-                AuthorizationServiceConfiguration.fromJson(json.getJSONObject(KEY_CONFIGURATION)),
-                JsonUtil.getString(json, KEY_CLIENT_ID),
-                JsonUtil.getStringIfDefined(json, KEY_NONCE),
-                JsonUtil.getString(json, KEY_GRANT_TYPE),
-                JsonUtil.getUriIfDefined(json, KEY_REDIRECT_URI),
-                JsonUtil.getStringIfDefined(json, KEY_SCOPE),
-                JsonUtil.getStringIfDefined(json, KEY_AUTHORIZATION_CODE),
-                JsonUtil.getStringIfDefined(json, KEY_REFRESH_TOKEN),
-                JsonUtil.getStringIfDefined(json, KEY_CODE_VERIFIER),
-                JsonUtil.getStringMap(json, KEY_ADDITIONAL_PARAMETERS));
-    }
+        @VisibleForTesting
+        const val KEY_CLIENT_ID: String = "clientId"
 
-    /**
-     * Reads a token request from a JSON string representation produced by
-     * {@link #jsonSerializeString()}. This method is just a convenience wrapper for
-     * {@link #jsonDeserialize(JSONObject)}, converting the JSON string to its JSON object form.
-     * @throws JSONException if the provided JSON does not match the expected structure.
-     */
-    @NonNull
-    public static TokenRequest jsonDeserialize(@NonNull String json) throws JSONException {
-        checkNotNull(json, "json string cannot be null");
-        return jsonDeserialize(new JSONObject(json));
+        @VisibleForTesting
+        const val KEY_NONCE: String = "nonce"
+
+        @VisibleForTesting
+        const val KEY_GRANT_TYPE: String = "grantType"
+
+        @VisibleForTesting
+        const val KEY_REDIRECT_URI: String = "redirectUri"
+
+        @VisibleForTesting
+        const val KEY_SCOPE: String = "scope"
+
+        @VisibleForTesting
+        const val KEY_AUTHORIZATION_CODE: String = "authorizationCode"
+
+        @VisibleForTesting
+        const val KEY_REFRESH_TOKEN: String = "refreshToken"
+
+        @VisibleForTesting
+        const val KEY_CODE_VERIFIER: String = "codeVerifier"
+
+        @VisibleForTesting
+        const val KEY_ADDITIONAL_PARAMETERS: String = "additionalParameters"
+
+        const val PARAM_CLIENT_ID: String = "client_id"
+
+        @VisibleForTesting
+        const val PARAM_CODE: String = "code"
+
+        @VisibleForTesting
+        const val PARAM_CODE_VERIFIER: String = "code_verifier"
+
+        @VisibleForTesting
+        const val PARAM_GRANT_TYPE: String = "grant_type"
+
+        @VisibleForTesting
+        const val PARAM_REDIRECT_URI: String = "redirect_uri"
+
+        @VisibleForTesting
+        const val PARAM_REFRESH_TOKEN: String = "refresh_token"
+
+        @VisibleForTesting
+        const val PARAM_SCOPE: String = "scope"
+
+        private val BUILT_IN_PARAMS: Set<String> = setOf(
+            PARAM_CLIENT_ID,
+            PARAM_CODE,
+            PARAM_CODE_VERIFIER,
+            PARAM_GRANT_TYPE,
+            PARAM_REDIRECT_URI,
+            PARAM_REFRESH_TOKEN,
+            PARAM_SCOPE
+        )
+
+
+        /**
+         * The grant type used when requesting an access token using a username and password.
+         * This grant type is not directly supported by this library.
+         *
+         * @see "The OAuth 2.0 Authorization Framework
+         */
+        const val GRANT_TYPE_PASSWORD: String = "password"
+
+        /**
+         * The grant type used when requesting an access token using client credentials, typically
+         * TLS client certificates. This grant type is not directly supported by this library.
+         *
+         * @see "The OAuth 2.0 Authorization Framework
+         */
+        const val GRANT_TYPE_CLIENT_CREDENTIALS: String = "client_credentials"
+
+        /**
+         * Reads a token request from a JSON string representation produced by
+         * [.jsonSerialize].
+         * @throws JSONException if the provided JSON does not match the expected structure.
+         */
+        @JvmStatic
+        @Throws(JSONException::class)
+        fun jsonDeserialize(json: JSONObject) = TokenRequest(
+            configuration = fromJson(json.getJSONObject(KEY_CONFIGURATION)),
+            clientId = json.getString(KEY_CLIENT_ID),
+            nonce = json.getStringIfDefined(KEY_NONCE),
+            grantType = json.getString(KEY_GRANT_TYPE),
+            redirectUri = json.getUriIfDefined(KEY_REDIRECT_URI),
+            scope = json.getStringIfDefined(KEY_SCOPE),
+            authorizationCode = json.getStringIfDefined(KEY_AUTHORIZATION_CODE),
+            refreshToken = json.getStringIfDefined(KEY_REFRESH_TOKEN),
+            codeVerifier = json.getStringIfDefined(KEY_CODE_VERIFIER),
+            additionalParameters = json.getStringMap(KEY_ADDITIONAL_PARAMETERS)
+        )
+
+        /**
+         * Reads a token request from a JSON string representation produced by
+         * [.jsonSerializeString]. This method is just a convenience wrapper for
+         * [.jsonDeserialize], converting the JSON string to its JSON object form.
+         * @throws JSONException if the provided JSON does not match the expected structure.
+         */
+        @Throws(JSONException::class)
+        fun jsonDeserialize(json: String) = jsonDeserialize(JSONObject(json))
     }
 }

@@ -11,31 +11,30 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package net.openid.appauth
 
-package net.openid.appauth;
+import net.openid.appauth.NoClientAuthentication.getRequestHeaders
+import net.openid.appauth.NoClientAuthentication.getRequestParameters
+import net.openid.appauth.TestValues.TEST_CLIENT_ID
+import org.assertj.core.api.Assertions.assertThat
+import org.assertj.core.data.MapEntry
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 
-import org.assertj.core.data.MapEntry;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.robolectric.RobolectricTestRunner;
-import org.robolectric.annotation.Config;
-
-import static net.openid.appauth.TestValues.TEST_CLIENT_ID;
-import static org.assertj.core.api.Assertions.assertThat;
-
-@RunWith(RobolectricTestRunner.class)
-@Config(sdk = 16)
-public class NoClientAuthenticationTest {
-
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [16])
+class NoClientAuthenticationTest {
     @Test
-    public void testGetRequestHeaders() {
-        assertThat(NoClientAuthentication.INSTANCE.getRequestHeaders(TEST_CLIENT_ID)).isNull();
+    fun testGetRequestHeaders() {
+        assertThat(getRequestHeaders(TEST_CLIENT_ID)).isNull()
     }
 
     @Test
-    public void testGetRequestParameters() {
-        assertThat(NoClientAuthentication.INSTANCE.getRequestParameters(TEST_CLIENT_ID))
-                .containsExactly(MapEntry.entry(TokenRequest.PARAM_CLIENT_ID, TEST_CLIENT_ID));
+    fun testGetRequestParameters() {
+        assertThat(getRequestParameters(TEST_CLIENT_ID))
+            .containsExactly(MapEntry.entry(TokenRequest.PARAM_CLIENT_ID, TEST_CLIENT_ID))
     }
 }

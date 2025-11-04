@@ -11,46 +11,39 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package net.openid.appauth
 
-package net.openid.appauth;
+import net.openid.appauth.AsciiStringListUtil.iterableToString
+import net.openid.appauth.AsciiStringListUtil.stringToSet
+import org.junit.Assert
+import org.junit.Assert.assertEquals
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
-
-import java.util.Arrays;
-import java.util.List;
-import java.util.Set;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.robolectric.RobolectricTestRunner;
-import org.robolectric.annotation.Config;
-
-@RunWith(RobolectricTestRunner.class)
-@Config(sdk=16)
-public final class AsciiStringListUtilTest {
-
-    private static final List<String> SCOPES = Arrays.asList("email", "profile", "openid");
-    private static final String SCOPE_STRING = "email profile openid";
-
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [16])
+class AsciiStringListUtilTest {
     @Test
-    public void testScopeIterableToString() throws Exception {
-        assertEquals(SCOPE_STRING, AsciiStringListUtil.iterableToString(SCOPES));
+    @Throws(Exception::class)
+    fun testScopeIterableToString() {
+        assertEquals(SCOPE_STRING, iterableToString(SCOPES))
     }
 
     @Test
-    public void testScopeIterableToString_nullIterable() throws Exception {
-        assertNull(AsciiStringListUtil.iterableToString(null));
+    @Throws(Exception::class)
+    fun testScopeStringToSet() {
+        val result = stringToSet("email profile email openid")
+        Assert.assertNotNull(result)
+        assertEquals(SCOPES.size.toLong(), result!!.size.toLong())
+        Assert.assertTrue(result.contains("email"))
+        Assert.assertTrue(result.contains("profile"))
+        Assert.assertTrue(result.contains("openid"))
     }
 
-    @Test
-    public void testScopeStringToSet() throws Exception {
-        Set<String> result = AsciiStringListUtil.stringToSet("email profile email openid");
-        assertNotNull(result);
-        assertEquals(SCOPES.size(), result.size());
-        assertTrue(result.contains("email"));
-        assertTrue(result.contains("profile"));
-        assertTrue(result.contains("openid"));
+    companion object {
+        private val SCOPES = listOf("email", "profile", "openid")
+        private const val SCOPE_STRING = "email profile openid"
     }
 }

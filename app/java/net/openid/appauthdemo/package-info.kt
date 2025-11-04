@@ -11,9 +11,8 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 /**
  * App which demonstrates the use of the AppAuth library to authenticate a user with an IDP
  * configured in res/raw/auth_config.json.
  */
-package net.openid.appauthdemo;
+package net.openid.appauthdemo

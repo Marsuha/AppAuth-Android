@@ -11,45 +11,323 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
+@file:Suppress("KDocUnresolvedReference")
 
-package net.openid.appauth;
+package net.openid.appauth
 
-import static net.openid.appauth.AdditionalParamsProcessor.builtInParams;
-import static net.openid.appauth.AdditionalParamsProcessor.checkAdditionalParams;
-import static net.openid.appauth.Preconditions.checkCollectionNotEmpty;
-import static net.openid.appauth.Preconditions.checkNotEmpty;
-import static net.openid.appauth.Preconditions.checkNotNull;
+import android.net.Uri
+import net.openid.appauth.AuthorizationServiceConfiguration.Companion.fromJson
+import org.json.JSONException
+import org.json.JSONObject
 
-import android.net.Uri;
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
-
-import org.json.JSONException;
-import org.json.JSONObject;
-
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-
-public class RegistrationRequest {
+@Suppress("unused")
+class RegistrationRequest private constructor(
     /**
-     * OpenID Connect 'application_type'.
+     * The service's [configuration][AuthorizationServiceConfiguration].
+     * This configuration specifies how to connect to a particular OAuth provider.
+     * Configurations may be
+     * [ ][AuthorizationServiceConfiguration], or
+     * [ via an OpenID Connect Discovery Document][AuthorizationServiceConfiguration.fetchFromUrl].
      */
-    public static final String APPLICATION_TYPE_NATIVE = "native";
+    @JvmField val configuration: AuthorizationServiceConfiguration,
+    /**
+     * The client's redirect URI's.
+     *
+     * @see "The OAuth 2.0 Authorization Framework
+     */
+    @JvmField val redirectUris: List<Uri>,
+    /**
+     * The response types to use.
+     *
+     * @see "OpenID Connect Core 1.0, Section 3
+     * <https:></https:>//openid.net/specs/openid-connect-core-1_0.html.rfc.section.3>"
+     */
+    @JvmField val responseTypes: List<String>?,
+    /**
+     * The grant types to use.
+     *
+     * @see "OpenID Connect Dynamic Client Registration 1.0, Section 2
+     * <https:></https:>//openid.net/specs/openid-connect-discovery-1_0.html.rfc.section.2>"
+     */
+    @JvmField val grantTypes: List<String>?,
+    /**
+     * The subject type to use.
+     *
+     * @see "OpenID Connect Core 1.0, Section 8 <https:></https:>//openid.net/specs/openid-connect-core-1_0.html.rfc.section.8>"
+     */
+    @JvmField val subjectType: String?,
+    /**
+     * URL for the Client's JSON Web Key Set [JWK] document.
+     *
+     * @see "OpenID Connect Dynamic Client Registration 1.0, Client Metadata
+     * <https:></https:>//openid.net/specs/openid-connect-registration-1_0.html.ClientMetadata>"
+     */
+    val jwksUri: Uri?,
+    /**
+     * Client's JSON Web Key Set [JWK] document.
+     *
+     * @see "OpenID Connect Dynamic Client Registration 1.0, Client Metadata
+     * <https:></https:>//openid.net/specs/openid-connect-registration-1_0.html.ClientMetadata>"
+     */
+    @JvmField val jwks: JSONObject?,
+    /**
+     * The client authentication method to use at the token endpoint.
+     *
+     * @see "OpenID Connect Core 1.0, Section 9 <https:></https:>//openid.net/specs/openid-connect-core-1_0.html.rfc.section.9>"
+     */
+    val tokenEndpointAuthenticationMethod: String?,
+    /**
+     * Additional parameters to be passed as part of the request.
+     */
+    @JvmField val additionalParameters: Map<String, String>
+) {
+    /**
+     * The application type to register, will always be 'native'.
+     */
+    @JvmField
+    val applicationType: String = APPLICATION_TYPE_NATIVE
 
-    static final String PARAM_REDIRECT_URIS = "redirect_uris";
-    static final String PARAM_RESPONSE_TYPES = "response_types";
-    static final String PARAM_GRANT_TYPES = "grant_types";
-    static final String PARAM_APPLICATION_TYPE = "application_type";
-    static final String PARAM_SUBJECT_TYPE = "subject_type";
-    static final String PARAM_JWKS_URI = "jwks_uri";
-    static final String PARAM_JWKS = "jwks";
-    static final String PARAM_TOKEN_ENDPOINT_AUTHENTICATION_METHOD = "token_endpoint_auth_method";
 
-    private static final Set<String> BUILT_IN_PARAMS = builtInParams(
+    /**
+     * Creates instances of [RegistrationRequest].
+     */
+    class Builder(
+        configuration: AuthorizationServiceConfiguration,
+        redirectUri: List<Uri>
+    ) {
+        private var mConfiguration: AuthorizationServiceConfiguration = configuration
+        private var mRedirectUris: List<Uri> = redirectUri
+
+        private var mResponseTypes: List<String>? = null
+
+        private var mGrantTypes: List<String>? = null
+
+        private var mSubjectType: String? = null
+
+        private var mJwksUri: Uri? = null
+
+        private var mJwks: JSONObject? = null
+
+        private var mTokenEndpointAuthenticationMethod: String? = null
+
+        private var mAdditionalParameters: Map<String, String> = emptyMap()
+
+
+        /**
+         * Creates a registration request builder with the specified mandatory properties.
+         */
+        init {
+            require(redirectUri.isNotEmpty()) { "redirectUri cannot be empty" }
+        }
+
+        /**
+         * Specifies the authorization service configuration for the request, which must not
+         * be null or empty.
+         */
+        fun setConfiguration(configuration: AuthorizationServiceConfiguration): Builder {
+            mConfiguration = configuration
+            return this
+        }
+
+        /**
+         * Specifies the redirect URI's.
+         *
+         * @see [ "The OAuth 2.0
+         * Authorization Framework"
+        ](https://tools.ietf.org/html/rfc6749.section-3.1.2) */
+        fun setRedirectUriValues(vararg redirectUriValues: Uri): Builder {
+            return setRedirectUriValues(listOf(*redirectUriValues))
+        }
+
+        /**
+         * Specifies the redirect URI's.
+         *
+         * @see "The OAuth 2.0 Authorization Framework
+         */
+        fun setRedirectUriValues(redirectUriValues: List<Uri>): Builder {
+            require(redirectUriValues.isNotEmpty()) { "redirectUriValues cannot be empty" }
+            mRedirectUris = redirectUriValues
+            return this
+        }
+
+        /**
+         * Specifies the response types.
+         *
+         * @see "OpenID Connect Core 1.0, Section 3
+         * <https:></https:>//openid.net/specs/openid-connect-core-1_0.html.rfc.section.3>"
+         */
+        fun setResponseTypeValues(vararg responseTypeValues: String): Builder {
+            return setResponseTypeValues(listOf(*responseTypeValues))
+        }
+
+        /**
+         * Specifies the response types.
+         *
+         * @see "OpenID Connect Core 1.0, Section X
+         * <https:></https:>//openid.net/specs/openid-connect-core-1_0.html.rfc.section.X>"
+         */
+        fun setResponseTypeValues(responseTypeValues: List<String>?): Builder {
+            mResponseTypes = responseTypeValues
+            return this
+        }
+
+        /**
+         * Specifies the grant types.
+         *
+         * @see "OpenID Connect Dynamic Client Registration 1.0, Section 2
+         * <https:></https:>//openid.net/specs/openid-connect-discovery-1_0.html.rfc.section.2>"
+         */
+        fun setGrantTypeValues(vararg grantTypeValues: String): Builder {
+            return setGrantTypeValues(listOf(*grantTypeValues))
+        }
+
+        /**
+         * Specifies the grant types.
+         *
+         * @see "OpenID Connect Dynamic Client Registration 1.0, Section 2
+         * <https:></https:>//openid.net/specs/openid-connect-discovery-1_0.html.rfc.section.2>"
+         */
+        fun setGrantTypeValues(grantTypeValues: List<String>?): Builder {
+            mGrantTypes = grantTypeValues
+            return this
+        }
+
+        /**
+         * Specifies the subject types.
+         *
+         * @see "OpenID Connect Core 1.0, Section 8
+         * <https:></https:>//openid.net/specs/openid-connect-core-1_0.html.rfc.section.8>"
+         */
+        fun setSubjectType(subjectType: String?): Builder {
+            mSubjectType = subjectType
+            return this
+        }
+
+        /**
+         * Specifies the URL for the Client's JSON Web Key Set.
+         *
+         * @see "OpenID Connect Dynamic Client Registration 1.0, Client Metadata
+         * <https:></https:>//openid.net/specs/openid-connect-registration-1_0.html.ClientMetadata>"
+         */
+        fun setJwksUri(jwksUri: Uri?): Builder {
+            mJwksUri = jwksUri
+            return this
+        }
+
+        /**
+         * Specifies the client's JSON Web Key Set.
+         *
+         * @see "OpenID Connect Dynamic Client Registration 1.0, Client Metadata
+         * <https:></https:>//openid.net/specs/openid-connect-registration-1_0.html.ClientMetadata>"
+         */
+        fun setJwks(jwks: JSONObject?): Builder {
+            mJwks = jwks
+            return this
+        }
+
+        /**
+         * Specifies the client authentication method to use at the token endpoint.
+         *
+         * @see "OpenID Connect Core 1.0, Section 9
+         * <https:></https:>//openid.net/specs/openid-connect-core-1_0.html.rfc.section.9>"
+         */
+        fun setTokenEndpointAuthenticationMethod(
+            tokenEndpointAuthenticationMethod: String?
+        ): Builder {
+            this.mTokenEndpointAuthenticationMethod = tokenEndpointAuthenticationMethod
+            return this
+        }
+
+        /**
+         * Specifies additional parameters. Replaces any previously provided set of parameters.
+         * Parameter keys and values cannot be null or empty.
+         */
+        fun setAdditionalParameters(additionalParameters: Map<String, String>?): Builder {
+            mAdditionalParameters = additionalParameters.checkAdditionalParams(BUILT_IN_PARAMS)
+            return this
+        }
+
+        /**
+         * Constructs the registration request. At a minimum, the redirect URI must have been
+         * set before calling this method.
+         */
+        fun build(): RegistrationRequest {
+            return RegistrationRequest(
+                configuration = mConfiguration,
+                redirectUris = mRedirectUris,
+                responseTypes = mResponseTypes,
+                grantTypes = mGrantTypes,
+                subjectType = mSubjectType,
+                jwksUri = mJwksUri,
+                jwks = mJwks,
+                tokenEndpointAuthenticationMethod = mTokenEndpointAuthenticationMethod,
+                additionalParameters = mAdditionalParameters
+            )
+        }
+    }
+
+    /**
+     * Converts the registration request to JSON for transmission to an authorization service.
+     * For local persistence and transmission, use [.jsonSerialize].
+     */
+    fun toJsonString(): String {
+        val json = jsonSerializeParams()
+        additionalParameters.forEach { json.put(it.key, it.value) }
+        return json.toString()
+    }
+
+    /**
+     * Produces a JSON representation of the registration request for persistent storage or
+     * local transmission (e.g. between activities).
+     */
+    fun jsonSerialize(): JSONObject {
+        val json = jsonSerializeParams()
+        json.put(KEY_CONFIGURATION, configuration.toJson())
+        json.put(KEY_ADDITIONAL_PARAMETERS, additionalParameters.toJsonObject())
+        return json
+    }
+
+    /**
+     * Produces a JSON string representation of the registration request for persistent storage or
+     * local transmission (e.g. between activities). This method is just a convenience wrapper
+     * for [.jsonSerialize], converting the JSON object to its string form.
+     */
+    fun jsonSerializeString() = jsonSerialize().toString()
+
+    private fun jsonSerializeParams() = JSONObject().apply {
+        put(PARAM_REDIRECT_URIS, redirectUris.toJsonArray())
+        put(PARAM_APPLICATION_TYPE, applicationType)
+        responseTypes?.let { put(PARAM_RESPONSE_TYPES, it.toJsonArray()) }
+        grantTypes?.let { put(PARAM_GRANT_TYPES, it.toJsonArray()) }
+        subjectType?.let { put(PARAM_SUBJECT_TYPE, it) }
+
+        jwksUri?.let { put(PARAM_JWKS_URI, it.toString()) }
+        jwks?.let { put(PARAM_JWKS, it) }
+
+        tokenEndpointAuthenticationMethod?.let {
+            put(
+                PARAM_TOKEN_ENDPOINT_AUTHENTICATION_METHOD,
+                it
+            )
+        }
+    }
+
+    companion object {
+        /**
+         * OpenID Connect 'application_type'.
+         */
+        const val APPLICATION_TYPE_NATIVE: String = "native"
+
+        const val PARAM_REDIRECT_URIS: String = "redirect_uris"
+        const val PARAM_RESPONSE_TYPES: String = "response_types"
+        const val PARAM_GRANT_TYPES: String = "grant_types"
+        const val PARAM_APPLICATION_TYPE: String = "application_type"
+        const val PARAM_SUBJECT_TYPE: String = "subject_type"
+        const val PARAM_JWKS_URI: String = "jwks_uri"
+        const val PARAM_JWKS: String = "jwks"
+        const val PARAM_TOKEN_ENDPOINT_AUTHENTICATION_METHOD: String = "token_endpoint_auth_method"
+
+        private val BUILT_IN_PARAMS: Set<String> = setOf(
             PARAM_REDIRECT_URIS,
             PARAM_RESPONSE_TYPES,
             PARAM_GRANT_TYPES,
@@ -58,424 +336,58 @@ public class RegistrationRequest {
             PARAM_JWKS_URI,
             PARAM_JWKS,
             PARAM_TOKEN_ENDPOINT_AUTHENTICATION_METHOD
-    );
+        )
 
-    static final String KEY_ADDITIONAL_PARAMETERS = "additionalParameters";
-    static final String KEY_CONFIGURATION = "configuration";
-
-    /**
-     * Instructs the authorization server to generate a pairwise subject identifier.
-     *
-     * @see "OpenID Connect Core 1.0, Section 8
-     * <https://openid.net/specs/openid-connect-core-1_0.html#rfc.section.8>"
-     */
-    public static final String SUBJECT_TYPE_PAIRWISE = "pairwise";
-
-    /**
-     * Instructs the authorization server to generate a public subject identifier.
-     *
-     * @see "OpenID Connect Core 1.0, Section 8
-     * <https://openid.net/specs/openid-connect-core-1_0.html#rfc.section.8>"
-     */
-    public static final String SUBJECT_TYPE_PUBLIC = "public";
-
-    /**
-     * The service's {@link AuthorizationServiceConfiguration configuration}.
-     * This configuration specifies how to connect to a particular OAuth provider.
-     * Configurations may be
-     * {@link
-     * AuthorizationServiceConfiguration#AuthorizationServiceConfiguration(Uri, Uri, Uri, Uri)
-     * created manually}, or
-     * {@link AuthorizationServiceConfiguration#fetchFromUrl(Uri,
-     * AuthorizationServiceConfiguration.RetrieveConfigurationCallback)
-     * via an OpenID Connect Discovery Document}.
-     */
-    @NonNull
-    public final AuthorizationServiceConfiguration configuration;
-
-    /**
-     * The client's redirect URI's.
-     *
-     * @see "The OAuth 2.0 Authorization Framework (RFC 6749), Section 3.1.2
-     * <https://tools.ietf.org/html/rfc6749#section-3.1.2>"
-     */
-    @NonNull
-    public final List<Uri> redirectUris;
-
-    /**
-     * The application type to register, will always be 'native'.
-     */
-    @NonNull
-    public final String applicationType;
-
-    /**
-     * The response types to use.
-     *
-     * @see "OpenID Connect Core 1.0, Section 3
-     * <https://openid.net/specs/openid-connect-core-1_0.html#rfc.section.3>"
-     */
-    @Nullable
-    public final List<String> responseTypes;
-
-    /**
-     * The grant types to use.
-     *
-     * @see "OpenID Connect Dynamic Client Registration 1.0, Section 2
-     * <https://openid.net/specs/openid-connect-discovery-1_0.html#rfc.section.2>"
-     */
-    @Nullable
-    public final List<String> grantTypes;
-
-    /**
-     * The subject type to use.
-     *
-     * @see "OpenID Connect Core 1.0, Section 8 <https://openid.net/specs/openid-connect-core-1_0.html#rfc.section.8>"
-     */
-    @Nullable
-    public final String subjectType;
-
-    /**
-     * URL for the Client's JSON Web Key Set [JWK] document.
-     *
-     * @see "OpenID Connect Dynamic Client Registration 1.0, Client Metadata
-     * <https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata>"
-     */
-    @Nullable
-    public final Uri jwksUri;
-
-    /**
-     * Client's JSON Web Key Set [JWK] document.
-     *
-     * @see "OpenID Connect Dynamic Client Registration 1.0, Client Metadata
-     * <https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata>"
-     */
-    @Nullable
-    public final JSONObject jwks;
-
-    /**
-     * The client authentication method to use at the token endpoint.
-     *
-     * @see "OpenID Connect Core 1.0, Section 9 <https://openid.net/specs/openid-connect-core-1_0.html#rfc.section.9>"
-     */
-    @Nullable
-    public final String tokenEndpointAuthenticationMethod;
-
-    /**
-     * Additional parameters to be passed as part of the request.
-     */
-    @NonNull
-    public final Map<String, String> additionalParameters;
-
-
-    /**
-     * Creates instances of {@link RegistrationRequest}.
-     */
-    public static final class Builder {
-        @NonNull
-        private AuthorizationServiceConfiguration mConfiguration;
-        @NonNull
-        private List<Uri> mRedirectUris = new ArrayList<>();
-
-        @Nullable
-        private List<String> mResponseTypes;
-
-        @Nullable
-        private List<String> mGrantTypes;
-
-        @Nullable
-        private String mSubjectType;
-
-        @Nullable
-        private Uri mJwksUri;
-
-        @Nullable
-        private JSONObject mJwks;
-
-        @Nullable
-        private String mTokenEndpointAuthenticationMethod;
-
-        @NonNull
-        private Map<String, String> mAdditionalParameters = Collections.emptyMap();
-
+        const val KEY_ADDITIONAL_PARAMETERS: String = "additionalParameters"
+        const val KEY_CONFIGURATION: String = "configuration"
 
         /**
-         * Creates a registration request builder with the specified mandatory properties.
-         */
-        public Builder(
-                @NonNull AuthorizationServiceConfiguration configuration,
-                @NonNull List<Uri> redirectUri) {
-            setConfiguration(configuration);
-            setRedirectUriValues(redirectUri);
-        }
-
-        /**
-         * Specifies the authorization service configuration for the request, which must not
-         * be null or empty.
-         */
-        @NonNull
-        public Builder setConfiguration(@NonNull AuthorizationServiceConfiguration configuration) {
-            mConfiguration = checkNotNull(configuration);
-            return this;
-        }
-
-        /**
-         * Specifies the redirect URI's.
-         *
-         * @see <a href="https://tools.ietf.org/html/rfc6749#section-3.1.2"> "The OAuth 2.0
-         * Authorization Framework" (RFC 6749), Section 3.1.2</a>
-         */
-        @NonNull
-        public Builder setRedirectUriValues(@NonNull Uri... redirectUriValues) {
-            return setRedirectUriValues(Arrays.asList(redirectUriValues));
-        }
-
-        /**
-         * Specifies the redirect URI's.
-         *
-         * @see "The OAuth 2.0 Authorization Framework (RFC 6749), Section 3.1.2
-         * <https://tools.ietf.org/html/rfc6749#section-3.1.2>"
-         */
-        @NonNull
-        public Builder setRedirectUriValues(@NonNull List<Uri> redirectUriValues) {
-            checkCollectionNotEmpty(redirectUriValues, "redirectUriValues cannot be null");
-            mRedirectUris = redirectUriValues;
-            return this;
-        }
-
-        /**
-         * Specifies the response types.
-         *
-         * @see "OpenID Connect Core 1.0, Section 3
-         * <https://openid.net/specs/openid-connect-core-1_0.html#rfc.section.3>"
-         */
-        @NonNull
-        public Builder setResponseTypeValues(@Nullable String... responseTypeValues) {
-            return setResponseTypeValues(Arrays.asList(responseTypeValues));
-        }
-
-        /**
-         * Specifies the response types.
-         *
-         * @see "OpenID Connect Core 1.0, Section X
-         * <https://openid.net/specs/openid-connect-core-1_0.html#rfc.section.X>"
-         */
-        @NonNull
-        public Builder setResponseTypeValues(@Nullable List<String> responseTypeValues) {
-            mResponseTypes = responseTypeValues;
-            return this;
-        }
-
-        /**
-         * Specifies the grant types.
-         *
-         * @see "OpenID Connect Dynamic Client Registration 1.0, Section 2
-         * <https://openid.net/specs/openid-connect-discovery-1_0.html#rfc.section.2>"
-         */
-        @NonNull
-        public Builder setGrantTypeValues(@Nullable String... grantTypeValues) {
-            return setGrantTypeValues(Arrays.asList(grantTypeValues));
-        }
-
-        /**
-         * Specifies the grant types.
-         *
-         * @see "OpenID Connect Dynamic Client Registration 1.0, Section 2
-         * <https://openid.net/specs/openid-connect-discovery-1_0.html#rfc.section.2>"
-         */
-        @NonNull
-        public Builder setGrantTypeValues(@Nullable List<String> grantTypeValues) {
-            mGrantTypes = grantTypeValues;
-            return this;
-        }
-
-        /**
-         * Specifies the subject types.
+         * Instructs the authorization server to generate a pairwise subject identifier.
          *
          * @see "OpenID Connect Core 1.0, Section 8
-         * <https://openid.net/specs/openid-connect-core-1_0.html#rfc.section.8>"
+         * <https:></https:>//openid.net/specs/openid-connect-core-1_0.html.rfc.section.8>"
          */
-        @NonNull
-        public Builder setSubjectType(@Nullable String subjectType) {
-            mSubjectType = subjectType;
-            return this;
-        }
+        const val SUBJECT_TYPE_PAIRWISE: String = "pairwise"
 
         /**
-         * Specifies the URL for the Client's JSON Web Key Set.
+         * Instructs the authorization server to generate a public subject identifier.
          *
-         * @see "OpenID Connect Dynamic Client Registration 1.0, Client Metadata
-         * <https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata>"
+         * @see "OpenID Connect Core 1.0, Section 8
+         * <https:></https:>//openid.net/specs/openid-connect-core-1_0.html.rfc.section.8>"
          */
-        @NonNull
-        public Builder setJwksUri(@Nullable Uri jwksUri) {
-            mJwksUri = jwksUri;
-            return this;
-        }
+        const val SUBJECT_TYPE_PUBLIC: String = "public"
 
         /**
-         * Specifies the client's JSON Web Key Set.
-         *
-         * @see "OpenID Connect Dynamic Client Registration 1.0, Client Metadata
-         * <https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata>"
+         * Reads a registration request from a JSON string representation produced by
+         * [.jsonSerialize].
+         * @throws JSONException if the provided JSON does not match the expected structure.
          */
-        @NonNull
-        public Builder setJwks(@Nullable JSONObject jwks) {
-            mJwks = jwks;
-            return this;
-        }
+        @JvmStatic
+        @Throws(JSONException::class)
+        fun jsonDeserialize(json: JSONObject) = RegistrationRequest(
+            configuration = fromJson(json.getJSONObject(KEY_CONFIGURATION)),
+            redirectUris = json.getUriList(PARAM_REDIRECT_URIS),
+            responseTypes = json.getStringListIfDefined(PARAM_RESPONSE_TYPES),
+            grantTypes = json.getStringListIfDefined(PARAM_GRANT_TYPES),
+            subjectType = json.getStringIfDefined(PARAM_SUBJECT_TYPE),
+            jwksUri = json.getUriIfDefined(PARAM_JWKS_URI),
+            jwks = json.getJsonObjectIfDefined(PARAM_JWKS),
+            tokenEndpointAuthenticationMethod = json.getStringIfDefined(
+                PARAM_TOKEN_ENDPOINT_AUTHENTICATION_METHOD
+            ),
+            additionalParameters = json.getStringMap(KEY_ADDITIONAL_PARAMETERS)
+        )
 
         /**
-         * Specifies the client authentication method to use at the token endpoint.
-         *
-         * @see "OpenID Connect Core 1.0, Section 9
-         * <https://openid.net/specs/openid-connect-core-1_0.html#rfc.section.9>"
+         * Reads a registration request from a JSON string representation produced by
+         * [.jsonSerializeString]. This method is just a convenience wrapper for
+         * [.jsonDeserialize], converting the JSON string to its JSON object form.
+         * @throws JSONException if the provided JSON does not match the expected structure.
          */
-        @NonNull
-        public Builder setTokenEndpointAuthenticationMethod(
-                @Nullable String tokenEndpointAuthenticationMethod) {
-            this.mTokenEndpointAuthenticationMethod = tokenEndpointAuthenticationMethod;
-            return this;
+        @Throws(JSONException::class)
+        fun jsonDeserialize(jsonStr: String): RegistrationRequest {
+            require(jsonStr.isNotEmpty()) { "jsonStr must not be empty" }
+            return jsonDeserialize(JSONObject(jsonStr))
         }
-
-        /**
-         * Specifies additional parameters. Replaces any previously provided set of parameters.
-         * Parameter keys and values cannot be null or empty.
-         */
-        @NonNull
-        public Builder setAdditionalParameters(@Nullable Map<String, String> additionalParameters) {
-            mAdditionalParameters = checkAdditionalParams(additionalParameters, BUILT_IN_PARAMS);
-            return this;
-        }
-
-        /**
-         * Constructs the registration request. At a minimum, the redirect URI must have been
-         * set before calling this method.
-         */
-        @NonNull
-        public RegistrationRequest build() {
-            return new RegistrationRequest(
-                    mConfiguration,
-                    Collections.unmodifiableList(mRedirectUris),
-                    mResponseTypes == null
-                            ? mResponseTypes : Collections.unmodifiableList(mResponseTypes),
-                    mGrantTypes == null ? mGrantTypes : Collections.unmodifiableList(mGrantTypes),
-                    mSubjectType,
-                    mJwksUri,
-                    mJwks,
-                    mTokenEndpointAuthenticationMethod,
-                    Collections.unmodifiableMap(mAdditionalParameters));
-        }
-    }
-
-    private RegistrationRequest(
-            @NonNull AuthorizationServiceConfiguration configuration,
-            @NonNull List<Uri> redirectUris,
-            @Nullable List<String> responseTypes,
-            @Nullable List<String> grantTypes,
-            @Nullable String subjectType,
-            @Nullable Uri jwksUri,
-            @Nullable JSONObject jwks,
-            @Nullable String tokenEndpointAuthenticationMethod,
-            @NonNull Map<String, String> additionalParameters) {
-        this.configuration = configuration;
-        this.redirectUris = redirectUris;
-        this.responseTypes = responseTypes;
-        this.grantTypes = grantTypes;
-        this.subjectType = subjectType;
-        this.jwksUri = jwksUri;
-        this.jwks = jwks;
-        this.tokenEndpointAuthenticationMethod = tokenEndpointAuthenticationMethod;
-        this.additionalParameters = additionalParameters;
-        this.applicationType = APPLICATION_TYPE_NATIVE;
-    }
-
-    /**
-     * Converts the registration request to JSON for transmission to an authorization service.
-     * For local persistence and transmission, use {@link #jsonSerialize()}.
-     */
-    @NonNull
-    public String toJsonString() {
-        JSONObject json = jsonSerializeParams();
-        for (Map.Entry<String, String> param : additionalParameters.entrySet()) {
-            JsonUtil.put(json, param.getKey(), param.getValue());
-        }
-        return json.toString();
-    }
-
-    /**
-     * Produces a JSON representation of the registration request for persistent storage or
-     * local transmission (e.g. between activities).
-     */
-    @NonNull
-    public JSONObject jsonSerialize() {
-        JSONObject json = jsonSerializeParams();
-        JsonUtil.put(json, KEY_CONFIGURATION, configuration.toJson());
-        JsonUtil.put(json, KEY_ADDITIONAL_PARAMETERS,
-                JsonUtil.mapToJsonObject(additionalParameters));
-        return json;
-    }
-
-    /**
-     * Produces a JSON string representation of the registration request for persistent storage or
-     * local transmission (e.g. between activities). This method is just a convenience wrapper
-     * for {@link #jsonSerialize()}, converting the JSON object to its string form.
-     */
-    @NonNull
-    public String jsonSerializeString() {
-        return jsonSerialize().toString();
-    }
-
-    private JSONObject jsonSerializeParams() {
-        JSONObject json = new JSONObject();
-        JsonUtil.put(json, PARAM_REDIRECT_URIS, JsonUtil.toJsonArray(redirectUris));
-        JsonUtil.put(json, PARAM_APPLICATION_TYPE, applicationType);
-
-        if (responseTypes != null) {
-            JsonUtil.put(json, PARAM_RESPONSE_TYPES, JsonUtil.toJsonArray(responseTypes));
-        }
-        if (grantTypes != null) {
-            JsonUtil.put(json, PARAM_GRANT_TYPES, JsonUtil.toJsonArray(grantTypes));
-        }
-        JsonUtil.putIfNotNull(json, PARAM_SUBJECT_TYPE, subjectType);
-
-        JsonUtil.putIfNotNull(json, PARAM_JWKS_URI, jwksUri);
-        JsonUtil.putIfNotNull(json, PARAM_JWKS, jwks);
-
-        JsonUtil.putIfNotNull(json, PARAM_TOKEN_ENDPOINT_AUTHENTICATION_METHOD,
-                tokenEndpointAuthenticationMethod);
-        return json;
-    }
-
-    /**
-     * Reads a registration request from a JSON string representation produced by
-     * {@link #jsonSerialize()}.
-     * @throws JSONException if the provided JSON does not match the expected structure.
-     */
-    public static RegistrationRequest jsonDeserialize(@NonNull JSONObject json)
-            throws JSONException {
-        checkNotNull(json, "json must not be null");
-
-        return new RegistrationRequest(
-            AuthorizationServiceConfiguration.fromJson(json.getJSONObject(KEY_CONFIGURATION)),
-            JsonUtil.getUriList(json, PARAM_REDIRECT_URIS),
-            JsonUtil.getStringListIfDefined(json, PARAM_RESPONSE_TYPES),
-            JsonUtil.getStringListIfDefined(json, PARAM_GRANT_TYPES),
-            JsonUtil.getStringIfDefined(json, PARAM_SUBJECT_TYPE),
-            JsonUtil.getUriIfDefined(json, PARAM_JWKS_URI),
-            JsonUtil.getJsonObjectIfDefined(json, PARAM_JWKS),
-            JsonUtil.getStringIfDefined(json, PARAM_TOKEN_ENDPOINT_AUTHENTICATION_METHOD),
-            JsonUtil.getStringMap(json, KEY_ADDITIONAL_PARAMETERS));
-    }
-
-    /**
-     * Reads a registration request from a JSON string representation produced by
-     * {@link #jsonSerializeString()}. This method is just a convenience wrapper for
-     * {@link #jsonDeserialize(JSONObject)}, converting the JSON string to its JSON object form.
-     * @throws JSONException if the provided JSON does not match the expected structure.
-     */
-    public static RegistrationRequest jsonDeserialize(@NonNull String jsonStr)
-            throws JSONException {
-        checkNotEmpty(jsonStr, "jsonStr must not be empty or null");
-        return jsonDeserialize(new JSONObject(jsonStr));
     }
 }

@@ -11,49 +11,30 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package net.openid.appauth.connectivity
 
-package net.openid.appauth.connectivity;
-
-import android.net.Uri;
-import androidx.annotation.NonNull;
-
-import net.openid.appauth.Preconditions;
-
-import java.io.IOException;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.util.concurrent.TimeUnit;
+import android.net.Uri
+import java.io.IOException
+import java.net.HttpURLConnection
+import java.net.URL
+import java.util.concurrent.TimeUnit
 
 /**
- * Creates {@link java.net.HttpURLConnection} instances using the default, platform-provided
+ * Creates [HttpURLConnection] instances using the default, platform-provided
  * mechanism, with sensible production defaults.
  */
-public final class DefaultConnectionBuilder implements ConnectionBuilder {
+object DefaultConnectionBuilder : ConnectionBuilder {
+    private val CONNECTION_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(15).toInt()
+    private val READ_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(10).toInt()
+    private const val HTTPS_SCHEME = "https"
 
-    /**
-     * The singleton instance of the default connection builder.
-     */
-    public static final DefaultConnectionBuilder INSTANCE = new DefaultConnectionBuilder();
-
-    private static final int CONNECTION_TIMEOUT_MS = (int) TimeUnit.SECONDS.toMillis(15);
-    private static final int READ_TIMEOUT_MS = (int) TimeUnit.SECONDS.toMillis(10);
-
-    private static final String HTTPS_SCHEME = "https";
-
-    private DefaultConnectionBuilder() {
-        // no need to construct instances of this type
-    }
-
-    @NonNull
-    @Override
-    public HttpURLConnection openConnection(@NonNull Uri uri) throws IOException {
-        Preconditions.checkNotNull(uri, "url must not be null");
-        Preconditions.checkArgument(HTTPS_SCHEME.equals(uri.getScheme()),
-                "only https connections are permitted");
-        HttpURLConnection conn = (HttpURLConnection) new URL(uri.toString()).openConnection();
-        conn.setConnectTimeout(CONNECTION_TIMEOUT_MS);
-        conn.setReadTimeout(READ_TIMEOUT_MS);
-        conn.setInstanceFollowRedirects(false);
-        return conn;
+    @Throws(IOException::class)
+    override fun openConnection(uri: Uri): HttpURLConnection {
+        require(HTTPS_SCHEME == uri.scheme) { "only https connections are permitted" }
+        return (URL(uri.toString()).openConnection() as HttpURLConnection).apply {
+            connectTimeout = CONNECTION_TIMEOUT_MS
+            readTimeout = READ_TIMEOUT_MS
+            instanceFollowRedirects = false
+        }
     }
 }

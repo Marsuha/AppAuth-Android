@@ -11,58 +11,38 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package net.openid.appauth
 
-package net.openid.appauth;
-
-import static net.openid.appauth.Preconditions.checkNotNull;
-
-import android.util.Base64;
-import androidx.annotation.NonNull;
-
-import net.openid.appauth.internal.UriUtil;
-
-import java.util.Collections;
-import java.util.Map;
+import android.util.Base64
+import net.openid.appauth.internal.UriUtil.formUrlEncodeValue
+import java.util.Collections
 
 /**
  * Implementation of the client authentication method 'client_secret_basic'.
  *
  * @see "OpenID Connect Core 1.0, Section 9
- * <https://openid.net/specs/openid-connect-core-1_0.html#rfc.section.9>"
+ * <https:></https:>//openid.net/specs/openid-connect-core-1_0.html.rfc.section.9>"
  */
-public class ClientSecretBasic implements ClientAuthentication {
-    /**
-     * Name of this authentication method.
-     *
-     * @see "OpenID Connect Core 1.0, Section 9
-     * <https://openid.net/specs/openid-connect-core-1_0.html#rfc.section.9>"
-     */
-    public static final String NAME = "client_secret_basic";
-
-    @NonNull
-    private String mClientSecret;
-
-    /**
-     * Creates a {@link ClientAuthentication} which will use the client authentication method
-     * `client_secret_basic`.
-     */
-    public ClientSecretBasic(@NonNull String clientSecret) {
-        mClientSecret = checkNotNull(clientSecret, "mClientSecret cannot be null");
-    }
-
-    @Override
-    public final Map<String, String> getRequestHeaders(@NonNull String clientId) {
+class ClientSecretBasic(private val clientSecret: String) : ClientAuthentication {
+    override fun getRequestHeaders(clientId: String): Map<String, String> {
         // From the OAuth2 RFC, client ID and secret should be encoded prior to concatenation and
         // conversion to Base64: https://tools.ietf.org/html/rfc6749#section-2.3.1
-        String encodedClientId = UriUtil.formUrlEncodeValue(clientId);
-        String encodedClientSecret = UriUtil.formUrlEncodeValue(mClientSecret);
-        String credentials = encodedClientId + ":" + encodedClientSecret;
-        String basicAuth = Base64.encodeToString(credentials.getBytes(), Base64.NO_WRAP);
-        return Collections.singletonMap("Authorization", "Basic " + basicAuth);
+        val encodedClientId = formUrlEncodeValue(clientId)
+        val encodedClientSecret = formUrlEncodeValue(clientSecret)
+        val credentials = "$encodedClientId:$encodedClientSecret"
+        val basicAuth = Base64.encodeToString(credentials.toByteArray(), Base64.NO_WRAP)
+        return mapOf("Authorization" to "Basic $basicAuth")
     }
 
-    @Override
-    public final Map<String, String> getRequestParameters(@NonNull String clientId) {
-        return null;
+    override fun getRequestParameters(clientId: String): Map<String, String>? = null
+
+    companion object {
+        /**
+         * Name of this authentication method.
+         *
+         * @see "OpenID Connect Core 1.0, Section 9
+         * <https:></https:>//openid.net/specs/openid-connect-core-1_0.html.rfc.section.9>"
+         */
+        const val NAME: String = "client_secret_basic"
     }
 }
