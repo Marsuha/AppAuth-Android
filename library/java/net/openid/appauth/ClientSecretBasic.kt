@@ -15,7 +15,6 @@ package net.openid.appauth
 
 import android.util.Base64
 import net.openid.appauth.internal.UriUtil.formUrlEncodeValue
-import java.util.Collections
 
 /**
  * Implementation of the client authentication method 'client_secret_basic'.

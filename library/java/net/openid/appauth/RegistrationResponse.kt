@@ -90,28 +90,22 @@ class RegistrationResponse private constructor(
         val missingField: String
     ) : Exception("Missing mandatory registration field: $missingField")
 
-    class Builder(request: RegistrationRequest) {
-        private var mRequest: RegistrationRequest = request
-        private var mClientId: String? = null
+    class Builder(private var request: RegistrationRequest) {
+        private var clientId: String? = null
+        private var clientIdIssuedAt: Long? = null
+        private var clientSecret: String? = null
+        private var clientSecretExpiresAt: Long? = null
+        private var registrationAccessToken: String? = null
+        private var registrationClientUri: Uri? = null
+        private var tokenEndpointAuthMethod: String? = null
 
-        private var mClientIdIssuedAt: Long? = null
-        private var mClientSecret: String? = null
-        private var mClientSecretExpiresAt: Long? = null
-        private var mRegistrationAccessToken: String? = null
-        private var mRegistrationClientUri: Uri? = null
-        private var mTokenEndpointAuthMethod: String? = null
-
-        private var mAdditionalParameters: Map<String, String> = emptyMap()
-
-        init {
-            require(!mClientId.isNullOrEmpty()) { "client ID cannot be null or empty" }
-        }
+        private var additionalParameters: Map<String, String> = emptyMap()
 
         /**
          * Specifies the request associated with this response. Must not be null.
          */
         fun setRequest(request: RegistrationRequest): Builder {
-            mRequest = request
+            this@Builder.request = request
             return this
         }
 
@@ -123,7 +117,7 @@ class RegistrationResponse private constructor(
          */
         fun setClientId(clientId: String): Builder {
             require(clientId.isNotEmpty()) { "client ID cannot be empty" }
-            mClientId = clientId
+            this@Builder.clientId = clientId
             return this
         }
 
@@ -134,7 +128,7 @@ class RegistrationResponse private constructor(
          * <https:></https:>//openid.net/specs/openid-connect-discovery-1_0.html.rfc.section.3.2>"
          */
         fun setClientIdIssuedAt(clientIdIssuedAt: Long?): Builder {
-            mClientIdIssuedAt = clientIdIssuedAt
+            this@Builder.clientIdIssuedAt = clientIdIssuedAt
             return this
         }
 
@@ -145,7 +139,7 @@ class RegistrationResponse private constructor(
          * <https:></https:>//openid.net/specs/openid-connect-discovery-1_0.html.rfc.section.3.2>"
          */
         fun setClientSecret(clientSecret: String?): Builder {
-            mClientSecret = clientSecret
+            this@Builder.clientSecret = clientSecret
             return this
         }
 
@@ -156,7 +150,7 @@ class RegistrationResponse private constructor(
          * <https:></https:>//openid.net/specs/openid-connect-discovery-1_0.html.rfc.section.3.2>"
          */
         fun setClientSecretExpiresAt(clientSecretExpiresAt: Long?): Builder {
-            mClientSecretExpiresAt = clientSecretExpiresAt
+            this@Builder.clientSecretExpiresAt = clientSecretExpiresAt
             return this
         }
 
@@ -167,7 +161,7 @@ class RegistrationResponse private constructor(
          * <https:></https:>//openid.net/specs/openid-connect-discovery-1_0.html.rfc.section.3.2>"
          */
         fun setRegistrationAccessToken(registrationAccessToken: String?): Builder {
-            mRegistrationAccessToken = registrationAccessToken
+            this@Builder.registrationAccessToken = registrationAccessToken
             return this
         }
 
@@ -175,7 +169,7 @@ class RegistrationResponse private constructor(
          * Specifies the client authentication method to use at the token endpoint.
          */
         fun setTokenEndpointAuthMethod(tokenEndpointAuthMethod: String?): Builder {
-            mTokenEndpointAuthMethod = tokenEndpointAuthMethod
+            this@Builder.tokenEndpointAuthMethod = tokenEndpointAuthMethod
             return this
         }
 
@@ -186,7 +180,7 @@ class RegistrationResponse private constructor(
          * <https:></https:>//openid.net/specs/openid-connect-discovery-1_0.html.rfc.section.3.2>"
          */
         fun setRegistrationClientUri(registrationClientUri: Uri?): Builder {
-            mRegistrationClientUri = registrationClientUri
+            this@Builder.registrationClientUri = registrationClientUri
             return this
         }
 
@@ -194,7 +188,7 @@ class RegistrationResponse private constructor(
          * Specifies the additional, non-standard parameters received as part of the response.
          */
         fun setAdditionalParameters(additionalParameters: Map<String, String>?): Builder {
-            mAdditionalParameters = additionalParameters.checkAdditionalParams(BUILT_IN_PARAMS)
+            this@Builder.additionalParameters = additionalParameters.checkAdditionalParams(BUILT_IN_PARAMS)
             return this
         }
 
@@ -202,15 +196,15 @@ class RegistrationResponse private constructor(
          * Creates the token response instance.
          */
         fun build() = RegistrationResponse(
-            request = mRequest,
-            clientId = mClientId!!,
-            clientIdIssuedAt = mClientIdIssuedAt,
-            clientSecret = mClientSecret,
-            clientSecretExpiresAt = mClientSecretExpiresAt,
-            registrationAccessToken = mRegistrationAccessToken,
-            registrationClientUri = mRegistrationClientUri,
-            tokenEndpointAuthMethod = mTokenEndpointAuthMethod,
-            additionalParameters = mAdditionalParameters
+            request = request,
+            clientId = clientId!!,
+            clientIdIssuedAt = clientIdIssuedAt,
+            clientSecret = clientSecret,
+            clientSecretExpiresAt = clientSecretExpiresAt,
+            registrationAccessToken = registrationAccessToken,
+            registrationClientUri = registrationClientUri,
+            tokenEndpointAuthMethod = tokenEndpointAuthMethod,
+            additionalParameters = additionalParameters
         )
 
         /**

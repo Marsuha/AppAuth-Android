@@ -21,9 +21,10 @@ import org.json.JSONObject
 /**
  * Contains common test values which are useful across all tests.
  */
+@Suppress("unused")
 internal object TestValues {
     const val TEST_CLIENT_ID: String = "test_client_id"
-    const val TEST_STATE: String = "\$TAT3"
+    const val TEST_STATE: String = $$"$TAT3"
     const val TEST_NONCE: String = "NONC3"
     const val TEST_APP_SCHEME: String = "com.test.app"
     @JvmField

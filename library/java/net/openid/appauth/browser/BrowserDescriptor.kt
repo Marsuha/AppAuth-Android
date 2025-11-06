@@ -17,6 +17,7 @@ import android.content.pm.PackageInfo
 import android.content.pm.Signature
 import android.os.Build
 import android.util.Base64
+import net.openid.appauth.browser.BrowserDescriptor.Companion.generateSignatureHashes
 import java.security.MessageDigest
 import java.security.NoSuchAlgorithmException
 
@@ -29,80 +30,31 @@ import java.security.NoSuchAlgorithmException
  * [PackageInfo] object provided by the package manager.
  *
  * @param packageName     The Android package name of the browser.
- * @param signatureHashes The set of SHA-512, Base64 url safe encoded signatures for the app. This can be
- * generated for a signature by calling [.generateSignatureHash].
- * @param version         The version name of the browser.
- * @param useCustomTab    Whether it is intended to use the browser as a custom tab.
-*/
-class BrowserDescriptor(
+ * @param signatureHashes The set of [signatures][Signature] of the browser app,
+ * which have been hashed with SHA-512, and Base-64 URL-safe encoded.
+ * @param version         The version string of the browser app.
+ * @param useCustomTab    Whether it is intended that the browser will be used via a custom tab.
+ */
+@Suppress("unused")
+data class BrowserDescriptor(
     /**
      * The package name of the browser app.
      */
-    @JvmField val packageName: String,
+    val packageName: String,
     /**
      * The set of [signatures][Signature] of the browser app,
      * which have been hashed with SHA-512, and Base-64 URL-safe encoded.
      */
-    @JvmField val signatureHashes: Set<String>,
+    val signatureHashes: Set<String>,
     /**
      * The version string of the browser app.
      */
-    @JvmField val version: String,
+    val version: String,
     /**
      * Whether it is intended that the browser will be used via a custom tab.
      */
-    @JvmField val useCustomTab: Boolean
+    val useCustomTab: Boolean
 ) {
-    /**
-     * Creates a description of a browser from a [PackageInfo] object returned from the
-     * [android.content.pm.PackageManager]. The object is expected to include the
-     * signatures of the app, which can be retrieved with the
-     * [GET_SIGNATURES][android.content.pm.PackageManager.GET_SIGNATURES] flag when
-     * calling [android.content.pm.PackageManager.getPackageInfo].
-     */
-    @Suppress("DEPRECATION")
-    constructor(packageInfo: PackageInfo, useCustomTab: Boolean) : this(
-        packageName = packageInfo.packageName,
-        signatureHashes = generateSignatureHashes(packageInfo.getSignatures()),
-        version = checkNotNull(packageInfo.versionName),
-        useCustomTab = useCustomTab
-    )
-
-    /**
-     * Creates a copy of this browser descriptor, changing the intention to use it as a custom
-     * tab to the specified value.
-     */
-    fun changeUseCustomTab(newUseCustomTabValue: Boolean): BrowserDescriptor {
-        return BrowserDescriptor(
-            packageName,
-            signatureHashes,
-            version,
-            newUseCustomTabValue
-        )
-    }
-
-    override fun equals(other: Any?): Boolean {
-        if (this === other) return true
-        if (other !is BrowserDescriptor) return false
-
-        return this.packageName == other.packageName
-                && this.version == other.version
-                && this.useCustomTab == other.useCustomTab && this.signatureHashes == other.signatureHashes
-    }
-
-    override fun hashCode(): Int {
-        var hash = packageName.hashCode()
-
-        hash = PRIME_HASH_FACTOR * hash + version.hashCode()
-        hash = PRIME_HASH_FACTOR * hash + (if (useCustomTab) 1 else 0)
-
-        for (signatureHash in signatureHashes) {
-            hash = PRIME_HASH_FACTOR * hash + signatureHash.hashCode()
-        }
-
-        return hash
-    }
-
     companion object {
         // See: http://stackoverflow.com/a/2816747
         private const val PRIME_HASH_FACTOR = 92821
@@ -133,6 +85,22 @@ class BrowserDescriptor(
         }
     }
 }
+
+/**
+ * Creates a description of a browser from a [PackageInfo] object returned from the
+ * [android.content.pm.PackageManager]. The object is expected to include the
+ * signatures of the app, which can be retrieved with the
+ * [GET_SIGNATURES][android.content.pm.PackageManager.GET_SIGNATURES] flag when
+ * calling [android.content.pm.PackageManager.getPackageInfo].
+ */
+@Suppress("DEPRECATION")
+fun BrowserDescriptor(packageInfo: PackageInfo, useCustomTab: Boolean) = BrowserDescriptor(
+    packageName = packageInfo.packageName,
+    signatureHashes = generateSignatureHashes(packageInfo.getSignatures()),
+    version = checkNotNull(packageInfo.versionName),
+    useCustomTab = useCustomTab
+)
+
 
 private fun PackageInfo.getSignatures(): Array<Signature> {
     val signatures: Array<Signature>? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {

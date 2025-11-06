@@ -19,7 +19,6 @@ import android.content.Intent
 import android.graphics.Color
 import android.net.Uri
 import androidx.annotation.ColorInt
-import androidx.browser.customtabs.CustomTabsClient
 import androidx.browser.customtabs.CustomTabsIntent
 import androidx.browser.customtabs.CustomTabsIntent.EXTRA_TITLE_VISIBILITY_STATE
 import androidx.browser.customtabs.CustomTabsIntent.EXTRA_TOOLBAR_COLOR
@@ -41,6 +40,7 @@ import org.assertj.core.api.Assertions.assertThat
 import org.junit.Assert
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -52,6 +52,7 @@ import org.mockito.Mockito
 import org.mockito.junit.MockitoJUnit
 import org.mockito.junit.MockitoRule
 import org.mockito.kotlin.any
+import org.mockito.kotlin.argThat
 import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
@@ -67,7 +68,7 @@ import java.net.HttpURLConnection
 
 @Suppress("DEPRECATION")
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [16])
+@Config(sdk = [28])
 @LooperMode(LooperMode.Mode.PAUSED)
 class AuthorizationServiceTest {
     @get:Rule
@@ -77,7 +78,7 @@ class AuthorizationServiceTest {
     private lateinit var browserDescriptor: BrowserDescriptor
 
     @Mock
-    lateinit var connectionBuilder: ConnectionBuilder
+    lateinit var connectionProvider: ConnectionBuilder
 
     @Mock
     lateinit var httpConnection: HttpURLConnection
@@ -88,8 +89,8 @@ class AuthorizationServiceTest {
     @Mock
     lateinit var context: Context
 
-    @Mock
-    lateinit var client: CustomTabsClient
+    /*@Mock
+    lateinit var client: CustomTabsClient*/
 
     @Mock
     lateinit var customTabManager: CustomTabManager
@@ -101,16 +102,14 @@ class AuthorizationServiceTest {
 
         service = AuthorizationService(
             context,
-            AppAuthConfiguration.Builder()
-                .setConnectionBuilder(connectionBuilder)
-                .build(),
+            appAuthConfiguration { connectionBuilder = connectionProvider },
             browserDescriptor,
             customTabManager
         )
 
         outputStream = ByteArrayOutputStream()
 
-        whenever(connectionBuilder.openConnection(any<Uri>()))
+        whenever(connectionProvider.openConnection(any<Uri>()))
             .thenReturn(httpConnection)
 
         whenever(httpConnection.getOutputStream()).thenReturn(outputStream)
@@ -371,11 +370,8 @@ class AuthorizationServiceTest {
     fun testTokenRequest_withBasicAuth() = runTest {
         val csb = ClientSecretBasic(TEST_CLIENT_SECRET)
         val `is`: InputStream = ByteArrayInputStream(authCodeExchangeResponseJson.toByteArray())
-
-        Mockito.`when`(httpConnection.responseCode)
-            .thenReturn(HttpURLConnection.HTTP_OK)
-
-        Mockito.`when`(httpConnection.inputStream).thenReturn(`is`)
+        whenever(httpConnection.responseCode).thenReturn(HttpURLConnection.HTTP_OK)
+        whenever(httpConnection.inputStream).thenReturn(`is`)
 
         val request = TestValues.testAuthCodeExchangeRequest
         val result = performTokenRequest(request, csb)
@@ -385,7 +381,7 @@ class AuthorizationServiceTest {
         val postBody = outputStream.toString()
         assertTokenRequestBody(postBody, request.requestParameters)
 
-        Mockito.verify(httpConnection).setRequestProperty(
+        verify(httpConnection).setRequestProperty(
             "Authorization",
             csb.getRequestHeaders(TEST_CLIENT_ID)["Authorization"]
         )
@@ -600,7 +596,7 @@ class AuthorizationServiceTest {
             Result.failure(ex)
         }
 
-        Assert.assertTrue((result.getOrNull() == null) xor (result.exceptionOrNull() == null))
+        assertTrue((result.getOrNull() == null) xor (result.exceptionOrNull() == null))
         return result
     }
 
@@ -613,7 +609,7 @@ class AuthorizationServiceTest {
             Result.failure(ex)
         }
 
-        Assert.assertTrue((result.getOrNull() == null) xor (result.exceptionOrNull() == null))
+        assertTrue((result.getOrNull() == null) xor (result.exceptionOrNull() == null))
         return result
     }
 
@@ -624,7 +620,7 @@ class AuthorizationServiceTest {
 
     private fun assertColorMatch(intent: Intent, expected: Int?) {
         val color = intent.getIntExtra(EXTRA_TOOLBAR_COLOR, Color.TRANSPARENT)
-        Assert.assertTrue((expected == null) || ((expected == color) && (color != Color.TRANSPARENT)))
+        assertTrue((expected == null) || ((expected == color) && (color != Color.TRANSPARENT)))
     }
 
     /**
@@ -632,7 +628,11 @@ class AuthorizationServiceTest {
      */
     private class CustomTabsServiceMatcher : ArgumentMatcher<Intent> {
         override fun matches(intent: Intent): Boolean {
-            return TEST_BROWSER_PACKAGE == intent.getPackage()
+            return TEST_BROWSER_PACKAGE == intent.`package`
+        }
+
+        override fun toString(): String {
+            return "$TEST_BROWSER_PACKAGE == intent.`package`"
         }
     }
 
@@ -654,8 +654,6 @@ class AuthorizationServiceTest {
     }
 
     companion object {
-        private const val CALLBACK_TIMEOUT_MILLIS = 1000
-
         private const val TEST_EXPIRES_IN = 3600
         private const val TEST_BROWSER_PACKAGE = "com.browser.test"
 
@@ -677,6 +675,6 @@ class AuthorizationServiceTest {
 
         private const val TEST_INVALID_GRANT_CODE = 2002
 
-        fun serviceIntentEq(): Intent = ArgumentMatchers.argThat(CustomTabsServiceMatcher())
+        fun serviceIntentEq(): Intent = argThat<Intent>(CustomTabsServiceMatcher())
     }
 }

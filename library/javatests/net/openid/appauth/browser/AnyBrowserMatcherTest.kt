@@ -24,7 +24,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [16])
+@Config(sdk = [28])
 class AnyBrowserMatcherTest {
     @Test
     fun testMatches() {

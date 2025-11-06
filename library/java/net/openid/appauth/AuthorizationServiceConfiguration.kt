@@ -28,6 +28,7 @@ import java.io.InputStream
 /**
  * Configuration details required to interact with an authorization service.
  */
+@Suppress("unused")
 class AuthorizationServiceConfiguration {
     /**
      * The authorization service's endpoint.
@@ -225,7 +226,7 @@ class AuthorizationServiceConfiguration {
                     val connection = connectionBuilder.openConnection(openIdConnectDiscoveryUri)
                     connection.requestMethod = "GET"
                     connection.doInput = true
-                    //connection.connect()
+                    connection.connect()
                     `is` = connection.inputStream
                     val json = JSONObject(`is`.readString())
                     val discovery = AuthorizationServiceDiscovery(json)

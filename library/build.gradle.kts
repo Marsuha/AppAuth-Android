@@ -14,9 +14,9 @@ plugins {
     id("testdeps")
     alias(libs.plugins.kotlin.android)
 }
-//
+
 val GROUP: String by project
-val POM_ARTIFACT_ID: String by project
+val POM_ARTIFACT_ID: String by project//\\
 val POM_NAME: String by project
 val POM_DESCRIPTION: String by project
 val POM_PACKAGING: String by project

@@ -21,81 +21,63 @@ import net.openid.appauth.connectivity.DefaultConnectionBuilder
 /**
  * Defines configuration properties that control the behavior of the AppAuth library, independent
  * of the OAuth2 specific details that are described.
+ *
+ * @param browserMatcher Controls which browsers can be used for the authorization flow.
+ * @param connectionBuilder Creates [java.net.HttpURLConnection] instances for use in token requests and related
+ * interactions with the authorization service.
+ * @param skipIssuerHttpsCheck Returns `true` if issuer https validation is disabled, otherwise
+ * `false`.
  */
-class AppAuthConfiguration private constructor(
+data class AppAuthConfiguration(
     /**
      * Controls which browsers can be used for the authorization flow.
      */
-    val browserMatcher: BrowserMatcher,
+    val browserMatcher: BrowserMatcher = AnyBrowserMatcher,
     /**
      * Creates [java.net.HttpURLConnection] instances for use in token requests and related
      * interactions with the authorization service.
      */
-    val connectionBuilder: ConnectionBuilder,
+    val connectionBuilder: ConnectionBuilder = DefaultConnectionBuilder,
     /**
      * Returns `true` if issuer https validation is disabled, otherwise
      * `false`.
-     *
-     * @see Builder.setSkipIssuerHttpsCheck
      */
-    val skipIssuerHttpsCheck: Boolean
-) {
-    /**
-     * Creates [AppAuthConfiguration] instances.
-     */
-    class Builder {
-        private var mBrowserMatcher: BrowserMatcher = AnyBrowserMatcher
-        private var mConnectionBuilder: ConnectionBuilder = DefaultConnectionBuilder
-        private var mSkipIssuerHttpsCheck = false
-        private val mSkipNonceVerification = false
+    val skipIssuerHttpsCheck: Boolean = false
+)
 
-        /**
-         * Specify the browser matcher to use, which controls the browsers that can be used
-         * for authorization.
-         */
-        fun setBrowserMatcher(browserMatcher: BrowserMatcher): Builder {
-            mBrowserMatcher = browserMatcher
-            return this
-        }
+@DslMarker
+annotation class AppAuthConfigurationDsl
 
-        /**
-         * Specify the connection builder to use, which creates [java.net.HttpURLConnection]
-         * instances for use in direct communication with the authorization service.
-         */
-        fun setConnectionBuilder(connectionBuilder: ConnectionBuilder): Builder {
-            mConnectionBuilder = connectionBuilder
-            return this
-        }
+@AppAuthConfigurationDsl
+class AppAuthConfigurationBuilder {
+    var browserMatcher: BrowserMatcher = AnyBrowserMatcher
+    var connectionBuilder: ConnectionBuilder = DefaultConnectionBuilder
+    var skipIssuerHttpsCheck: Boolean = false
 
-        /**
-         * Disables https validation for the issuer identifier.
-         *
-         *
-         * NOTE: Disabling issuer https validation implies the app is running against an
-         * insecure environment. Enabling this option is only recommended for testing purposes.
-         */
-        fun setSkipIssuerHttpsCheck(skipIssuerHttpsCheck: Boolean): Builder {
-            mSkipIssuerHttpsCheck = skipIssuerHttpsCheck
-            return this
-        }
-
-        /**
-         * Creates the instance from the configured properties.
-         */
-        fun build(): AppAuthConfiguration {
-            return AppAuthConfiguration(
-                mBrowserMatcher,
-                mConnectionBuilder,
-                mSkipIssuerHttpsCheck
-            )
-        }
+    fun build(): AppAuthConfiguration {
+        return AppAuthConfiguration(
+            browserMatcher,
+            connectionBuilder,
+            skipIssuerHttpsCheck
+        )
     }
+}
 
-    companion object {
-        /**
-         * The default configuration that is used if no configuration is explicitly specified
-         * when constructing an [AuthorizationService].
-         */
-        val DEFAULT: AppAuthConfiguration = Builder().build()
-    }
+/**
+ * Creates an [AppAuthConfiguration] instance using a DSL-style builder.
+ *
+ * This function provides a convenient, type-safe way to construct an `AppAuthConfiguration` object.
+ *
+ * Example usage:
+ * ```
+ * val config = appAuthConfiguration {
+ *     browserMatcher = VersionedBrowserMatcher.CHROME_CUSTOM_TAB
+ *     connectionBuilder = CustomConnectionBuilder()
+ * }
+ * ```
+ * @param block A lambda with the [AppAuthConfigurationBuilder] as its receiver, used to configure the properties.
+ * @return A configured, immutable [AppAuthConfiguration] instance.
+ */
+fun appAuthConfiguration(block: AppAuthConfigurationBuilder.() -> Unit): AppAuthConfiguration {
+    return AppAuthConfigurationBuilder().apply(block).build()
 }

@@ -30,7 +30,6 @@ import com.google.android.material.snackbar.Snackbar
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import net.openid.appauth.AppAuthConfiguration
 import net.openid.appauth.AuthState
 import net.openid.appauth.AuthState.FreshTokenResult
 import net.openid.appauth.AuthorizationException
@@ -41,6 +40,7 @@ import net.openid.appauth.ClientAuthentication.UnsupportedAuthenticationMethod
 import net.openid.appauth.EndSessionRequest
 import net.openid.appauth.TokenRequest
 import net.openid.appauth.TokenResponse
+import net.openid.appauth.appAuthConfiguration
 import okio.buffer
 import okio.source
 import org.joda.time.format.DateTimeFormat
@@ -61,9 +61,9 @@ class TokenActivity : AppCompatActivity() {
     private val authService by lazy {
         AuthorizationService(
             context = this,
-            clientConfiguration = AppAuthConfiguration.Builder()
-                .setConnectionBuilder(configuration.connectionBuilder)
-                .build()
+            clientConfiguration = appAuthConfiguration {
+                connectionBuilder = configuration.connectionBuilder
+            }
         )
     }
     private val stateManager by lazy { AuthStateManager.getInstance(this) }

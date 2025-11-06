@@ -86,8 +86,12 @@ object BrowserSelector {
                     val browser = info.activityInfo.packageName
                     var defaultIndex = if (browser == defaultBrowser) 0 else browsers.size
 
-                    @Suppress("DEPRECATION")
-                    val packageInfo = pm.getPackageInfo(browser, PackageManager.GET_SIGNATURES)
+                    val packageInfo = if (Build.VERSION.SDK_INT >= VERSION_CODES.P) {
+                        pm.getPackageInfo(browser, PackageManager.GET_SIGNING_CERTIFICATES)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        pm.getPackageInfo(browser, PackageManager.GET_SIGNATURES)
+                    }
 
                     if (hasWarmupService(pm, browser)) {
                         browsers.add(defaultIndex, BrowserDescriptor(packageInfo, true))

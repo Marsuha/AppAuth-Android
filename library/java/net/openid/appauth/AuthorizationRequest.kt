@@ -17,7 +17,6 @@ import android.net.Uri
 import androidx.annotation.VisibleForTesting
 import net.openid.appauth.AsciiStringListUtil.stringToSet
 import net.openid.appauth.CodeVerifierUtil.checkCodeVerifier
-import net.openid.appauth.CodeVerifierUtil.codeVerifierChallengeMethod
 import net.openid.appauth.CodeVerifierUtil.deriveCodeVerifierChallenge
 import org.json.JSONException
 import org.json.JSONObject
@@ -28,7 +27,7 @@ import org.json.JSONObject
  * @see "The OAuth 2.0 Authorization Framework
  * @see "The OAuth 2.0 Authorization Framework
  */
-@Suppress("KDocUnresolvedReference", "SpellCheckingInspection")
+@Suppress("KDocUnresolvedReference")
 class AuthorizationRequest private constructor(
     /**
      * The service's [configuration][AuthorizationServiceConfiguration].
@@ -193,6 +192,45 @@ class AuthorizationRequest private constructor(
      */
     @JvmField val additionalParameters: Map<String, String>
 ) : AuthorizationManagementRequest {
+    /**
+     * The set of scopes from the consolidated, space-delimited `scope` field.
+     *
+     * If no scopes were specified for this request, this will be `null`.
+     *
+     * @see scope
+     */
+    val scopeValues: Set<String>?
+        get() = scope?.let { stringToSet(it) }
+
+    /**
+     * The set of prompt values, derived from the consolidated, space-delimited `prompt`
+     * string. If no prompt values were specified, this will be `null`.
+     *
+     * @see prompt
+     */
+    val promptValues: Set<String>?
+        get() = prompt?.let { stringToSet(it) }
+
+    /**
+     * The set of `ui_locales` values from the consolidated, space-separated
+     * `uiLocales` parameter. If no ui_locales values were specified, this will be `null`.
+     *
+     * @see uiLocales
+     */
+    val uiLocalesValues: Set<String>?
+        get() = uiLocales?.let { stringToSet(it) }
+
+    /**
+     * The set of `claims_locales` values from the consolidated, space-separated
+     * `claimsLocales` parameter.
+     *
+     * If no `claims_locales` values were specified for this request, this will be `null`.
+     *
+     * @see claimsLocales
+     */
+    val claimsLocalesValues: Set<String>?
+        get() = claimsLocales?.let { stringToSet(it) }
+
     /**
      * All spec-defined values for the OpenID Connect 1.0 `display` parameter.
      *
@@ -403,65 +441,44 @@ class AuthorizationRequest private constructor(
      */
     @Suppress("unused")
     class Builder(
-        configuration: AuthorizationServiceConfiguration,
-        clientId: String,
-        responseType: String,
-        redirectUri: Uri
+        private var configuration: AuthorizationServiceConfiguration,
+        private var clientId: String,
+        private var responseType: String,
+        private var redirectUri: Uri
     ) {
-        // SuppressWarnings justification: static analysis incorrectly determines that this field
-        // is not initialized, as it is indirectly initialized by setConfiguration
-        private var mConfiguration: AuthorizationServiceConfiguration = configuration
-
-        // SuppressWarnings justification: static analysis incorrectly determines that this field
-        // is not initialized, as it is indirectly initialized by setClientId
-        private var mClientId: String = clientId
-
-        private var mDisplay: String? = null
-
-        private var mLoginHint: String? = null
-
-        private var mPrompt: String? = null
-
-        private var mUiLocales: String? = null
-
-        // SuppressWarnings justification: static analysis incorrectly determines that this field
-        // is not initialized, as it is indirectly initialized by setResponseType
-        private var mResponseType: String = responseType
-
-        // SuppressWarnings justification: static analysis incorrectly determines that this field
-        // is not initialized, as it is indirectly initialized by setRedirectUri
-        private var mRedirectUri: Uri = redirectUri
-
-        private var mScope: String? = null
-
-        private var mState: String? = null
-
-        private var mNonce: String? = null
-
-        private var mCodeVerifier: String? = null
-
-        private var mCodeVerifierChallenge: String? = null
-
-        private var mCodeVerifierChallengeMethod: String? = null
-
-        private var mResponseMode: String? = null
-
-        private var mClaims: JSONObject? = null
-
-        private var mClaimsLocales: String? = null
-
-        private var mAdditionalParameters: Map<String, String> = emptyMap()
-
-        /**
-         * Creates an authorization request builder with the specified mandatory properties,
-         * and preset values for [AuthorizationRequest.state],
-         * [AuthorizationRequest.nonce] and [AuthorizationRequest.codeVerifier].
-         */
         init {
-            setState(AuthorizationManagementUtil.randomState)
-            setNonce(AuthorizationManagementUtil.randomState)
-            setCodeVerifier(CodeVerifierUtil.generateRandomCodeVerifier())
+            require(clientId.isNotBlank()) { "client id cannot be empty" }
+            require(responseType.isNotBlank()) { "response type cannot be empty" }
         }
+
+        private var display: String? = null
+
+        private var loginHint: String? = null
+
+        private var prompt: String? = null
+
+        private var uiLocales: String? = null
+
+        private var scope: String? = null
+
+        private var state: String? = AuthorizationManagementUtil.randomState
+
+        private var nonce: String? = AuthorizationManagementUtil.randomState
+
+        private var codeVerifier: String? = CodeVerifierUtil.generateRandomCodeVerifier()
+
+        private var codeVerifierChallenge: String? = deriveCodeVerifierChallenge(codeVerifier!!)
+
+        private var codeVerifierChallengeMethod: String? =
+            CodeVerifierUtil.codeVerifierChallengeMethod
+
+        private var responseMode: String? = null
+
+        private var claims: JSONObject? = null
+
+        private var claimsLocales: String? = null
+
+        private var additionalParameters: Map<String, String> = emptyMap()
 
         /**
          * Specifies the service configuration to be used in dispatching this request.
@@ -469,7 +486,7 @@ class AuthorizationRequest private constructor(
         fun setAuthorizationServiceConfiguration(
             configuration: AuthorizationServiceConfiguration
         ): Builder {
-            mConfiguration = configuration
+            this@Builder.configuration = configuration
             return this
         }
 
@@ -480,7 +497,8 @@ class AuthorizationRequest private constructor(
          * @see "The OAuth 2.0 Authorization Framework
          */
         fun setClientId(clientId: String): Builder {
-            mClientId = clientId
+            require(clientId.isNotEmpty()) { "client id cannot be empty" }
+            this@Builder.clientId = clientId
             return this
         }
 
@@ -494,7 +512,7 @@ class AuthorizationRequest private constructor(
          */
         fun setDisplay(display: String?): Builder {
             display?.let { require(it.isNotEmpty()) { "display must be null or not empty" } }
-            mDisplay = display
+            this@Builder.display = display
             return this
         }
 
@@ -506,7 +524,7 @@ class AuthorizationRequest private constructor(
          */
         fun setLoginHint(loginHint: String?): Builder {
             loginHint?.let { require(it.isNotEmpty()) { "login hint must be null or not empty" } }
-            mLoginHint = loginHint
+            this@Builder.loginHint = loginHint
             return this
         }
 
@@ -522,7 +540,7 @@ class AuthorizationRequest private constructor(
          */
         fun setPrompt(prompt: String?): Builder {
             prompt?.let { require(it.isNotEmpty()) { "prompt must be null or not empty" } }
-            mPrompt = prompt
+            this@Builder.prompt = prompt
             return this
         }
 
@@ -550,8 +568,9 @@ class AuthorizationRequest private constructor(
          * @see <a href="https://openid.net/specs/openid-connect-core-1_0.html#rfc.section.3.1.2.1">
          *     OpenID Connect Core 1.0, Section 3.1.2.1</a>
          */
-        fun setPromptValues(promptValues: Iterable<String>): Builder {
-            mPrompt = AsciiStringListUtil.iterableToString(promptValues)
+        fun setPromptValues(values: Iterable<String>): Builder {
+            require(values.all { it.isNotBlank() }) { "prompt values must not be empty" }
+            prompt = AsciiStringListUtil.iterableToString(values)
             return this
         }
 
@@ -566,7 +585,7 @@ class AuthorizationRequest private constructor(
          */
         fun setUiLocales(uiLocales: String?): Builder {
             uiLocales?.let { require(it.isNotEmpty()) { "uiLocales must be null or not empty" } }
-            mUiLocales = uiLocales
+            this@Builder.uiLocales = uiLocales
             return this
         }
 
@@ -592,8 +611,9 @@ class AuthorizationRequest private constructor(
          * @see <a href="https://openid.net/specs/openid-connect-core-1_0.html#rfc.section.3.1.2.1">
          *     OpenID Connect Core 1.0, Section 3.1.2.1</a>
          */
-        fun setUiLocalesValues(uiLocalesValues: Iterable<String>): Builder {
-            mUiLocales = AsciiStringListUtil.iterableToString(uiLocalesValues)
+        fun setUiLocalesValues(values: Iterable<String>): Builder {
+            require(values.all { it.isNotBlank() }) { "uiLocales values must not be empty" }
+            uiLocales = AsciiStringListUtil.iterableToString(values)
             return this
         }
 
@@ -606,7 +626,7 @@ class AuthorizationRequest private constructor(
          */
         fun setResponseType(responseType: String): Builder {
             require(responseType.isNotEmpty()) { "response type cannot be empty" }
-            mResponseType = responseType
+            this@Builder.responseType = responseType
             return this
         }
 
@@ -616,7 +636,7 @@ class AuthorizationRequest private constructor(
          * @see "The OAuth 2.0 Authorization Framework
          */
         fun setRedirectUri(redirectUri: Uri): Builder {
-            mRedirectUri = redirectUri
+            this@Builder.redirectUri = redirectUri
             return this
         }
 
@@ -628,7 +648,7 @@ class AuthorizationRequest private constructor(
          */
         fun setScope(scope: String?): Builder {
             if (scope.isNullOrEmpty()) {
-                mScope = null
+                this@Builder.scope = null
             } else {
                 setScopes(*scope.split(" +").dropLastWhile { it.isEmpty() }.toTypedArray())
             }
@@ -655,7 +675,7 @@ class AuthorizationRequest private constructor(
          * @see "The OAuth 2.0 Authorization Framework
          */
         fun setScopes(scopes: Iterable<String>): Builder {
-            mScope = AsciiStringListUtil.iterableToString(scopes)
+            scope = AsciiStringListUtil.iterableToString(scopes)
             return this
         }
 
@@ -672,7 +692,7 @@ class AuthorizationRequest private constructor(
          */
         fun setState(state: String?): Builder {
             state?.let { require(it.isNotEmpty()) { "state cannot be empty if defined" } }
-            mState = state
+            this@Builder.state = state
             return this
         }
 
@@ -688,7 +708,7 @@ class AuthorizationRequest private constructor(
          */
         fun setNonce(nonce: String?): Builder {
             nonce?.let { require(it.isNotEmpty()) { "nonce cannot be empty if defined" } }
-            mNonce = nonce
+            this@Builder.nonce = nonce
             return this
         }
 
@@ -703,9 +723,10 @@ class AuthorizationRequest private constructor(
          */
         fun setCodeVerifier(codeVerifier: String?): Builder {
             codeVerifier?.let { checkCodeVerifier(it) }
-            mCodeVerifier = codeVerifier
-            mCodeVerifierChallenge = codeVerifier?.let { deriveCodeVerifierChallenge(it) }
-            mCodeVerifierChallengeMethod = codeVerifier?.let { codeVerifierChallengeMethod }
+            this@Builder.codeVerifier = codeVerifier
+            codeVerifierChallenge = codeVerifier?.let { deriveCodeVerifierChallenge(it) }
+            codeVerifierChallengeMethod =
+                codeVerifier?.let { CodeVerifierUtil.codeVerifierChallengeMethod }
             return this
         }
 
@@ -736,10 +757,11 @@ class AuthorizationRequest private constructor(
                 }
             }
 
-            mCodeVerifier = codeVerifier
-            mCodeVerifierChallenge = codeVerifierChallenge.takeIf { codeVerifier != null }
+            this@Builder.codeVerifier = codeVerifier
+            this@Builder.codeVerifierChallenge =
+                codeVerifierChallenge.takeIf { codeVerifier != null }
 
-            mCodeVerifierChallengeMethod =
+            this@Builder.codeVerifierChallengeMethod =
                 codeVerifierChallengeMethod.takeIf { codeVerifier != null }
 
             return this
@@ -757,7 +779,7 @@ class AuthorizationRequest private constructor(
          */
         fun setResponseMode(responseMode: String?): Builder {
             responseMode?.let { require(it.isNotEmpty()) { "responseMode must be null or not empty" } }
-            mResponseMode = responseMode
+            this@Builder.responseMode = responseMode
             return this
         }
 
@@ -769,7 +791,7 @@ class AuthorizationRequest private constructor(
          *     OpenID Connect Core 1.0, Section 5.5</a>
          */
         fun setClaims(claims: JSONObject?): Builder {
-            mClaims = claims
+            this@Builder.claims = claims
             return this
         }
 
@@ -782,7 +804,7 @@ class AuthorizationRequest private constructor(
          */
         fun setClaimsLocales(claimsLocales: String?): Builder {
             claimsLocales?.let { require(it.isNotEmpty()) { "claimsLocales must be null or not empty" } }
-            mClaimsLocales = claimsLocales
+            this@Builder.claimsLocales = claimsLocales
             return this
         }
 
@@ -804,8 +826,9 @@ class AuthorizationRequest private constructor(
          * @see <a href="https://openid.net/specs/openid-connect-core-1_0.html#rfc.section.5.2">
          *     OpenID Connect Core 1.0, Section 5.2</a>
          */
-        fun setClaimsLocalesValues(claimsLocalesValues: Iterable<String>): Builder {
-            mClaimsLocales = AsciiStringListUtil.iterableToString(claimsLocalesValues)
+        fun setClaimsLocalesValues(values: Iterable<String>): Builder {
+            require(values.all { it.isNotBlank() }) { "claimsLocales values must not be empty" }
+            claimsLocales = AsciiStringListUtil.iterableToString(values)
             return this
         }
 
@@ -816,7 +839,8 @@ class AuthorizationRequest private constructor(
          * @see "The OAuth 2.0 Authorization Framework
          */
         fun setAdditionalParameters(additionalParameters: Map<String, String>?): Builder {
-            mAdditionalParameters = additionalParameters.checkAdditionalParams(BUILT_IN_PARAMS)
+            this@Builder.additionalParameters =
+                additionalParameters.checkAdditionalParams(BUILT_IN_PARAMS)
             return this
         }
 
@@ -832,60 +856,26 @@ class AuthorizationRequest private constructor(
          */
         fun build(): AuthorizationRequest {
             return AuthorizationRequest(
-                mConfiguration,
-                mClientId,
-                mResponseType,
-                mRedirectUri,
-                mDisplay,
-                mLoginHint,
-                mPrompt,
-                mUiLocales,
-                mScope,
-                mState,
-                mNonce,
-                mCodeVerifier,
-                mCodeVerifierChallenge,
-                mCodeVerifierChallengeMethod,
-                mResponseMode,
-                mClaims,
-                mClaimsLocales,
-                mAdditionalParameters
+                configuration,
+                clientId,
+                responseType,
+                redirectUri,
+                display,
+                loginHint,
+                prompt,
+                uiLocales,
+                scope,
+                state,
+                nonce,
+                codeVerifier,
+                codeVerifierChallenge,
+                codeVerifierChallengeMethod,
+                responseMode,
+                claims,
+                claimsLocales,
+                additionalParameters
             )
         }
-    }
-
-    /**
-     * Derives the set of scopes from the consolidated, space-delimited scopes in the
-     * [.scope] field. If no scopes were specified for this request, the method will
-     * return `null`.
-     */
-    val scopeSet: Set<String>?
-        get() = scope?.let { stringToSet(it) }
-
-    /**
-     * Derives the set of prompt values from the consolidated, space-delimited prompt values in
-     * the [.prompt] field. If no prompt values were specified for this request, the method
-     * will return `null`.
-     */
-    val promptValues: Set<String>?
-        get() = prompt?.let { stringToSet(it) }
-
-    /**
-     * Derives the set of ui_locales values from the consolidated, space-separated list of
-     * BCP47 [RFC5646] language tag values in the [.uiLocales] field. If no ui_locales values
-     * were specified for this request, the method will return `null`.
-     */
-    fun getUiLocales(): Set<String>? {
-        return uiLocales?.let { stringToSet(it) }
-    }
-
-    /**
-     * Derives the set of claims_locales values from the consolidated, space-separated list of
-     * BCP47 [RFC5646] language tag values in the [.claimsLocales] field. If no claims_locales
-     * values were specified for this request, the method will return `null`.
-     */
-    fun getClaimsLocales(): Set<String>? {
-        return claimsLocales?.let { stringToSet(it) }
     }
 
     /**
@@ -912,10 +902,7 @@ class AuthorizationRequest private constructor(
 
         claims?.let { appendQueryParameter(PARAM_CLAIMS, it.toString()) }
         claimsLocales?.let { appendQueryParameter(PARAM_CLAIMS_LOCALES, it) }
-
-        additionalParameters.forEach { (key, value) ->
-            appendQueryParameter(key, value)
-        }
+        additionalParameters.forEach { appendQueryParameter(it.key, it.value) }
 
         build()
     }
@@ -951,9 +938,7 @@ class AuthorizationRequest private constructor(
      * local transmission (e.g. between activities). This method is just a convenience wrapper
      * for [.jsonSerialize], converting the JSON object to its string form.
      */
-    override fun jsonSerializeString(): String {
-        return jsonSerialize().toString()
-    }
+    override fun jsonSerializeString() = jsonSerialize().toString()
 
     companion object {
         /**

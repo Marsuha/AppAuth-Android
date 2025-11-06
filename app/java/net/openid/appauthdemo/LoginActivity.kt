@@ -42,7 +42,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import net.openid.appauth.AppAuthConfiguration
 import net.openid.appauth.AuthState
 import net.openid.appauth.AuthorizationException
 import net.openid.appauth.AuthorizationRequest
@@ -51,6 +50,7 @@ import net.openid.appauth.AuthorizationServiceConfiguration
 import net.openid.appauth.ClientSecretBasic
 import net.openid.appauth.RegistrationRequest
 import net.openid.appauth.ResponseTypeValues
+import net.openid.appauth.appAuthConfiguration
 import net.openid.appauth.browser.AnyBrowserMatcher
 import net.openid.appauth.browser.BrowserMatcher
 import net.openid.appauth.browser.BrowserSelector.getAllBrowsers
@@ -83,7 +83,7 @@ class LoginActivity : AppCompatActivity() {
 
     private var isPendingIntentMode = false
 
-    private var browserMatcher: BrowserMatcher = AnyBrowserMatcher
+    private var selectedBrowserMatcher: BrowserMatcher = AnyBrowserMatcher
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -264,10 +264,10 @@ class LoginActivity : AppCompatActivity() {
             ) {
                 val info = adapter.getItem(position)
                 if (info == null) {
-                    browserMatcher = AnyBrowserMatcher
+                    selectedBrowserMatcher = AnyBrowserMatcher
                     return
                 } else {
-                    browserMatcher = ExactBrowserMatcher(info.descriptor)
+                    selectedBrowserMatcher = ExactBrowserMatcher(info.descriptor)
                 }
 
                 recreateAuthorizationService()
@@ -276,7 +276,7 @@ class LoginActivity : AppCompatActivity() {
             }
 
             override fun onNothingSelected(parent: AdapterView<*>?) {
-                browserMatcher = AnyBrowserMatcher
+                selectedBrowserMatcher = AnyBrowserMatcher
             }
         }
 
@@ -364,11 +364,12 @@ class LoginActivity : AppCompatActivity() {
 
     private fun createAuthorizationService(): AuthorizationService {
         Log.i(TAG, "Creating authorization service")
-        val builder = AppAuthConfiguration.Builder()
-        builder.setBrowserMatcher(browserMatcher)
-        builder.setConnectionBuilder(configuration.connectionBuilder)
+        val config = appAuthConfiguration {
+            browserMatcher = selectedBrowserMatcher
+            connectionBuilder = configuration.connectionBuilder
+        }
 
-        return AuthorizationService(this, builder.build())
+        return AuthorizationService(this, config)
     }
 
     @MainThread

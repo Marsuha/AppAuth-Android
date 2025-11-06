@@ -23,7 +23,7 @@ import androidx.annotation.VisibleForTesting
  */
 @Suppress("unused")
 class Logger @VisibleForTesting internal constructor(private val log: LogWrapper) {
-    private val mLogLevel: Int
+    private val logLevel: Int
 
     init {
         // determine the active logging level
@@ -33,11 +33,11 @@ class Logger @VisibleForTesting internal constructor(private val log: LogWrapper
             level--
         }
 
-        mLogLevel = level + 1
+        logLevel = level + 1
     }
 
     fun log(level: Int, tr: Throwable?, message: String, vararg messageParams: Any?) {
-        if (mLogLevel > level) return
+        if (logLevel > level) return
 
         var formattedMessage = if (messageParams.isEmpty()) {
             message
@@ -45,7 +45,7 @@ class Logger @VisibleForTesting internal constructor(private val log: LogWrapper
             String.format(message, *messageParams)
         }
 
-        formattedMessage += "\n${log.getStackTraceString(tr)}"
+        tr?.let { formattedMessage += "\n${log.getStackTraceString(it)}" }
         log.println(level, LOG_TAG, formattedMessage)
     }
 
@@ -83,7 +83,7 @@ class Logger @VisibleForTesting internal constructor(private val log: LogWrapper
         @VisibleForTesting
         const val LOG_TAG: String = "AppAuth"
 
-        private var sInstance: Logger? = null
+        private var _instance: Logger? = null
 
         @JvmStatic
         @get:Synchronized
@@ -91,11 +91,11 @@ class Logger @VisibleForTesting internal constructor(private val log: LogWrapper
         @set:VisibleForTesting
         var instance: Logger
             get() {
-                if (sInstance == null) sInstance = Logger(AndroidLogWrapper)
-                return sInstance!!
+                if (_instance == null) _instance = Logger(AndroidLogWrapper)
+                return _instance!!
             }
             set(logger) {
-                sInstance = logger
+                _instance = logger
             }
 
         @JvmStatic

@@ -1,8 +1,3 @@
-import org.gradle.api.tasks.SourceSet
-import org.gradle.api.tasks.SourceSetContainer
-import org.gradle.api.tasks.compile.JavaCompile
-import org.gradle.api.plugins.quality.Checkstyle
-
 plugins {
     id("checkstyle")
 }

@@ -25,7 +25,7 @@ import org.robolectric.annotation.Config
 
 @Suppress("DEPRECATION")
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [16])
+@Config(sdk = [28])
 class UriUtilTest {
     private lateinit var sanitizer: UrlQuerySanitizer
 

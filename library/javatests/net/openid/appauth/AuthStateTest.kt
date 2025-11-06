@@ -45,7 +45,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [16])
+@Config(sdk = [28])
 class AuthStateTest {
     private lateinit var clock: TestClock
 
@@ -66,7 +66,7 @@ class AuthStateTest {
         assertThat(state.lastTokenResponse).isNull()
         assertThat(state.lastRegistrationResponse).isNull()
         assertThat(state.scope).isNull()
-        assertThat(state.scopeSet).isNull()
+        assertThat(state.scopeValues).isNull()
         assertThat(state.getNeedsTokenRefresh(clock)).isTrue()
     }
 
@@ -88,7 +88,7 @@ class AuthStateTest {
         assertThat<TokenResponse?>(state.lastTokenResponse).isNull()
 
         assertThat(state.scope).isEqualTo(authCodeRequest.scope)
-        assertThat(state.scopeSet).isEqualTo(authCodeRequest.scopeSet)
+        assertThat(state.scopeValues).isEqualTo(authCodeRequest.scopeValues)
 
         assertThat(state.getNeedsTokenRefresh(clock)).isTrue()
     }
@@ -113,7 +113,7 @@ class AuthStateTest {
         assertThat<TokenResponse?>(state.lastTokenResponse).isNull()
 
         assertThat(state.scope).isNull()
-        assertThat(state.scopeSet).isNull()
+        assertThat(state.scopeValues).isNull()
         assertThat(state.getNeedsTokenRefresh(clock)).isTrue()
     }
 
@@ -127,7 +127,7 @@ class AuthStateTest {
         val state = AuthState(resp, null)
 
         assertThat(state.scope).isEqualTo(resp.scope)
-        assertThat(state.scopeSet).isEqualTo(resp.scopeSet)
+        assertThat(state.scopeValues).isEqualTo(resp.scopeSet)
     }
 
     @Test
@@ -147,7 +147,7 @@ class AuthStateTest {
         assertThat<TokenResponse?>(state.lastTokenResponse).isSameAs(tokenResp)
 
         assertThat(state.scope).isEqualTo(authResp.request.scope)
-        assertThat(state.scopeSet).isEqualTo(authResp.request.scopeSet)
+        assertThat(state.scopeValues).isEqualTo(authResp.request.scopeValues)
 
         // no access token or ID token have yet been retrieved
         assertThat(state.isAuthorized).isFalse()
@@ -174,7 +174,7 @@ class AuthStateTest {
             .isSameAs(regResp)
 
         assertThat(state.scope).isNull()
-        assertThat(state.scopeSet).isNull()
+        assertThat(state.scopeValues).isNull()
         assertThat(state.getNeedsTokenRefresh(clock)).isTrue()
     }
 

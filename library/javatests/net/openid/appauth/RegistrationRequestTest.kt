@@ -28,7 +28,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [16])
+@Config(sdk = [28])
 class RegistrationRequestTest {
     private lateinit var minimalRequestBuilder: RegistrationRequest.Builder
     private lateinit var maximalRequestBuilder: RegistrationRequest.Builder

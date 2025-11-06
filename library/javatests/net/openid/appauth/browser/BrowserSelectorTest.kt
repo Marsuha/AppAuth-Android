@@ -21,44 +21,40 @@ import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
 import android.content.pm.ResolveInfo
 import android.content.pm.Signature
-import android.text.TextUtils
+import android.content.pm.SigningInfo
 import net.openid.appauth.browser.BrowserSelector.BROWSER_INTENT
-import org.assertj.core.api.Assertions
-import org.junit.After
+import org.assertj.core.api.Assertions.assertThat
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.mockito.ArgumentMatcher
-import org.mockito.ArgumentMatchers
 import org.mockito.Mock
-import org.mockito.Mockito
-import org.mockito.MockitoAnnotations
+import org.mockito.junit.MockitoJUnit
+import org.mockito.junit.MockitoRule
+import org.mockito.kotlin.argThat
+import org.mockito.kotlin.eq
+import org.mockito.kotlin.mock
+import org.mockito.kotlin.whenever
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
-import java.lang.AutoCloseable
 import java.nio.charset.StandardCharsets
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [16])
+@Config(sdk = [28])
 class BrowserSelectorTest {
-    private var mMockitoCloseable: AutoCloseable? = null
+    @get:Rule
+    val mockitoRule: MockitoRule = MockitoJUnit.rule()
 
     @Mock
-    var mContext: Context? = null
+    lateinit var context: Context
 
     @Mock
-    var mPackageManager: PackageManager? = null
+    lateinit var packageManager: PackageManager
 
     @Before
     fun setUp() {
-        mMockitoCloseable = MockitoAnnotations.openMocks(this)
-        Mockito.`when`(mContext!!.packageManager).thenReturn(mPackageManager)
-    }
-
-    @After
-    @Throws(Exception::class)
-    fun tearDown() {
-        mMockitoCloseable!!.close()
+        whenever(context.packageManager).thenReturn(packageManager)
     }
 
     @Test
@@ -109,6 +105,7 @@ class BrowserSelectorTest {
                 .withBrowserDefaults()
                 .addAuthority("www.example.com")
                 .build()
+
         setBrowserList(authorityRestrictedBrowser, CHROME)
         setBrowsersWithWarmupSupport(authorityRestrictedBrowser, CHROME)
         checkSelectedBrowser(CHROME, USE_CUSTOM_TAB)
@@ -124,6 +121,7 @@ class BrowserSelectorTest {
                 .addScheme(SCHEME_HTTP)
                 .addScheme(SCHEME_HTTPS)
                 .build()
+
         setBrowserList(misconfiguredBrowser, CHROME)
         setBrowsersWithWarmupSupport(misconfiguredBrowser, CHROME)
         checkSelectedBrowser(CHROME, USE_CUSTOM_TAB)
@@ -138,6 +136,7 @@ class BrowserSelectorTest {
                 .addCategory(Intent.CATEGORY_BROWSABLE)
                 .addScheme(SCHEME_HTTP)
                 .build()
+
         setBrowserList(DOLPHIN, noHttpsBrowser)
         setBrowsersWithWarmupSupport(noHttpsBrowser)
         checkSelectedBrowser(DOLPHIN, USE_STANDALONE)
@@ -154,8 +153,8 @@ class BrowserSelectorTest {
             CHROME,
             USE_STANDALONE,
             VersionedBrowserMatcher(
-                CHROME.mPackageName,
-                CHROME.mSignatureHashes,
+                CHROME.packageName,
+                CHROME.signatureHashes,
                 USE_STANDALONE,
                 VersionRange.ANY_VERSION
             )
@@ -172,8 +171,8 @@ class BrowserSelectorTest {
             null,
             USE_STANDALONE,
             VersionedBrowserMatcher(
-                CHROME.mPackageName,
-                CHROME.mSignatureHashes,
+                CHROME.packageName,
+                CHROME.signatureHashes,
                 USE_STANDALONE,
                 VersionRange.ANY_VERSION
             )
@@ -189,16 +188,15 @@ class BrowserSelectorTest {
         setBrowserList(FIREFOX, CHROME)
         setBrowsersWithWarmupSupport(*NO_BROWSERS)
 
-        Mockito.`when`(
-            mContext!!.packageManager.resolveActivity(BROWSER_INTENT, 0)
-        ).thenReturn(CHROME.mResolveInfo)
+        whenever(context.packageManager.resolveActivity(BROWSER_INTENT, 0))
+            .thenReturn(CHROME.resolveInfo)
 
-        val allBrowsers = BrowserSelector.getAllBrowsers(mContext!!)
+        val allBrowsers = BrowserSelector.getAllBrowsers(context)
 
-        Assertions.assertThat(allBrowsers[0].packageName).isEqualTo(CHROME.mPackageName)
-        Assertions.assertThat(allBrowsers[0].useCustomTab).isFalse()
-        Assertions.assertThat(allBrowsers[1].packageName).isEqualTo(FIREFOX.mPackageName)
-        Assertions.assertThat(allBrowsers[1].useCustomTab).isFalse()
+        assertThat(allBrowsers[0].packageName).isEqualTo(CHROME.packageName)
+        assertThat(allBrowsers[0].useCustomTab).isFalse()
+        assertThat(allBrowsers[1].packageName).isEqualTo(FIREFOX.packageName)
+        assertThat(allBrowsers[1].useCustomTab).isFalse()
     }
 
     @Test
@@ -210,15 +208,15 @@ class BrowserSelectorTest {
         setBrowserList(CHROME, FIREFOX)
         setBrowsersWithWarmupSupport(CHROME)
 
-        Mockito.`when`(mContext!!.packageManager.resolveActivity(BROWSER_INTENT, 0))
-            .thenReturn(FIREFOX.mResolveInfo)
+        whenever(context.packageManager.resolveActivity(BROWSER_INTENT, 0))
+            .thenReturn(FIREFOX.resolveInfo)
 
-        val allBrowsers = BrowserSelector.getAllBrowsers(mContext!!)
+        val allBrowsers = BrowserSelector.getAllBrowsers(context)
 
-        Assertions.assertThat(allBrowsers[0].packageName).isEqualTo(FIREFOX.mPackageName)
-        Assertions.assertThat(allBrowsers[0].useCustomTab).isFalse()
-        Assertions.assertThat(allBrowsers[1].packageName).isEqualTo(CHROME.mPackageName)
-        Assertions.assertThat(allBrowsers[1].useCustomTab).isTrue()
+        assertThat(allBrowsers[0].packageName).isEqualTo(FIREFOX.packageName)
+        assertThat(allBrowsers[0].useCustomTab).isFalse()
+        assertThat(allBrowsers[1].packageName).isEqualTo(CHROME.packageName)
+        assertThat(allBrowsers[1].useCustomTab).isTrue()
     }
 
     @Test
@@ -231,17 +229,17 @@ class BrowserSelectorTest {
         setBrowserList(CHROME, FIREFOX_CUSTOM_TAB)
         setBrowsersWithWarmupSupport(CHROME, FIREFOX_CUSTOM_TAB)
 
-        Mockito.`when`(mContext!!.packageManager.resolveActivity(BROWSER_INTENT, 0))
-            .thenReturn(FIREFOX_CUSTOM_TAB.mResolveInfo)
+        whenever(context.packageManager.resolveActivity(BROWSER_INTENT, 0))
+            .thenReturn(FIREFOX_CUSTOM_TAB.resolveInfo)
 
-        val allBrowsers = BrowserSelector.getAllBrowsers(mContext!!)
+        val allBrowsers = BrowserSelector.getAllBrowsers(context)
 
-        Assertions.assertThat(allBrowsers[0].packageName).isEqualTo(FIREFOX_CUSTOM_TAB.mPackageName)
-        Assertions.assertThat(allBrowsers[0].useCustomTab).isTrue()
-        Assertions.assertThat(allBrowsers[1].packageName).isEqualTo(FIREFOX_CUSTOM_TAB.mPackageName)
-        Assertions.assertThat(allBrowsers[1].useCustomTab).isFalse()
-        Assertions.assertThat(allBrowsers[2].packageName).isEqualTo(CHROME.mPackageName)
-        Assertions.assertThat(allBrowsers[2].useCustomTab).isTrue()
+        assertThat(allBrowsers[0].packageName).isEqualTo(FIREFOX_CUSTOM_TAB.packageName)
+        assertThat(allBrowsers[0].useCustomTab).isTrue()
+        assertThat(allBrowsers[1].packageName).isEqualTo(FIREFOX_CUSTOM_TAB.packageName)
+        assertThat(allBrowsers[1].useCustomTab).isFalse()
+        assertThat(allBrowsers[2].packageName).isEqualTo(CHROME.packageName)
+        assertThat(allBrowsers[2].useCustomTab).isTrue()
     }
 
     @Test
@@ -252,8 +250,8 @@ class BrowserSelectorTest {
         setBrowserList(FIREFOX, CHROME)
         setBrowsersWithWarmupSupport(*NO_BROWSERS)
 
-        Mockito.`when`(mContext!!.packageManager.resolveActivity(BROWSER_INTENT, 0))
-            .thenReturn(CHROME.mResolveInfo)
+        whenever(context.packageManager.resolveActivity(BROWSER_INTENT, 0))
+            .thenReturn(CHROME.resolveInfo)
 
         checkSelectedBrowser(CHROME, USE_STANDALONE)
     }
@@ -266,8 +264,8 @@ class BrowserSelectorTest {
         setBrowserList(CHROME, FIREFOX)
         setBrowsersWithWarmupSupport(CHROME)
 
-        Mockito.`when`(mContext!!.packageManager.resolveActivity(BROWSER_INTENT, 0))
-            .thenReturn(FIREFOX.mResolveInfo)
+        whenever(context.packageManager.resolveActivity(BROWSER_INTENT, 0))
+            .thenReturn(FIREFOX.resolveInfo)
 
         checkSelectedBrowser(CHROME, USE_CUSTOM_TAB)
     }
@@ -279,8 +277,8 @@ class BrowserSelectorTest {
         // BrowserSelector.select will return Firefox.
         setBrowserList(CHROME, FIREFOX_CUSTOM_TAB)
         setBrowsersWithWarmupSupport(CHROME, FIREFOX_CUSTOM_TAB)
-        Mockito.`when`(mContext!!.packageManager.resolveActivity(BROWSER_INTENT, 0))
-            .thenReturn(FIREFOX_CUSTOM_TAB.mResolveInfo)
+        whenever(context.packageManager.resolveActivity(BROWSER_INTENT, 0))
+            .thenReturn(FIREFOX_CUSTOM_TAB.resolveInfo)
 
         checkSelectedBrowser(FIREFOX_CUSTOM_TAB, USE_CUSTOM_TAB)
     }
@@ -288,40 +286,34 @@ class BrowserSelectorTest {
     /**
      * Browsers are expected to be in priority order, such that the default would be first.
      */
-    @Suppress("DEPRECATION")
     @Throws(PackageManager.NameNotFoundException::class)
     private fun setBrowserList(vararg browsers: TestBrowser) {
-        val resolveInfos = mutableListOf<ResolveInfo>()
-
-        for (browser in browsers) {
-            Mockito.`when`(
-                mPackageManager!!.getPackageInfo(
-                    ArgumentMatchers.eq(browser.mPackageInfo.packageName),
-                    ArgumentMatchers.eq(PackageManager.GET_SIGNATURES)
+        val resolveInfos = browsers.map {
+            whenever(
+                packageManager.getPackageInfo(
+                    eq(it.packageInfo.packageName),
+                    eq(PackageManager.GET_SIGNING_CERTIFICATES)
                 )
-            )
-                .thenReturn(browser.mPackageInfo)
-            resolveInfos.add(browser.mResolveInfo)
+            ).thenReturn(it.packageInfo)
+            it.resolveInfo
         }
 
-        Mockito.`when`(
-            mPackageManager!!.queryIntentActivities(
+        whenever(
+            packageManager.queryIntentActivities(
                 BROWSER_INTENT,
-                PackageManager.GET_RESOLVED_FILTER
+                PackageManager.GET_RESOLVED_FILTER or PackageManager.MATCH_ALL
             )
-        )
-            .thenReturn(resolveInfos)
+        ).thenReturn(resolveInfos)
     }
 
     private fun setBrowsersWithWarmupSupport(vararg browsers: TestBrowser) {
-        for (browser in browsers) {
-            Mockito.`when`(
-                mPackageManager!!.resolveService(
-                    serviceIntentEq(browser.mResolveInfo.activityInfo.packageName)!!,
-                    ArgumentMatchers.eq(0)
+        browsers.forEach {
+            whenever(
+                packageManager.resolveService(
+                    serviceIntentEq(it.resolveInfo.activityInfo.packageName),
+                    eq(0)
                 )
-            )
-                .thenReturn(browser.mResolveInfo)
+            ).thenReturn(it.resolveInfo)
         }
     }
 
@@ -330,30 +322,29 @@ class BrowserSelectorTest {
         expectCustomTabUse: Boolean,
         browserMatcher: BrowserMatcher = AnyBrowserMatcher
     ) {
-        val result = BrowserSelector.select(mContext!!, browserMatcher)
-        if (expected == null) {
-            Assertions.assertThat(result).isNull()
-        } else {
-            Assertions.assertThat(result).isNotNull()
-            Assertions.assertThat(result!!.packageName).isEqualTo(expected.mPackageName)
-            Assertions.assertThat(result.useCustomTab).isEqualTo(expectCustomTabUse)
-        }
+        val result = BrowserSelector.select(context, browserMatcher)
+
+        expected?.let {
+            assertThat(result).isNotNull()
+            assertThat(result!!.packageName).isEqualTo(it.packageName)
+            assertThat(result.useCustomTab).isEqualTo(expectCustomTabUse)
+        } ?: assertThat(result).isNull()
     }
 
     private class TestBrowser(
-        val mPackageName: String,
-        val mPackageInfo: PackageInfo,
-        val mResolveInfo: ResolveInfo,
-        val mSignatureHashes: Set<String>
+        val packageName: String,
+        val packageInfo: PackageInfo,
+        val resolveInfo: ResolveInfo,
+        val signatureHashes: Set<String>
     )
 
-    private class TestBrowserBuilder(private val mPackageName: String) {
-        private val mSignatures = mutableListOf<ByteArray>()
-        private val mActions = mutableListOf<String>()
-        private val mCategories = mutableListOf<String>()
-        private val mSchemes = mutableListOf<String>()
-        private val mAuthorities = mutableListOf<String>()
-        private var mVersion: String? = null
+    private class TestBrowserBuilder(private val packageName: String) {
+        private val signatures = mutableListOf<ByteArray>()
+        private val actions = mutableListOf<String>()
+        private val categories = mutableListOf<String>()
+        private val schemes = mutableListOf<String>()
+        private val authorities = mutableListOf<String>()
+        private var version: String? = null
 
         fun withBrowserDefaults(): TestBrowserBuilder {
             return addAction(Intent.ACTION_VIEW)
@@ -363,81 +354,71 @@ class BrowserSelectorTest {
         }
 
         fun addAction(action: String): TestBrowserBuilder {
-            mActions.add(action)
+            actions.add(action)
             return this
         }
 
         fun addCategory(category: String): TestBrowserBuilder {
-            mCategories.add(category)
+            categories.add(category)
             return this
         }
 
         fun addScheme(scheme: String): TestBrowserBuilder {
-            mSchemes.add(scheme)
+            schemes.add(scheme)
             return this
         }
 
         fun addAuthority(authority: String): TestBrowserBuilder {
-            mAuthorities.add(authority)
+            authorities.add(authority)
             return this
         }
 
         fun addSignature(signature: String): TestBrowserBuilder {
-            mSignatures.add(signature.toByteArray(StandardCharsets.UTF_8))
+            signatures.add(signature.toByteArray(StandardCharsets.UTF_8))
             return this
         }
 
         fun setVersion(version: String): TestBrowserBuilder {
-            mVersion = version
+            this.version = version
             return this
         }
 
         @Suppress("DEPRECATION")
         fun build(): TestBrowser {
             val pi = PackageInfo()
-            pi.packageName = mPackageName
-            pi.versionName = mVersion
-            pi.signatures = arrayOfNulls<Signature>(mSignatures.size)
+            pi.packageName = packageName
+            pi.versionName = version
+            val signatureArray = signatures.map { Signature(it) }.toTypedArray()
+            pi.signatures = signatureArray
 
-            for (i in mSignatures.indices) {
-                pi.signatures!![i] = Signature(mSignatures[i])
-            }
+            val mockedSigningInfo: SigningInfo = mock()
+            whenever(mockedSigningInfo.signingCertificateHistory).thenReturn(signatureArray)
+            whenever(mockedSigningInfo.hasMultipleSigners()).thenReturn(false)
+            whenever(mockedSigningInfo.apkContentsSigners).thenReturn(signatureArray)
+            pi.signingInfo = mockedSigningInfo
 
             val signatureHashes = BrowserDescriptor.generateSignatureHashes(pi.signatures!!)
 
             val ri = ResolveInfo()
-            ri.activityInfo = ActivityInfo()
-            ri.activityInfo.packageName = mPackageName
-            ri.filter = IntentFilter()
-
-            for (action in mActions) {
-                ri.filter.addAction(action)
+            ri.activityInfo = ActivityInfo().also { it.packageName = packageName }
+            ri.filter = IntentFilter().apply {
+                actions.forEach { this.addAction(it) }
+                categories.forEach { this.addCategory(it) }
+                schemes.forEach { this.addDataScheme(it) }
+                authorities.forEach { this.addDataAuthority(it, null) }
             }
 
-            for (category in mCategories) {
-                ri.filter.addCategory(category)
-            }
-
-            for (scheme in mSchemes) {
-                ri.filter.addDataScheme(scheme)
-            }
-
-            for (authority in mAuthorities) {
-                ri.filter.addDataAuthority(authority, null)
-            }
-
-            return TestBrowser(mPackageName, pi, ri, signatureHashes)
+            return TestBrowser(packageName, pi, ri, signatureHashes)
         }
     }
 
     /**
      * Custom matcher for verifying the intent fired during token request.
      */
-    private class ServiceIntentMatcher(private val mPackage: String) : ArgumentMatcher<Intent?> {
+    private class ServiceIntentMatcher(private val `package`: String) : ArgumentMatcher<Intent> {
         override fun matches(intent: Intent?): Boolean {
-            return (intent != null)
-                    && (BrowserSelector.ACTION_CUSTOM_TABS_CONNECTION == intent.action)
-                    && (TextUtils.equals(mPackage, intent.getPackage()))
+            return intent != null && (BrowserSelector.ACTION_CUSTOM_TABS_CONNECTION == intent.action)
+                    && (`package` == intent.`package`)
         }
     }
 
@@ -474,8 +455,8 @@ class BrowserSelectorTest {
 
         private val NO_BROWSERS = emptyArray<TestBrowser>()
 
-        private fun serviceIntentEq(pkg: String): Intent? {
-            return ArgumentMatchers.argThat(ServiceIntentMatcher(pkg))
+        private fun serviceIntentEq(pkg: String): Intent {
+            return argThat(ServiceIntentMatcher(pkg))
         }
     }
 }

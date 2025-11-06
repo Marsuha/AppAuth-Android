@@ -10,7 +10,6 @@ import androidx.browser.customtabs.CustomTabsClient
 import androidx.browser.customtabs.CustomTabsService
 import androidx.browser.customtabs.CustomTabsServiceConnection
 import androidx.browser.customtabs.CustomTabsSession
-import androidx.core.os.bundleOf
 import com.google.common.truth.Truth
 import kotlinx.coroutines.test.runTest
 import org.assertj.core.api.Assertions.assertThat
@@ -34,7 +33,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [16])
+@Config(sdk = [28])
 class CustomTabManagerTest {
     @get:Rule
     val mockitoRule: MockitoRule = MockitoJUnit.rule()
@@ -113,12 +112,8 @@ class CustomTabManagerTest {
         // Assert on the captured argument
         val capturedBundles = otherUrisCaptor.firstValue
         Truth.assertThat(capturedBundles).hasSize(2)
-
-        // Using Truth's 'containsExactly' makes the assertion more expressive
-        Truth.assertThat(capturedBundles).containsExactly(
-            bundleOf(CustomTabsService.KEY_URL to otherPossibleUri1),
-            bundleOf(CustomTabsService.KEY_URL to otherPossibleUri2)
-        ).inOrder()
+        assertThat(capturedBundles[0].get(CustomTabsService.KEY_URL)).isEqualTo(otherPossibleUri1)
+        assertThat(capturedBundles[1].get(CustomTabsService.KEY_URL)).isEqualTo(otherPossibleUri2)
     }
 
     @Test

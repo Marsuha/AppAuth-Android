@@ -105,7 +105,7 @@ import java.net.HttpURLConnection.HTTP_OK
  */
 class AuthorizationService @JvmOverloads constructor(
     val context: Context,
-    private val clientConfiguration: AppAuthConfiguration = AppAuthConfiguration.DEFAULT,
+    private val clientConfiguration: AppAuthConfiguration = AppAuthConfiguration(),
     /**
      * Returns the BrowserDescriptor of the chosen browser.
      * Can for example be used to set the browsers package name to a CustomTabsIntent.
@@ -116,7 +116,7 @@ class AuthorizationService @JvmOverloads constructor(
     ),
     val customTabManager: CustomTabManager = CustomTabManager(context)
 ) {
-    private var mDisposed = false
+    private var disposed = false
 
     /**
      * Constructor that injects a url builder into the service for testing.
@@ -574,13 +574,13 @@ class AuthorizationService @JvmOverloads constructor(
      * activity is paused or destroyed.
      */
     fun dispose() {
-        if (mDisposed) return
+        if (disposed) return
         customTabManager.dispose()
-        mDisposed = true
+        disposed = true
     }
 
     private fun checkNotDisposed() {
-        check(!mDisposed) { "Service has been disposed and rendered inoperable" }
+        check(!disposed) { "Service has been disposed and rendered inoperable" }
     }
 
     /**

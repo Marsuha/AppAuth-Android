@@ -13,42 +13,36 @@
  */
 package net.openid.appauth
 
-import android.app.Application
 import android.content.Intent
 import android.net.Uri
-import androidx.test.core.app.ActivityScenario
-import androidx.test.core.app.ApplicationProvider
-import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.google.common.truth.Truth.assertWithMessage
+import androidx.test.ext.truth.content.IntentSubject.assertThat
+import org.assertj.core.api.Assertions.assertThat
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.robolectric.Shadows
+import org.robolectric.Robolectric.buildActivity
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 
-@RunWith(AndroidJUnit4::class)
-@Config(sdk = [16])
+
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [28])
 class RedirectUriReceiverActivityTest {
+
     @Test
     fun testForwardsRedirectToManagementActivity() {
         val redirectUri = Uri.parse("https://www.example.com/oauth2redirect")
-        val redirectIntent = Intent(
-            ApplicationProvider.getApplicationContext<Application>(),
-            RedirectUriReceiverActivity::class.java
-        ).apply { data = redirectUri }
+        val redirectIntent = Intent().apply { data = redirectUri }
 
-        val scenario = ActivityScenario.launch<RedirectUriReceiverActivity>(redirectIntent)
+        val redirectController = buildActivity(
+            RedirectUriReceiverActivity::class.java,
+            redirectIntent
+        ).create()
 
-        scenario.onActivity { activity ->
-            assertWithMessage("Activity should be finishing after forwarding the intent")
-                .that(activity.isFinishing).isTrue()
-        }
+        val redirectActivity = redirectController.get() as RedirectUriReceiverActivity
 
-        val shadowApplication = Shadows.shadowOf(ApplicationProvider.getApplicationContext<Application>())
-        val nextIntent = shadowApplication.nextStartedActivity
-
-        assertWithMessage("An activity should have been started").that(nextIntent).isNotNull()
-        assertWithMessage("The forwarded intent should have the correct data URI")
-            .that(nextIntent.data)
-            .isEqualTo(redirectUri)
+        val nextIntent: Intent? = shadowOf(redirectActivity).nextStartedActivity
+        assertThat(nextIntent).hasData(redirectUri)
+        assertThat(redirectActivity.isFinishing).isTrue()
     }
 }

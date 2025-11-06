@@ -39,10 +39,10 @@ package net.openid.appauth.browser
  * ```
 </DOLPHIN_SIGNATURE> */
 class BrowserDenyList(vararg matchers: BrowserMatcher) : BrowserMatcher {
-    private val mBrowserMatchers: List<BrowserMatcher> = listOf(*matchers)
+    private val browserMatchers: List<BrowserMatcher> = listOf(*matchers)
 
     override fun matches(descriptor: BrowserDescriptor): Boolean {
-        mBrowserMatchers.forEach { if (it.matches(descriptor)) return false }
+        browserMatchers.forEach { if (it.matches(descriptor)) return false }
         return true
     }
 }

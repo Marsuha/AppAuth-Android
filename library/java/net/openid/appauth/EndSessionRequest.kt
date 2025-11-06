@@ -84,18 +84,17 @@ class EndSessionRequest private constructor(
     /**
      * Creates instances of [EndSessionRequest].
      */
-    class Builder(configuration: AuthorizationServiceConfiguration) {
-        private var mConfiguration: AuthorizationServiceConfiguration = configuration
+    class Builder(private var configuration: AuthorizationServiceConfiguration) {
 
-        private var mState: String? = AuthorizationManagementUtil.randomState
+        private var state: String? = AuthorizationManagementUtil.randomState
 
-        private var mIdTokenHint: String? = null
+        private var idTokenHint: String? = null
 
-        private var mPostLogoutRedirectUri: Uri? = null
+        private var postLogoutRedirectUri: Uri? = null
 
-        private var mUiLocales: String? = null
+        private var uiLocales: String? = null
 
-        private var mAdditionalParameters: Map<String, String> = emptyMap()
+        private var additionalParameters: Map<String, String> = emptyMap()
 
         /**
          *  @see [EndSessionRequest.configuration]
@@ -103,7 +102,7 @@ class EndSessionRequest private constructor(
         fun setAuthorizationServiceConfiguration(
             configuration: AuthorizationServiceConfiguration
         ): Builder {
-            mConfiguration = configuration
+            this@Builder.configuration = configuration
             return this
         }
 
@@ -111,14 +110,14 @@ class EndSessionRequest private constructor(
          */
         fun setIdTokenHint(idTokenHint: String?): Builder {
             idTokenHint?.let { require(it.isNotEmpty()) { "idTokenHint must not be empty" } }
-            mIdTokenHint = idTokenHint
+            this@Builder.idTokenHint = idTokenHint
             return this
         }
 
         /** @see EndSessionRequest.postLogoutRedirectUri
          */
         fun setPostLogoutRedirectUri(postLogoutRedirectUri: Uri?): Builder {
-            mPostLogoutRedirectUri = postLogoutRedirectUri
+            this@Builder.postLogoutRedirectUri = postLogoutRedirectUri
             return this
         }
 
@@ -126,7 +125,7 @@ class EndSessionRequest private constructor(
          */
         fun setState(state: String?): Builder {
             state?.let { require(it.isNotEmpty()) { "state must not be empty" } }
-            mState = state
+            this@Builder.state = state
             return this
         }
 
@@ -134,7 +133,7 @@ class EndSessionRequest private constructor(
          */
         fun setUiLocales(uiLocales: String?): Builder {
             uiLocales?.let { require(it.isNotEmpty()) { "uiLocales must not be empty" } }
-            mUiLocales = uiLocales
+            this@Builder.uiLocales = uiLocales
             return this
         }
 
@@ -146,15 +145,19 @@ class EndSessionRequest private constructor(
 
         /** @see EndSessionRequest.uiLocales
          */
-        fun setUiLocalesValues(uiLocalesValues: Iterable<String>?): Builder {
-            mUiLocales = uiLocalesValues?.let { AsciiStringListUtil.iterableToString(it) }
+        fun setUiLocalesValues(values: Iterable<String>?): Builder {
+            uiLocales = values?.let { uiLocales ->
+                require(uiLocales.all { it.isNotBlank() }) { "uiLocales values must not be empty" }
+                AsciiStringListUtil.iterableToString(uiLocales)
+            }
+
             return this
         }
 
         /** @see EndSessionRequest.additionalParameters
          */
         fun setAdditionalParameters(additionalParameters: Map<String, String>?): Builder {
-            mAdditionalParameters = additionalParameters.checkAdditionalParams(BUILT_IN_PARAMS)
+            this@Builder.additionalParameters = additionalParameters.checkAdditionalParams(BUILT_IN_PARAMS)
             return this
         }
 
@@ -164,12 +167,12 @@ class EndSessionRequest private constructor(
          */
         fun build(): EndSessionRequest {
             return EndSessionRequest(
-                configuration = mConfiguration,
-                idTokenHint = mIdTokenHint,
-                postLogoutRedirectUri = mPostLogoutRedirectUri,
-                state = mState,
-                uiLocales = mUiLocales,
-                additionalParameters = mAdditionalParameters
+                configuration = configuration,
+                idTokenHint = idTokenHint,
+                postLogoutRedirectUri = postLogoutRedirectUri,
+                state = state,
+                uiLocales = uiLocales,
+                additionalParameters = additionalParameters
             )
         }
     }

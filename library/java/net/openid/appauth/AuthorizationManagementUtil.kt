@@ -29,6 +29,7 @@ import java.security.SecureRandom
  * An internal utility class for storing and retrieving authorization and end session requests
  * and responses.
  */
+@Suppress("unused")
 internal object AuthorizationManagementUtil {
     private const val STATE_LENGTH = 16
 

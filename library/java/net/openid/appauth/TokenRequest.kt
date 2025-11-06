@@ -216,6 +216,7 @@ class TokenRequest private constructor(
          * @see "The OAuth 2.0 Authorization Framework
          */
         fun setScopes(scopes: Iterable<String>): Builder {
+            require(scopes.all { it.isNotBlank() }) { "scopes values must not be empty" }
             mScope = AsciiStringListUtil.iterableToString(scopes)
             return this
         }

@@ -121,7 +121,7 @@ class IdToken internal constructor(
 
         tokenRequest.configuration.discoveryDoc?.let { discoveryDoc ->
             val expectedIssuer = discoveryDoc.issuer
-            if (this.issuer != expectedIssuer) {
+            if (issuer != expectedIssuer) {
                 throw fromTemplate(
                     AuthorizationException.GeneralErrors.ID_TOKEN_VALIDATION_ERROR,
                     IdTokenException("Issuer mismatch")
@@ -132,7 +132,7 @@ class IdToken internal constructor(
             // The iss value is a case sensitive URL using the https scheme that contains scheme,
             // host, and optionally, port number and path components and no query or fragment
             // components.
-            val issuerUri = this.issuer.toUri()
+            val issuerUri = issuer.toUri()
 
             if (!skipIssuerHttpsCheck && issuerUri.scheme != "https") {
                 throw fromTemplate(
@@ -210,7 +210,7 @@ class IdToken internal constructor(
             // OpenID Connect Core Section 3.1.3.7. rule #11
             // Validates the nonce.
             val expectedNonce = tokenRequest.nonce
-            if (nonce.toString() == expectedNonce.toString()) {
+            if (nonce.toString() != expectedNonce.toString()) {
                 throw fromTemplate(
                     AuthorizationException.GeneralErrors.ID_TOKEN_VALIDATION_ERROR,
                     IdTokenException("Nonce mismatch")
@@ -257,7 +257,7 @@ class IdToken internal constructor(
         @JvmStatic
         @Throws(JSONException::class, IdTokenException::class)
         fun from(token: String): IdToken {
-            val sections = token.split("\\.").dropLastWhile { it.isEmpty() }
+            val sections = token.split(".").dropLastWhile { it.isEmpty() }
 
             if (sections.size <= 1) {
                 throw IdTokenException("ID token must have both header and claims section")

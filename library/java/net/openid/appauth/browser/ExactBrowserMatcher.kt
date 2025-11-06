@@ -20,9 +20,9 @@ class ExactBrowserMatcher(
     /**
      * Creates a browser matcher that will only match the specified browser.
      */
-    private val mBrowser: BrowserDescriptor
+    private val browser: BrowserDescriptor
 ) : BrowserMatcher {
     override fun matches(descriptor: BrowserDescriptor): Boolean {
-        return mBrowser == descriptor
+        return browser == descriptor
     }
 }

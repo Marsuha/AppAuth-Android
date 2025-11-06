@@ -42,7 +42,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.shadows.ShadowActivity
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [16])
+@Config(sdk = [28])
 class AuthorizationManagementActivityTest {
     private lateinit var context: Context
     private lateinit var authRequest: AuthorizationRequest

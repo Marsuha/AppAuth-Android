@@ -24,7 +24,7 @@ import org.robolectric.annotation.Config
 import java.security.SecureRandom
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [16])
+@Config(sdk = [28])
 class CodeVerifierUtilTest {
     @Test
     fun checkCodeVerifier_tooShort_throwsException() {

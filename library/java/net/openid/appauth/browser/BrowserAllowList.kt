@@ -35,10 +35,10 @@ package net.openid.appauth.browser
  * ```
  */
 class BrowserAllowList(vararg matchers: BrowserMatcher) : BrowserMatcher {
-    private val mBrowserMatchers: List<BrowserMatcher> = listOf(*matchers)
+    private val browserMatchers: List<BrowserMatcher> = listOf(*matchers)
 
     override fun matches(descriptor: BrowserDescriptor): Boolean {
-        mBrowserMatchers.forEach { if (it.matches(descriptor)) return true }
+        browserMatchers.forEach { if (it.matches(descriptor)) return true }
         return false
     }
 }

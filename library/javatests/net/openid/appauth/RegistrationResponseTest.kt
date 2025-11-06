@@ -14,6 +14,7 @@
 package net.openid.appauth
 
 import android.net.Uri
+import com.google.testing.junit.testparameterinjector.TestParameter
 import net.openid.appauth.TestValues.TEST_APP_REDIRECT_URI
 import net.openid.appauth.TestValues.TEST_CLIENT_ID
 import net.openid.appauth.TestValues.TEST_CLIENT_SECRET
@@ -27,13 +28,13 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.experimental.runners.Enclosed
 import org.junit.runner.RunWith
-import org.robolectric.ParameterizedRobolectricTestRunner
+import org.robolectric.RobolectricTestParameterInjector
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import java.util.concurrent.TimeUnit
 
 @RunWith(Enclosed::class)
-@Config(sdk = [16])
+@Config(sdk = [28])
 object RegistrationResponseTest {
     private const val TEST_CLIENT_ID_ISSUED_AT = 34L
     private const val TEST_REGISTRATION_ACCESS_TOKEN = "test_access_token"
@@ -53,7 +54,7 @@ object RegistrationResponseTest {
             + "}")
 
     @RunWith(RobolectricTestRunner::class)
-    @Config(sdk = [16])
+    @Config(sdk = [28])
     class RegistrationResponseSingleTest {
         private lateinit var minimalBuilder: RegistrationResponse.Builder
         private lateinit var testJson: JSONObject
@@ -183,9 +184,16 @@ object RegistrationResponseTest {
         }
     }
 
-    @RunWith(ParameterizedRobolectricTestRunner::class)
-    @Config(sdk = [16])
-    class RegistrationResponseParameterTest(private val missingParameter: String?) {
+    @RunWith(RobolectricTestParameterInjector::class)
+    @Config(sdk = [28])
+    class RegistrationResponseParameterTest(
+        @param:TestParameter(
+            RegistrationResponse.PARAM_CLIENT_SECRET_EXPIRES_AT,
+            RegistrationResponse.PARAM_REGISTRATION_ACCESS_TOKEN,
+            RegistrationResponse.PARAM_REGISTRATION_CLIENT_URI
+        )
+        var missingParameter: String
+    ) {
         private lateinit var responseJson: JSONObject
         private lateinit var minimalRegistrationRequest: RegistrationRequest
 
@@ -211,18 +219,6 @@ object RegistrationResponseTest {
             } catch (e: RegistrationResponse.MissingArgumentException) {
                 assertThat(missingParameter).isEqualTo(e.missingField)
             }
-        }
-
-        companion object {
-            @Suppress("unused")
-            @ParameterizedRobolectricTestRunner.Parameters(name = "Missing parameter = {0}")
-            fun data() = listOf(
-                listOf(
-                    listOf(RegistrationResponse.PARAM_CLIENT_SECRET_EXPIRES_AT),
-                    listOf(RegistrationResponse.PARAM_REGISTRATION_ACCESS_TOKEN),
-                    listOf(RegistrationResponse.PARAM_REGISTRATION_CLIENT_URI)
-                )
-            )
         }
     }
 }

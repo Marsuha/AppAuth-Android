@@ -1,0 +1,75 @@
+[versions]
+kotlin = "2.2.20"
+agp = "8.13.0"
+grgit = "5.3.3"
+annotation = "1.9.1"
+appCompat = "1.7.1"
+browser = "1.9.0"
+glide = "5.0.5"
+material = "1.13.0"
+okio = "3.16.2"
+jodaTime = "2.14.0"
+coreKtx = "1.17.0"
+coroutines = "1.10.2"
+#Tests
+junit = "4.13.2"
+hamcrest = "3.0"
+mockitoCore = "5.20.0"
+mockitoKotlin = "6.1.0"
+robolectric = "4.16"
+assertjCore = "3.27.6"
+junitExt = "1.3.0"
+truthExt = "1.7.0"
+truth = "1.4.5"
+testParameterInjector = "1.18"
+xmlpull = "1.1.3.1"
+
+[libraries]
+browser = { group = "androidx.browser", name = "browser", version.ref = "browser" }
+annotation = { group = "androidx.annotation", name = "annotation", version.ref = "annotation" }
+appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appCompat" }
+material = { group = "com.google.android.material", name = "material", version.ref = "material" }
+okio = { group = "com.squareup.okio", name = "okio", version.ref = "okio" }
+joda-time = { group = "joda-time", name = "joda-time", version.ref = "jodaTime" }
+glide = { group = "com.github.bumptech.glide", name = "glide", version.ref = "glide" }
+compiler-glide = { group = "com.github.bumptech.glide", name = "compiler", version.ref = "glide" }
+androidGradlePlugin = { group = "com.android.tools.build", name = "gradle", version.ref = "agp" }
+kotlinGradlePlugin = { group = "org.jetbrains.kotlin", name = "kotlin-gradle-plugin", version.ref = "kotlin" }
+core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
+coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "coroutines" }
+coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
+
+#Tests
+#noinspection UnusedVersionCatalogEntry
+junit = { group = "junit", name = "junit", version.ref = "junit" }
+#noinspection UnusedVersionCatalogEntry
+hamcrest = { group = "org.hamcrest", name = "hamcrest", version.ref = "hamcrest" }
+#noinspection UnusedVersionCatalogEntry
+mockito = { group = "org.mockito", name = "mockito-core", version.ref = "mockitoCore" }
+#noinspection UnusedVersionCatalogEntry
+mockitoKotlin = { group = "org.mockito.kotlin", name = "mockito-kotlin", version.ref = "mockitoKotlin" }
+#noinspection UnusedVersionCatalogEntry
+robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
+#noinspection UnusedVersionCatalogEntry
+assertj = { group = "org.assertj", name = "assertj-core", version.ref = "assertjCore" }
+#noinspection UnusedVersionCatalogEntry
+junitExt = { group = "androidx.test.ext", name = "junit", version.ref = "junitExt" }
+#noinspection UnusedVersionCatalogEntry
+truthExt = { group = "androidx.test.ext", name = "truth", version.ref = "truthExt" }
+#noinspection UnusedVersionCatalogEntry
+truth = { group = "com.google.truth", name = "truth", version.ref = "truth" }
+#noinspection UnusedVersionCatalogEntry
+testParameterInjector = { group = "com.google.testparameterinjector", name = "test-parameter-injector", version.ref = "testParameterInjector" }
+#noinspection UnusedVersionCatalogEntry
+xmlpull = { group = "xmlpull", name = "xmlpull", version.ref = "xmlpull" }
+#noinspection UnusedVersionCatalogEntry
+coroutinesTest = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutines" }
+
+[plugins]
+agp-application = { id = "com.android.application" }
+agp-library = { id = "com.android.library" }
+grgit = { id = "org.ajoberstar.grgit", version.ref = "grgit" }
+kotlin-android = { id = "org.jetbrains.kotlin.android" }
+
+[bundles]
+coroutines = ["coroutines-core", "coroutines-android"]

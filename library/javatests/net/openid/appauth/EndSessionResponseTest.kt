@@ -14,7 +14,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [16])
+@Config(sdk = [28])
 class EndSessionResponseTest {
     fun testBuilder_nullState() {
         val res = EndSessionResponse.Builder(TEST_REQUEST)

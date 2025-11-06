@@ -22,43 +22,36 @@ import net.openid.appauth.internal.Logger.Companion.instance
 import net.openid.appauth.internal.Logger.Companion.verbose
 import net.openid.appauth.internal.Logger.Companion.warn
 import net.openid.appauth.internal.Logger.LogWrapper
-import org.junit.After
-import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.mockito.ArgumentMatchers
 import org.mockito.Mock
 import org.mockito.Mockito
-import org.mockito.MockitoAnnotations
+import org.mockito.junit.MockitoJUnit
+import org.mockito.junit.MockitoRule
+import org.mockito.kotlin.any
+import org.mockito.kotlin.doReturn
+import org.mockito.kotlin.never
+import org.mockito.kotlin.verify
+import org.mockito.kotlin.whenever
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
-import java.lang.AutoCloseable
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [16])
+@Config(sdk = [28])
 class LoggerTest {
-    private var mockitoCloseable: AutoCloseable? = null
+    @get:Rule
+    val mockitoRule: MockitoRule = MockitoJUnit.rule()
 
     @Mock
-    private val mockLockWrap: LogWrapper? = null
-
-    @Before
-    fun setUp() {
-        mockitoCloseable = MockitoAnnotations.openMocks(this)
-    }
-
-    @After
-    @Throws(Exception::class)
-    fun tearDown() {
-        mockitoCloseable!!.close()
-    }
+    private lateinit var mockLockWrap: LogWrapper
 
     @Test
     @Throws(Exception::class)
     fun testVerbose_whenVerboseLevel() {
         configureLog(Log.VERBOSE)
         verbose("Test")
-        Mockito.verify(mockLockWrap!!).println(Log.VERBOSE, Logger.LOG_TAG, "Test")
+        verify(mockLockWrap).println(Log.VERBOSE, Logger.LOG_TAG, "Test")
     }
 
     @Test
@@ -66,10 +59,10 @@ class LoggerTest {
     fun testVerbose_whenDebugLevel() {
         configureLog(Log.DEBUG)
         verbose("Test")
-        Mockito.verify(mockLockWrap!!, Mockito.never()).println(
-            ArgumentMatchers.anyInt(),
-            ArgumentMatchers.anyString(),
-            ArgumentMatchers.anyString()
+        verify(mockLockWrap, never()).println(
+            any<Int>(),
+            any<String>(),
+            any<String>()
         )
     }
 
@@ -78,7 +71,7 @@ class LoggerTest {
     fun testDebug_whenVerboseLevel() {
         configureLog(Log.VERBOSE)
         debug("Test")
-        Mockito.verify(mockLockWrap!!).println(Log.DEBUG, Logger.LOG_TAG, "Test")
+        verify(mockLockWrap).println(Log.DEBUG, Logger.LOG_TAG, "Test")
     }
 
     @Test
@@ -86,7 +79,7 @@ class LoggerTest {
     fun testDebug_withMessageParams() {
         configureLog(Log.VERBOSE)
         debug("Test %s %d", "extra", INT)
-        Mockito.verify(mockLockWrap!!)
+        verify(mockLockWrap)
             .println(Log.DEBUG, Logger.LOG_TAG, "Test extra 100")
     }
 
@@ -95,7 +88,7 @@ class LoggerTest {
     fun testDebugWithStack() {
         configureLog(Log.VERBOSE)
         debugWithStack(Exception(), "Bad things happened in %s", "MyClass")
-        Mockito.verify(mockLockWrap!!).println(
+        verify(mockLockWrap).println(
             Log.DEBUG, Logger.LOG_TAG,
             "Bad things happened in MyClass\nSTACK"
         )
@@ -106,7 +99,7 @@ class LoggerTest {
     fun testDebug_whenDebugLevel() {
         configureLog(Log.DEBUG)
         debug("Test")
-        Mockito.verify(mockLockWrap!!).println(Log.DEBUG, Logger.LOG_TAG, "Test")
+        verify(mockLockWrap).println(Log.DEBUG, Logger.LOG_TAG, "Test")
     }
 
     @Test
@@ -114,10 +107,10 @@ class LoggerTest {
     fun testDebug_whenInfoLevel() {
         configureLog(Log.INFO)
         debug("Test")
-        Mockito.verify(mockLockWrap!!, Mockito.never()).println(
-            ArgumentMatchers.anyInt(),
-            ArgumentMatchers.anyString(),
-            ArgumentMatchers.anyString()
+        verify(mockLockWrap, Mockito.never()).println(
+            any<Int>(),
+            any<String>(),
+            any<String>()
         )
     }
 
@@ -126,7 +119,7 @@ class LoggerTest {
     fun testInfo_whenDebugLevel() {
         configureLog(Log.DEBUG)
         info("Test")
-        Mockito.verify(mockLockWrap!!).println(Log.INFO, Logger.LOG_TAG, "Test")
+        verify(mockLockWrap).println(Log.INFO, Logger.LOG_TAG, "Test")
     }
 
     @Test
@@ -134,7 +127,7 @@ class LoggerTest {
     fun testInfo_whenInfoLevel() {
         configureLog(Log.INFO)
         info("Test")
-        Mockito.verify(mockLockWrap!!).println(Log.INFO, Logger.LOG_TAG, "Test")
+        verify(mockLockWrap).println(Log.INFO, Logger.LOG_TAG, "Test")
     }
 
     @Test
@@ -142,10 +135,10 @@ class LoggerTest {
     fun testInfo_whenWarnLevel() {
         configureLog(Log.WARN)
         info("Test")
-        Mockito.verify(mockLockWrap!!, Mockito.never()).println(
-            ArgumentMatchers.anyInt(),
-            ArgumentMatchers.anyString(),
-            ArgumentMatchers.anyString()
+        verify(mockLockWrap, Mockito.never()).println(
+            any<Int>(),
+            any<String>(),
+            any<String>()
         )
     }
 
@@ -154,7 +147,7 @@ class LoggerTest {
     fun testWarn_whenInfoLevel() {
         configureLog(Log.INFO)
         warn("Test")
-        Mockito.verify(mockLockWrap!!).println(Log.WARN, Logger.LOG_TAG, "Test")
+        verify(mockLockWrap).println(Log.WARN, Logger.LOG_TAG, "Test")
     }
 
     @Test
@@ -162,7 +155,7 @@ class LoggerTest {
     fun testWarn_whenWarnLevel() {
         configureLog(Log.WARN)
         warn("Test")
-        Mockito.verify(mockLockWrap!!).println(Log.WARN, Logger.LOG_TAG, "Test")
+        verify(mockLockWrap).println(Log.WARN, Logger.LOG_TAG, "Test")
     }
 
     @Test
@@ -170,10 +163,10 @@ class LoggerTest {
     fun testWarn_whenErrorLevel() {
         configureLog(Log.ERROR)
         warn("Test")
-        Mockito.verify(mockLockWrap!!, Mockito.never()).println(
-            ArgumentMatchers.anyInt(),
-            ArgumentMatchers.anyString(),
-            ArgumentMatchers.anyString()
+        verify(mockLockWrap, Mockito.never()).println(
+            any<Int>(),
+            any<String>(),
+            any<String>()
         )
     }
 
@@ -182,7 +175,7 @@ class LoggerTest {
     fun testError_whenWarnLevel() {
         configureLog(Log.WARN)
         error("Test")
-        Mockito.verify(mockLockWrap!!).println(Log.ERROR, Logger.LOG_TAG, "Test")
+        verify(mockLockWrap).println(Log.ERROR, Logger.LOG_TAG, "Test")
     }
 
     @Test
@@ -190,7 +183,7 @@ class LoggerTest {
     fun testError_whenErrorLevel() {
         configureLog(Log.ERROR)
         error("Test")
-        Mockito.verify(mockLockWrap!!).println(Log.ERROR, Logger.LOG_TAG, "Test")
+        verify(mockLockWrap).println(Log.ERROR, Logger.LOG_TAG, "Test")
     }
 
     @Test
@@ -198,25 +191,20 @@ class LoggerTest {
     fun testError_whenAssertLevel() {
         configureLog(Log.ASSERT)
         error("Test")
-        Mockito.verify(mockLockWrap!!, Mockito.never()).println(
-            ArgumentMatchers.anyInt(),
-            ArgumentMatchers.anyString(),
-            ArgumentMatchers.anyString()
+        verify(mockLockWrap, never()).println(
+            any<Int>(),
+            any<String>(),
+            any<String>()
         )
     }
 
     private fun configureLog(minLevel: Int) {
-        for (level in Log.VERBOSE..Log.ASSERT) {
-            Mockito.`when`(mockLockWrap!!.isLoggable(Logger.LOG_TAG, level))
-                .thenReturn(level >= minLevel)
+        (Log.VERBOSE..Log.ASSERT).forEach {
+            whenever(mockLockWrap.isLoggable(Logger.LOG_TAG, it))
+                .thenReturn(it >= minLevel)
         }
 
-        Mockito.`when`(
-            mockLockWrap!!.getStackTraceString(
-                ArgumentMatchers.any(Throwable::class.java)
-            )
-        ).thenReturn("STACK")
-
+        whenever(mockLockWrap.getStackTraceString(any<Throwable>())) doReturn "STACK"
         instance = Logger(mockLockWrap)
     }
 

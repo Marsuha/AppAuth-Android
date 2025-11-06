@@ -36,7 +36,7 @@ import org.robolectric.annotation.Config
 import java.util.concurrent.TimeUnit
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [16])
+@Config(sdk = [28])
 class AuthorizationResponseTest {
     private lateinit var authorizationResponseBuilder: AuthorizationResponse.Builder
     private lateinit var authorizationResponse: AuthorizationResponse

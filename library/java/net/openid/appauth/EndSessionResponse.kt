@@ -42,28 +42,25 @@ class EndSessionResponse private constructor(
     /**
      * Creates instances of [EndSessionResponse].
      */
-    class Builder(request: EndSessionRequest) {
-        private var mRequest: EndSessionRequest = request
+    class Builder(private var request: EndSessionRequest) {
 
-        private var mState: String? = null
+        private var state: String? = null
 
         @VisibleForTesting
         fun fromUri(uri: Uri): Builder {
-            val state = uri.getQueryParameter(KEY_STATE)
-            checkNotNull(state) { "state must be provided" }
-            setState(state)
+            setState(uri.getQueryParameter(KEY_STATE))
             return this
         }
 
         @Suppress("unused")
         fun setRequest(request: EndSessionRequest): Builder {
-            mRequest = request
+            this@Builder.request = request
             return this
         }
 
         fun setState(state: String?): Builder {
             state?.let { require(it.isNotEmpty()) { "state must not be empty" } }
-            mState = state
+            this@Builder.state = state
             return this
         }
 
@@ -72,8 +69,8 @@ class EndSessionResponse private constructor(
          */
         fun build(): EndSessionResponse {
             return EndSessionResponse(
-                mRequest,
-                mState
+                request,
+                state
             )
         }
     }

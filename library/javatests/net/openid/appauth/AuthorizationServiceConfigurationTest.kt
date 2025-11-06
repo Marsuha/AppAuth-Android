@@ -15,23 +15,26 @@ package net.openid.appauth
 
 import android.net.Uri
 import androidx.core.net.toUri
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
 import net.openid.appauth.AuthorizationServiceConfiguration.Companion.buildConfigurationUriFromIssuer
 import net.openid.appauth.AuthorizationServiceConfiguration.Companion.fromJson
 import net.openid.appauth.connectivity.ConnectionBuilder
-import org.assertj.core.api.Assertions
+import org.assertj.core.api.Assertions.assertThat
 import org.json.JSONArray
 import org.json.JSONObject
-import org.junit.Assert
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.mockito.Mock
-import org.mockito.Mockito
 import org.mockito.junit.MockitoJUnit
 import org.mockito.junit.MockitoRule
 import org.mockito.kotlin.any
+import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
@@ -42,7 +45,7 @@ import java.io.InputStream
 import java.net.HttpURLConnection
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [16])
+@Config(sdk = [28])
 @LooperMode(LooperMode.Mode.PAUSED)
 class AuthorizationServiceConfigurationTest {
     @get:Rule
@@ -78,9 +81,7 @@ class AuthorizationServiceConfigurationTest {
     @Test
     @Throws(Exception::class)
     fun testSerialization() {
-        val config = fromJson(
-            configuration.toJson()
-        )
+        val config = fromJson(configuration.toJson())
         assertMembers(config)
     }
 
@@ -95,13 +96,13 @@ class AuthorizationServiceConfigurationTest {
 
         val deserialized = fromJson(config.toJson())
 
-        Assertions.assertThat(deserialized.authorizationEndpoint)
+        assertThat(deserialized.authorizationEndpoint)
             .isEqualTo(config.authorizationEndpoint)
 
-        Assertions.assertThat(deserialized.tokenEndpoint).isEqualTo(config.tokenEndpoint)
-        Assertions.assertThat(deserialized.registrationEndpoint).isNull()
+        assertThat(deserialized.tokenEndpoint).isEqualTo(config.tokenEndpoint)
+        assertThat(deserialized.registrationEndpoint).isNull()
 
-        Assertions.assertThat(deserialized.endSessionEndpoint)
+        assertThat(deserialized.endSessionEndpoint)
             .isEqualTo(config.endSessionEndpoint)
     }
 
@@ -115,12 +116,12 @@ class AuthorizationServiceConfigurationTest {
 
         val deserialized = fromJson(config.toJson())
 
-        Assertions.assertThat(deserialized.authorizationEndpoint)
+        assertThat(deserialized.authorizationEndpoint)
             .isEqualTo(config.authorizationEndpoint)
 
-        Assertions.assertThat(deserialized.tokenEndpoint).isEqualTo(config.tokenEndpoint)
-        Assertions.assertThat(deserialized.endSessionEndpoint).isNull()
-        Assertions.assertThat(deserialized.registrationEndpoint).isNull()
+        assertThat(deserialized.tokenEndpoint).isEqualTo(config.tokenEndpoint)
+        assertThat(deserialized.endSessionEndpoint).isNull()
+        assertThat(deserialized.registrationEndpoint).isNull()
     }
 
     @Test
@@ -142,34 +143,32 @@ class AuthorizationServiceConfigurationTest {
     }
 
     private fun assertMembers(config: AuthorizationServiceConfiguration) {
-        Assert.assertEquals(TEST_AUTH_ENDPOINT, config.authorizationEndpoint.toString())
-        Assert.assertEquals(TEST_TOKEN_ENDPOINT, config.tokenEndpoint.toString())
-        Assert.assertEquals(TEST_REGISTRATION_ENDPOINT, config.registrationEndpoint.toString())
-        Assert.assertEquals(TEST_END_SESSION_ENDPOINT, config.endSessionEndpoint.toString())
+        assertEquals(TEST_AUTH_ENDPOINT, config.authorizationEndpoint.toString())
+        assertEquals(TEST_TOKEN_ENDPOINT, config.tokenEndpoint.toString())
+        assertEquals(TEST_REGISTRATION_ENDPOINT, config.registrationEndpoint.toString())
+        assertEquals(TEST_END_SESSION_ENDPOINT, config.endSessionEndpoint.toString())
     }
 
     @Test
     fun testBuildConfigurationUriFromIssuer() {
         val issuerUri = Uri.parse("https://test.openid.com")
-        Assertions.assertThat(buildConfigurationUriFromIssuer(issuerUri))
+        assertThat(buildConfigurationUriFromIssuer(issuerUri))
             .isEqualTo(TEST_DISCOVERY_URI)
     }
 
     @Test
     fun testBuildConfigurationUriFromIssuer_withRootPath() {
         val issuerUri = Uri.parse("https://test.openid.com/")
-        Assertions.assertThat(buildConfigurationUriFromIssuer(issuerUri))
+        assertThat(buildConfigurationUriFromIssuer(issuerUri))
             .isEqualTo(TEST_DISCOVERY_URI)
     }
 
     @Test
     fun testBuildConfigurationUriFromIssuer_withExtendedPath() {
         val issuerUri = Uri.parse("https://test.openid.com/tenant1")
-        Assertions.assertThat(buildConfigurationUriFromIssuer(issuerUri))
+        assertThat(buildConfigurationUriFromIssuer(issuerUri))
             .isEqualTo(
-                Uri.parse(
-                    "https://test.openid.com/tenant1/.well-known/openid-configuration"
-                )
+                Uri.parse("https://test.openid.com/tenant1/.well-known/openid-configuration")
             )
     }
 
@@ -177,37 +176,38 @@ class AuthorizationServiceConfigurationTest {
     @Throws(Exception::class)
     fun testFetchFromUrl_success() = runTest {
         val `is`: InputStream = ByteArrayInputStream(TEST_JSON.toByteArray())
-        Mockito.`when`(httpConnection.inputStream).thenReturn(`is`)
+        whenever(httpConnection.inputStream).thenReturn(`is`)
         val resultConfig = doFetch()
         val config = resultConfig.getOrNull()
-        Assert.assertNotNull(config)
-        Assert.assertEquals(TEST_AUTH_ENDPOINT, config!!.authorizationEndpoint.toString())
-        Assert.assertEquals(TEST_TOKEN_ENDPOINT, config.tokenEndpoint.toString())
-        Mockito.verify(httpConnection).connect()
+        assertNotNull(config)
+        assertEquals(TEST_AUTH_ENDPOINT, config!!.authorizationEndpoint.toString())
+        assertEquals(TEST_TOKEN_ENDPOINT, config.tokenEndpoint.toString())
+        verify(httpConnection).connect()
     }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     @Test
     @Throws(Exception::class)
     fun testFetchFromUrlWithoutName() = runTest {
         val `is`: InputStream = ByteArrayInputStream(TEST_JSON.toByteArray())
-        Mockito.`when`(httpConnection.inputStream).thenReturn(`is`)
+        whenever(httpConnection.inputStream).thenReturn(`is`)
         val resultConfig = doFetch()
         val config = resultConfig.getOrNull()
-        Assert.assertNotNull(config)
-        Assert.assertEquals(TEST_AUTH_ENDPOINT, config!!.authorizationEndpoint.toString())
-        Assert.assertEquals(TEST_TOKEN_ENDPOINT, config.tokenEndpoint.toString())
-        Mockito.verify(httpConnection).connect()
+        assertNotNull(config)
+        assertEquals(TEST_AUTH_ENDPOINT, config!!.authorizationEndpoint.toString())
+        assertEquals(TEST_TOKEN_ENDPOINT, config.tokenEndpoint.toString())
+        verify(httpConnection).connect()
     }
 
     @Test
     @Throws(Exception::class)
-    fun testFetchFromUrl_missingArgument() = runTest{
+    fun testFetchFromUrl_missingArgument() = runTest {
         val `is`: InputStream = ByteArrayInputStream(TEST_JSON_MISSING_ARGUMENT.toByteArray())
-        Mockito.`when`(httpConnection.inputStream).thenReturn(`is`)
+        whenever(httpConnection.inputStream).thenReturn(`is`)
         val resultConfig = doFetch()
-        Assert.assertNotNull(resultConfig.exceptionOrNull())
+        assertNotNull(resultConfig.exceptionOrNull())
 
-        Assert.assertEquals(
+        assertEquals(
             AuthorizationException.GeneralErrors.INVALID_DISCOVERY_DOCUMENT,
             resultConfig.exceptionOrNull()
         )
@@ -217,11 +217,11 @@ class AuthorizationServiceConfigurationTest {
     @Throws(Exception::class)
     fun testFetchFromUrl_malformedJson() = runTest {
         val `is`: InputStream = ByteArrayInputStream(TEST_JSON_MALFORMED.toByteArray())
-        Mockito.`when`(httpConnection.inputStream).thenReturn(`is`)
+        whenever(httpConnection.inputStream).thenReturn(`is`)
         val resultConfig = doFetch()
-        Assert.assertNotNull(resultConfig.exceptionOrNull())
+        assertNotNull(resultConfig.exceptionOrNull())
 
-        Assert.assertEquals(
+        assertEquals(
             AuthorizationException.GeneralErrors.JSON_DESERIALIZATION_ERROR,
             resultConfig.exceptionOrNull()
         )
@@ -231,11 +231,11 @@ class AuthorizationServiceConfigurationTest {
     @Throws(Exception::class)
     fun testFetchFromUrl_IoException() = runTest {
         val ex = IOException()
-        Mockito.`when`(httpConnection.inputStream).thenThrow(ex)
+        whenever(httpConnection.inputStream).thenThrow(ex)
         val resultConfig = doFetch()
-        Assert.assertNotNull(resultConfig.exceptionOrNull())
+        assertNotNull(resultConfig.exceptionOrNull())
 
-        Assert.assertEquals(
+        assertEquals(
             AuthorizationException.GeneralErrors.NETWORK_ERROR,
             resultConfig.exceptionOrNull()
         )
@@ -253,7 +253,7 @@ class AuthorizationServiceConfigurationTest {
             Result.failure(ex)
         }
 
-        Assert.assertTrue((result.isSuccess) xor (result.isFailure))
+        assertTrue((result.isSuccess) xor (result.isFailure))
         return result
     }
 
@@ -269,59 +269,60 @@ class AuthorizationServiceConfigurationTest {
             "https://test.openid.com/o/oauth/registration"
         private const val TEST_USERINFO_ENDPOINT = "https://test.openid.com/o/oauth/userinfo"
         private const val TEST_JWKS_URI = "https://test.openid.com/o/oauth/jwks"
-        private val TEST_RESPONSE_TYPE_SUPPORTED = mutableListOf<String?>("code", "token")
-        private val TEST_SUBJECT_TYPES_SUPPORTED = mutableListOf<String?>("public")
-        private val TEST_ID_TOKEN_SIGNING_ALG_VALUES = mutableListOf<String?>("RS256")
-        private val TEST_SCOPES_SUPPORTED = mutableListOf<String?>("openid", "profile")
+        private val TEST_RESPONSE_TYPE_SUPPORTED = listOf("code", "token")
+        private val TEST_SUBJECT_TYPES_SUPPORTED = listOf("public")
+        private val TEST_ID_TOKEN_SIGNING_ALG_VALUES = listOf("RS256")
+        private val TEST_SCOPES_SUPPORTED = listOf("openid", "profile")
         private val TEST_TOKEN_ENDPOINT_AUTH_METHODS =
-            mutableListOf<String?>("client_secret_post", "client_secret_basic")
-        private val TEST_CLAIMS_SUPPORTED = mutableListOf<String?>("aud", "exp")
-        private val TEST_DISCOVERY_URI: Uri = Uri.parse(
-            "https://test.openid.com/.well-known/openid-configuration"
-        )
-        val TEST_JSON: String = ("{\n"
-                + " \"issuer\": \"" + TEST_ISSUER + "\",\n"
-                + " \"authorization_endpoint\": \"" + TEST_AUTH_ENDPOINT + "\",\n"
-                + " \"token_endpoint\": \"" + TEST_TOKEN_ENDPOINT + "\",\n"
-                + " \"registration_endpoint\": \"" + TEST_REGISTRATION_ENDPOINT + "\",\n"
-                + " \"end_session_endpoint\": \"" + TEST_END_SESSION_ENDPOINT + "\",\n"
-                + " \"userinfo_endpoint\": \"" + TEST_USERINFO_ENDPOINT + "\",\n"
-                + " \"jwks_uri\": \"" + TEST_JWKS_URI + "\",\n"
-                + " \"response_types_supported\": " + toJson(TEST_RESPONSE_TYPE_SUPPORTED) + ",\n"
-                + " \"subject_types_supported\": " + toJson(TEST_SUBJECT_TYPES_SUPPORTED) + ",\n"
-                + " \"id_token_signing_alg_values_supported\": "
-                + toJson(TEST_ID_TOKEN_SIGNING_ALG_VALUES) + ",\n"
-                + " \"scopes_supported\": " + toJson(TEST_SCOPES_SUPPORTED) + ",\n"
-                + " \"token_endpoint_auth_methods_supported\": "
-                + toJson(TEST_TOKEN_ENDPOINT_AUTH_METHODS) + ",\n"
-                + " \"claims_supported\": " + toJson(TEST_CLAIMS_SUPPORTED) + "\n"
-                + "}")
+            listOf("client_secret_post", "client_secret_basic")
+        private val TEST_CLAIMS_SUPPORTED = listOf("aud", "exp")
+        private val TEST_DISCOVERY_URI: Uri =
+            Uri.parse("https://test.openid.com/.well-known/openid-configuration")
+        val TEST_JSON: String = """
+            {
+             "issuer": "$TEST_ISSUER",
+             "authorization_endpoint": "$TEST_AUTH_ENDPOINT",
+             "token_endpoint": "$TEST_TOKEN_ENDPOINT",
+             "registration_endpoint": "$TEST_REGISTRATION_ENDPOINT",
+             "end_session_endpoint": "$TEST_END_SESSION_ENDPOINT",
+             "userinfo_endpoint": "$TEST_USERINFO_ENDPOINT",
+             "jwks_uri": "$TEST_JWKS_URI",
+             "response_types_supported": ${TEST_RESPONSE_TYPE_SUPPORTED.toJson()},
+             "subject_types_supported": ${TEST_SUBJECT_TYPES_SUPPORTED.toJson()},
+             "id_token_signing_alg_values_supported": ${TEST_ID_TOKEN_SIGNING_ALG_VALUES.toJson()},
+             "scopes_supported": ${TEST_SCOPES_SUPPORTED.toJson()},
+             "token_endpoint_auth_methods_supported": ${TEST_TOKEN_ENDPOINT_AUTH_METHODS.toJson()},
+             "claims_supported": ${TEST_CLAIMS_SUPPORTED.toJson()}
+            }
+        """.trimIndent()
 
-        private val TEST_JSON_MALFORMED = ("{\n"
-                + " \"issuer\": \"" + TEST_ISSUER + "\",\n"
-                + " \"authorization_endpoint\": \"" + TEST_AUTH_ENDPOINT + "\",\n"
-                + " \"token_endpoint\": \"" + TEST_TOKEN_ENDPOINT + "\",\n"
-                + " \"userinfo_endpoint\": \"" + TEST_USERINFO_ENDPOINT + "\",\n"
-                + " \"jwks_uri\": \"" + TEST_JWKS_URI + "\",\n"
-                + " \"response_types_supported\": " + toJson(TEST_RESPONSE_TYPE_SUPPORTED) + ",\n"
-                + " \"subject_types_supported\": " + toJson(TEST_SUBJECT_TYPES_SUPPORTED) + ",\n"
-                + " \"id_token_signing_alg_values_supported\": "
-                + toJson(TEST_ID_TOKEN_SIGNING_ALG_VALUES) + ",\n"
-                + " \"scopes_supported\": " + toJson(TEST_SCOPES_SUPPORTED) + ",\n"
-                + " \"token_endpoint_auth_methods_supported\": "
-                + toJson(TEST_TOKEN_ENDPOINT_AUTH_METHODS) + ",\n"
-                + " \"claims_supported\": " + toJson(TEST_CLAIMS_SUPPORTED) + ",\n"
-                + "}")
+        private val TEST_JSON_MALFORMED = """
+            {
+             "issuer": "$TEST_ISSUER",
+             "authorization_endpoint": "$TEST_AUTH_ENDPOINT",
+             "token_endpoint": "$TEST_TOKEN_ENDPOINT",
+             "userinfo_endpoint": "$TEST_USERINFO_ENDPOINT",
+             "jwks_uri": "$TEST_JWKS_URI",
+             "response_types_supported": ${TEST_RESPONSE_TYPE_SUPPORTED.toJson()},
+             "subject_types_supported": ${TEST_SUBJECT_TYPES_SUPPORTED.toJson()},
+             "id_token_signing_alg_values_supported": ${TEST_ID_TOKEN_SIGNING_ALG_VALUES.toJson()},
+             "scopes_supported": ${TEST_SCOPES_SUPPORTED.toJson()},
+             "token_endpoint_auth_methods_supported": ${TEST_TOKEN_ENDPOINT_AUTH_METHODS.toJson()},
+             "claims_supported": ${TEST_CLAIMS_SUPPORTED.toJson()},
+            }
+        """.trimIndent()
 
-        private const val TEST_JSON_MISSING_ARGUMENT = ("{\n"
-                + " \"issuer\": \"" + TEST_ISSUER + "\",\n"
-                + " \"authorization_endpoint\": \"" + TEST_AUTH_ENDPOINT + "\",\n"
-                + " \"token_endpoint\": \"" + TEST_TOKEN_ENDPOINT + "\",\n"
-                + " \"userinfo_endpoint\": \"" + TEST_USERINFO_ENDPOINT + "\"\n"
-                + "}")
+        private val TEST_JSON_MISSING_ARGUMENT = """
+            {
+             "issuer": "$TEST_ISSUER",
+             "authorization_endpoint": "$TEST_AUTH_ENDPOINT",
+             "token_endpoint": "$TEST_TOKEN_ENDPOINT",
+             "userinfo_endpoint": "$TEST_USERINFO_ENDPOINT"
+            }
+        """.trimIndent()
 
-        private fun toJson(strings: MutableList<String?>?): String {
-            return JSONArray(strings).toString()
+        private fun List<String>.toJson(): String {
+            return JSONArray(this).toString()
         }
     }
 }

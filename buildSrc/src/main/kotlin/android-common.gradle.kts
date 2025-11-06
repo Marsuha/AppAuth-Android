@@ -88,6 +88,7 @@ private fun CommonExtension<*, *, *, *, *, *>.commonConfigure() {
 
     tasks.register<Jar>("sourcesJar") {
         dependsOn("generateReleaseSources")
+        @Suppress("UnstableApiUsage")
         from(sourceSets["main"].java.directories)
         archiveClassifier.set("sources")
     }

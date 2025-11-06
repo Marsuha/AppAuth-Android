@@ -18,7 +18,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [16])
+@Config(sdk = [28])
 class EndSessionRequestTest {
     private lateinit var requestBuilder: EndSessionRequest.Builder
 
@@ -163,7 +163,7 @@ class EndSessionRequestTest {
     @Test(expected = IllegalArgumentException::class)
     fun testUiLocales_withIterableContainingEmptyValue() {
         requestBuilder
-            .setUiLocalesValues(mutableListOf("en", ""))
+            .setUiLocalesValues(listOf("en", ""))
             .build()
     }
 

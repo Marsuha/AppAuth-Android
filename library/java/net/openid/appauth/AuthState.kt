@@ -37,6 +37,7 @@ import kotlin.contracts.contract
  * the creation of subsequent requests based on this state, and allows for this state to be
  * persisted easily.
  */
+@Suppress("unused")
 class AuthState {
     /**
      * Creates an empty, unauthenticated [AuthState].
@@ -153,8 +154,8 @@ class AuthState {
     /**
      * A set representation of [.getScope], for convenience.
      */
-    val scopeSet: Set<String>?
-        get() = AsciiStringListUtil.stringToSet(this.scope!!)
+    val scopeValues: Set<String>?
+        get() = scope?.let { AsciiStringListUtil.stringToSet(it) }
 
     /**
      * The configuration of the authorization service associated with this authorization state.

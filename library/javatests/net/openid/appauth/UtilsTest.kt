@@ -27,7 +27,7 @@ import java.io.IOException
 import java.io.InputStream
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [16])
+@Config(sdk = [28])
 class UtilsTest {
     @Test
     fun testCloseQuietly_close() {
