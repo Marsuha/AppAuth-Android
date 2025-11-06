@@ -85,6 +85,18 @@ class LoginActivity : AppCompatActivity() {
 
     private var selectedBrowserMatcher: BrowserMatcher = AnyBrowserMatcher
 
+    private val authResultLauncher = registerForActivityResult(StartActivityForResult()) { result ->
+        displayAuthOptions()
+
+        if (result.resultCode == RESULT_CANCELED) {
+            displayAuthCancelled()
+        } else {
+            val intent = Intent(this, TokenActivity::class.java)
+            result.data?.extras?.let { intent.putExtras(it) }
+            startActivity(intent)
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -338,17 +350,7 @@ class LoginActivity : AppCompatActivity() {
                 customTabsIntent = authIntent
             )
 
-            registerForActivityResult(StartActivityForResult()) { result ->
-                displayAuthOptions()
-
-                if (result.resultCode == RESULT_CANCELED) {
-                    displayAuthCancelled()
-                } else {
-                    val intent = Intent(this, TokenActivity::class.java)
-                    intent.putExtras(result.data!!.extras!!)
-                    startActivity(intent)
-                }
-            }.launch(intent)
+            authResultLauncher.launch(intent)
         }
     }
 
