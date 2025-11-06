@@ -1,0 +1,31 @@
+<resources>
+    <string name="app_name_short">AppAuth</string>
+    <string name="auth_granted">Авторизация предоставлена</string>
+    <string name="intro_header">Демо OpenID AppAuth</string>
+    <string name="openid_logo_content_description">Логотип AppAuth</string>
+    <string name="refresh_token">Обновить токен</string>
+    <string name="access_token_expires_at">Срок действия токена доступа истекает: %s</string>
+    <string name="no_access_token_returned">Токен доступа не возвращен</string>
+    <string name="no_refresh_token_returned">Токен обновления не возвращен</string>
+    <string name="refresh_token_returned">Токен обновления возвращен</string>
+    <string name="no_id_token_returned">ID-токен не возвращен</string>
+    <string name="id_token_returned">ID-токен возвращен</string>
+    <string name="view_profile">Просмотр информации о пользователе</string>
+    <string name="userinfo_profile_content_description">Изображение профиля пользователя</string>
+    <string name="login_hint_value">ID аккаунта (например, test@example.com)</string>
+    <string name="account_id_description">ID аккаунта необязателен. Если указан, он передается как параметр login_hint в запросе на авторизацию.</string>
+    <string name="auth_options">Параметры авторизации:</string>
+    <string name="browser_selector_label">Использовать браузер:</string>
+    <string name="browser_icon_contentDescription">Иконка браузера</string>
+    <string name="browser_appauth_default_label">Эвристический выбор AppAuth</string>
+    <string name="custom_tab_label">"%1$s (пользовательская вкладка)"</string>
+    <string name="retry_label">Повторить</string>
+    <string name="not_authorized">Не авторизован</string>
+    <string name="start_authorization">Начать авторизацию</string>
+    <string name="reauthorize">Повторная авторизация</string>
+    <string name="sign_out">Выйти</string>
+    <string name="no_access_token_expiry">Время доступа не имеет определенного срока действия</string>
+    <string name="access_token_expired">Срок действия токена доступа истек</string>
+    <string name="auth_settings">Используемые настройки авторизации:</string>
+    <string name="use_pending_intents">Использовать PendingIntent для завершения</string>
+</resources>

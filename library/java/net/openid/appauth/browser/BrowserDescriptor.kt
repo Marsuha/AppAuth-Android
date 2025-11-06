@@ -70,9 +70,7 @@ data class BrowserDescriptor(
                 val hashBytes = digest.digest(signature.toByteArray())
                 return Base64.encodeToString(hashBytes, Base64.URL_SAFE or Base64.NO_WRAP)
             } catch (_: NoSuchAlgorithmException) {
-                throw IllegalStateException(
-                    "Platform does not support $DIGEST_SHA_512 hashing"
-                )
+                throw IllegalStateException("Platform does not support $DIGEST_SHA_512 hashing")
             }
         }
 

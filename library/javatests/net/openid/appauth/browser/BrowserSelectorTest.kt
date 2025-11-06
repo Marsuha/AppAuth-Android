@@ -28,11 +28,11 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.mockito.ArgumentMatcher
 import org.mockito.Mock
 import org.mockito.junit.MockitoJUnit
 import org.mockito.junit.MockitoRule
 import org.mockito.kotlin.argThat
+import org.mockito.kotlin.doReturn
 import org.mockito.kotlin.eq
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
@@ -383,42 +383,35 @@ class BrowserSelectorTest {
             return this
         }
 
-        @Suppress("DEPRECATION")
         fun build(): TestBrowser {
-            val pi = PackageInfo()
-            pi.packageName = packageName
-            pi.versionName = version
             val signatureArray = signatures.map { Signature(it) }.toTypedArray()
-            pi.signatures = signatureArray
-
-            val mockedSigningInfo: SigningInfo = mock()
-            whenever(mockedSigningInfo.signingCertificateHistory).thenReturn(signatureArray)
-            whenever(mockedSigningInfo.hasMultipleSigners()).thenReturn(false)
-            whenever(mockedSigningInfo.apkContentsSigners).thenReturn(signatureArray)
-            pi.signingInfo = mockedSigningInfo
-
-            val signatureHashes = BrowserDescriptor.generateSignatureHashes(pi.signatures!!)
-
-            val ri = ResolveInfo()
-            ri.activityInfo = ActivityInfo().also { it.packageName = packageName }
-            ri.filter = IntentFilter().apply {
-                actions.forEach { this.addAction(it) }
-                categories.forEach { this.addCategory(it) }
-                schemes.forEach { this.addDataScheme(it) }
-                authorities.forEach { this.addDataAuthority(it, null) }
+            val mockedSigningInfo: SigningInfo = mock {
+                on { signingCertificateHistory } doReturn signatureArray
+                on { hasMultipleSigners() } doReturn false
+                on { apkContentsSigners } doReturn signatureArray
             }
 
-            return TestBrowser(packageName, pi, ri, signatureHashes)
-        }
-    }
+            val packageInfo = PackageInfo().apply {
+                packageName = this@TestBrowserBuilder.packageName
+                versionName = version
+                @Suppress("DEPRECATION")
+                signatures = signatureArray
+                signingInfo = mockedSigningInfo
+            }
 
-    /**
-     * Custom matcher for verifying the intent fired during token request.
-     */
-    private class ServiceIntentMatcher(private val `package`: String) : ArgumentMatcher<Intent> {
-        override fun matches(intent: Intent?): Boolean {
-            return intent != null && (BrowserSelector.ACTION_CUSTOM_TABS_CONNECTION == intent.action)
-                    && (`package` == intent.`package`)
+            val signatureHashes = BrowserDescriptor.generateSignatureHashes(signatureArray)
+
+            val resolveInfo = ResolveInfo().apply {
+                activityInfo = ActivityInfo().also { it.packageName = packageName }
+                filter = IntentFilter().apply {
+                    actions.forEach { addAction(it) }
+                    categories.forEach { addCategory(it) }
+                    schemes.forEach { addDataScheme(it) }
+                    authorities.forEach { addDataAuthority(it, null) }
+                }
+            }
+
+            return TestBrowser(packageName, packageInfo, resolveInfo, signatureHashes)
         }
     }
 
@@ -429,25 +422,25 @@ class BrowserSelectorTest {
         private const val USE_CUSTOM_TAB = true
         private const val USE_STANDALONE = false
 
-        private val CHROME: TestBrowser = TestBrowserBuilder("com.android.chrome")
+        private val CHROME = TestBrowserBuilder("com.android.chrome")
             .withBrowserDefaults()
             .setVersion("50")
             .addSignature("ChromeSignature")
             .build()
 
-        private val FIREFOX: TestBrowser = TestBrowserBuilder("org.mozilla.firefox")
+        private val FIREFOX = TestBrowserBuilder("org.mozilla.firefox")
             .withBrowserDefaults()
             .setVersion("10")
             .addSignature("FirefoxSignature")
             .build()
 
-        private val FIREFOX_CUSTOM_TAB: TestBrowser = TestBrowserBuilder("org.mozilla.firefox")
+        private val FIREFOX_CUSTOM_TAB = TestBrowserBuilder("org.mozilla.firefox")
             .withBrowserDefaults()
             .setVersion("57")
             .addSignature("FirefoxSignature")
             .build()
 
-        private val DOLPHIN: TestBrowser = TestBrowserBuilder("mobi.mgeek.TunnyBrowser")
+        private val DOLPHIN = TestBrowserBuilder("mobi.mgeek.TunnyBrowser")
             .withBrowserDefaults()
             .setVersion("1.4.1")
             .addSignature("DolphinSignature")
@@ -455,8 +448,8 @@ class BrowserSelectorTest {
 
         private val NO_BROWSERS = emptyArray<TestBrowser>()
 
-        private fun serviceIntentEq(pkg: String): Intent {
-            return argThat(ServiceIntentMatcher(pkg))
+        private fun serviceIntentEq(pkg: String) = argThat<Intent> {
+            BrowserSelector.ACTION_CUSTOM_TABS_CONNECTION == action && pkg == `package`
         }
     }
 }
