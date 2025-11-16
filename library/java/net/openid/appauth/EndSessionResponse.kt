@@ -13,12 +13,11 @@
  */
 package net.openid.appauth
 
-import android.annotation.SuppressLint
 import android.content.Intent
 import android.net.Uri
 import androidx.annotation.VisibleForTesting
-import org.json.JSONException
-import org.json.JSONObject
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 
 /**
  * A response to end session request.
@@ -28,17 +27,20 @@ import org.json.JSONObject
  * @see <a href="https://openid.net/specs/openid-connect-rpinitiated-1_0.html">
  *     OpenID Connect RP-Initiated Logout 1.0 - draft 01</a>
  */
+@Serializable
 class EndSessionResponse private constructor(
     /**
      * The end session request associated with this response.
      */
-    @JvmField val request: EndSessionRequest,
+    val request: EndSessionRequest,
     /**
      * The returned state parameter, which must match the value specified in the request.
      * AppAuth for Android ensures that this is the case.
      */
     override val state: String?
 ) : AuthorizationManagementResponse {
+
+    override val asJsonString get() = Json.encodeToString(this)
     /**
      * Creates instances of [EndSessionResponse].
      */
@@ -76,22 +78,12 @@ class EndSessionResponse private constructor(
     }
 
     /**
-     * Produces a JSON representation of the end session response for persistent storage or local
-     * transmission (e.g. between activities).
-     */
-    @SuppressLint("VisibleForTests")
-    override fun jsonSerialize() = JSONObject().apply {
-        put(KEY_REQUEST, request.jsonSerialize())
-        state?.let { put(KEY_STATE, it) }
-    }
-
-    /**
      * Produces an intent containing this end session response. This is used to deliver the
      * end session response to the registered handler after a call to
      * [AuthorizationService.performEndSessionRequest].
      */
     override fun toIntent() = Intent().apply {
-        putExtra(EXTRA_RESPONSE, jsonSerializeString())
+        putExtra(EXTRA_RESPONSE, asJsonString)
     }
 
     companion object {
@@ -102,37 +94,10 @@ class EndSessionResponse private constructor(
         const val EXTRA_RESPONSE: String = "net.openid.appauth.EndSessionResponse"
 
         @VisibleForTesting
-        const val KEY_REQUEST: String = "request"
-
-        @VisibleForTesting
         const val KEY_STATE: String = "state"
 
-        /**
-         * Reads an end session response from a JSON string representation produced by
-         * [.jsonSerialize].
-         *
-         * @throws JSONException if the provided JSON does not match the expected structure.
-         */
-        @JvmStatic
-        @Throws(JSONException::class)
-        fun jsonDeserialize(json: JSONObject): EndSessionResponse {
-            require(json.has(KEY_REQUEST)) { "authorization request not provided and not found in JSON" }
-
-            return EndSessionResponse(
-                EndSessionRequest.jsonDeserialize(json.getJSONObject(KEY_REQUEST)),
-                json.getStringIfDefined(KEY_STATE)
-            )
-        }
-
-        /**
-         * Reads an end session response from a JSON string representation produced by
-         * [.jsonSerializeString]. This method is just a convenience wrapper for
-         * [.jsonDeserialize], converting the JSON string to its JSON object form.
-         *
-         * @throws JSONException if the provided JSON does not match the expected structure.
-         */
-        @Throws(JSONException::class)
-        fun jsonDeserialize(jsonStr: String) = jsonDeserialize(JSONObject(jsonStr))
+        fun fromJsonString(jsonStr: String) =
+            Json.decodeFromString<EndSessionResponse>(jsonStr)
 
         /**
          * Extracts an end session response from an intent produced by [.toIntent]. This is
@@ -142,12 +107,7 @@ class EndSessionResponse private constructor(
         @JvmStatic
         fun fromIntent(dataIntent: Intent): EndSessionResponse? {
             if (!containsEndSessionResponse(dataIntent)) return null
-
-            try {
-                return jsonDeserialize(dataIntent.getStringExtra(EXTRA_RESPONSE)!!)
-            } catch (ex: JSONException) {
-                throw IllegalArgumentException("Intent contains malformed auth response", ex)
-            }
+            return fromJsonString(dataIntent.getStringExtra(EXTRA_RESPONSE)!!)
         }
 
         @JvmStatic

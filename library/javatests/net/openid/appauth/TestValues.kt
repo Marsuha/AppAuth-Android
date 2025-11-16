@@ -14,9 +14,11 @@
 package net.openid.appauth
 
 import android.net.Uri
-import org.json.JSONArray
-import org.json.JSONException
-import org.json.JSONObject
+import androidx.core.net.toUri
+import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.SerializationException
+import kotlinx.serialization.json.Json
+import net.openid.appauth.AuthorizationServiceDiscoveryTest.Companion.TEST_JSON
 
 /**
  * Contains common test values which are useful across all tests.
@@ -27,18 +29,20 @@ internal object TestValues {
     const val TEST_STATE: String = $$"$TAT3"
     const val TEST_NONCE: String = "NONC3"
     const val TEST_APP_SCHEME: String = "com.test.app"
+
     @JvmField
-    val TEST_APP_REDIRECT_URI: Uri = Uri.parse("$TEST_APP_SCHEME:/oidc_callback")
+    val TEST_APP_REDIRECT_URI: Uri = "$TEST_APP_SCHEME:/oidc_callback".toUri()
     const val TEST_SCOPE: String = "openid email"
-    val TEST_IDP_AUTH_ENDPOINT: Uri = Uri.parse("https://testidp.example.com/authorize")
-    val TEST_IDP_TOKEN_ENDPOINT: Uri = Uri.parse("https://testidp.example.com/token")
-    val TEST_IDP_REGISTRATION_ENDPOINT: Uri = Uri.parse("https://testidp.example.com/token")
+    val TEST_IDP_AUTH_ENDPOINT: Uri = "https://testidp.example.com/authorize".toUri()
+    val TEST_IDP_TOKEN_ENDPOINT: Uri = "https://testidp.example.com/token".toUri()
+    val TEST_IDP_REGISTRATION_ENDPOINT: Uri = "https://testidp.example.com/token".toUri()
 
     const val TEST_CODE_VERIFIER: String = "0123456789_0123456789_0123456789_0123456789"
     const val TEST_AUTH_CODE: String = "zxcvbnmjk"
     const val TEST_ACCESS_TOKEN: String = "aaabbbccc"
     const val TEST_ACCESS_TOKEN_EXPIRATION_TIME: Long = 120000L // two minutes
     const val TEST_ISSUER: String = "https://test.issuer"
+
     @JvmField
     val TEST_ID_TOKEN: String = IdTokenTest.getUnsignedIdToken(
         TEST_ISSUER,
@@ -53,7 +57,37 @@ internal object TestValues {
 
     const val TEST_EMAIL_ADDRESS: String = "test@example.com"
 
-    private fun toJson(strings: List<String>) = JSONArray(strings).toString()
+    private fun List<String>.toJson() = Json.encodeToString(this)
+
+    fun getDiscoveryDocument(
+        issuer: String,
+        authorizationEndpoint: String,
+        tokenEndpoint: String,
+        userInfoEndpoint: String,
+        registrationEndpoint: String,
+        endSessionEndpoint: String,
+        jwksUri: String,
+        responseTypesSupported: List<String>,
+        subjectTypesSupported: List<String>,
+        idTokenSigningAlgValues: List<String>,
+        scopesSupported: List<String>,
+        tokenEndpointAuthMethods: List<String>,
+        claimsSupported: List<String>
+    ) = AuthorizationServiceDiscovery(
+        issuer = issuer,
+        authorizationEndpoint = authorizationEndpoint.toUri(),
+        tokenEndpoint = tokenEndpoint.toUri(),
+        userinfoEndpoint = userInfoEndpoint.toUri(),
+        registrationEndpoint = registrationEndpoint.toUri(),
+        endSessionEndpoint = endSessionEndpoint.toUri(),
+        jwksUri = jwksUri.toUri(),
+        responseTypesSupported = responseTypesSupported,
+        subjectTypesSupported = subjectTypesSupported,
+        idTokenSigningAlgorithmValuesSupported = idTokenSigningAlgValues,
+        scopesSupported = scopesSupported,
+        tokenEndpointAuthMethodsSupported = tokenEndpointAuthMethods,
+        claimsSupported = claimsSupported
+    )
 
     fun getDiscoveryDocumentJson(
         issuer: String,
@@ -69,38 +103,30 @@ internal object TestValues {
         scopesSupported: List<String>,
         tokenEndpointAuthMethods: List<String>,
         claimsSupported: List<String>
-    ): String {
-        return ("{\n"
-                + " \"issuer\": \"" + issuer + "\",\n"
-                + " \"authorization_endpoint\": \"" + authorizationEndpoint + "\",\n"
-                + " \"token_endpoint\": \"" + tokenEndpoint + "\",\n"
-                + " \"userinfo_endpoint\": \"" + userInfoEndpoint + "\",\n"
-                + " \"end_session_endpoint\": \"" + endSessionEndpoint + "\",\n"
-                + " \"registration_endpoint\": \"" + registrationEndpoint + "\",\n"
-                + " \"jwks_uri\": \"" + jwksUri + "\",\n"
-                + " \"response_types_supported\": " + toJson(responseTypesSupported) + ",\n"
-                + " \"subject_types_supported\": " + toJson(subjectTypesSupported) + ",\n"
-                + " \"id_token_signing_alg_values_supported\": "
-                + toJson(idTokenSigningAlgValues) + ",\n"
-                + " \"scopes_supported\": " + toJson(scopesSupported) + ",\n"
-                + " \"token_endpoint_auth_methods_supported\": "
-                + toJson(tokenEndpointAuthMethods) + ",\n"
-                + " \"claims_supported\": " + toJson(claimsSupported) + "\n"
-                + "}")
-    }
+    ) = """
+        {
+            "issuer": "$issuer",
+            "authorization_endpoint": "$authorizationEndpoint",
+            "token_endpoint": "$tokenEndpoint",
+            "userinfo_endpoint": "$userInfoEndpoint",
+            "end_session_endpoint": "$endSessionEndpoint",
+            "registration_endpoint": "$registrationEndpoint",
+            "jwks_uri": "$jwksUri",
+            "response_types_supported": ${responseTypesSupported.toJson()},
+            "subject_types_supported": ${subjectTypesSupported.toJson()},
+            "id_token_signing_alg_values_supported": ${idTokenSigningAlgValues.toJson()},
+            "scopes_supported": ${scopesSupported.toJson()},
+            "token_endpoint_auth_methods_supported": ${tokenEndpointAuthMethods.toJson()},
+            "claims_supported": ${claimsSupported.toJson()}
+        }
+        """.trimIndent()
 
+    @OptIn(ExperimentalSerializationApi::class)
     val testDiscoveryDocument: AuthorizationServiceDiscovery
         get() {
             try {
-                return AuthorizationServiceDiscovery(
-                    JSONObject(AuthorizationServiceDiscoveryTest.TEST_JSON)
-                )
-            } catch (ex: JSONException) {
-                throw RuntimeException(
-                    "Unable to create test authorization service discover document",
-                    ex
-                )
-            } catch (ex: AuthorizationServiceDiscovery.MissingArgumentException) {
+                return AuthorizationServiceDiscovery.fromJsonString(TEST_JSON)
+            } catch (ex: SerializationException) {
                 throw RuntimeException(
                     "Unable to create test authorization service discover document",
                     ex

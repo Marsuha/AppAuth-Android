@@ -13,6 +13,9 @@
  */
 package net.openid.appauth
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import java.io.BufferedReader
 import java.io.IOException
 import java.io.InputStream
@@ -46,4 +49,25 @@ internal fun InputStream?.closeQuietly() {
     } catch (_: IOException) {
         // deliberately do nothing
     }
+}
+
+/**
+ * Removes the leading and trailing double quotes from this string.
+ */
+internal fun String.toUnquotedString() = trim('"')
+
+/**
+ * Converts this object to a string representation and removes any surrounding double quotes.
+ */
+internal fun Any.toUnquotedString() = toString().toUnquotedString()
+
+internal fun Context.isActivity(): Boolean {
+    var context = this
+    while (context is ContextWrapper) {
+        if (context is Activity) {
+            return true
+        }
+        context = context.baseContext
+    }
+    return false
 }

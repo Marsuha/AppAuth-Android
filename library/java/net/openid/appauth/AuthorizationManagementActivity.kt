@@ -23,13 +23,13 @@ import android.net.Uri
 import android.os.Bundle
 import androidx.annotation.VisibleForTesting
 import androidx.appcompat.app.AppCompatActivity
+import kotlinx.serialization.SerializationException
 import net.openid.appauth.AuthorizationException.AuthorizationRequestErrors
 import net.openid.appauth.AuthorizationException.Companion.PARAM_ERROR
 import net.openid.appauth.AuthorizationManagementUtil.RequestType
 import net.openid.appauth.AuthorizationManagementUtil.requestTypeFor
 import net.openid.appauth.AuthorizationManagementUtil.responseWith
 import net.openid.appauth.internal.Logger
-import org.json.JSONException
 
 /**
  * Stores state and handles events related to the authorization management flow. The activity is
@@ -229,7 +229,7 @@ class AuthorizationManagementActivity : AppCompatActivity() {
         outState.apply {
             putBoolean(KEY_AUTHORIZATION_STARTED, authorizationStarted)
             putParcelable(KEY_AUTH_INTENT, authIntent)
-            putString(KEY_AUTH_REQUEST, authRequest!!.jsonSerializeString())
+            putString(KEY_AUTH_REQUEST, authRequest!!.asJsonString)
             putString(KEY_AUTH_REQUEST_TYPE, requestTypeFor(authRequest!!).name)
             putParcelable(KEY_COMPLETE_INTENT, completeIntent)
             putParcelable(KEY_CANCEL_INTENT, cancelIntent)
@@ -288,7 +288,7 @@ class AuthorizationManagementActivity : AppCompatActivity() {
                     RequestType.valueOf(authRequestType)
                 )
             }
-        } catch (_: JSONException) {
+        } catch (_: SerializationException) {
             sendResult(
                 cancelIntent,
                 AuthorizationRequestErrors.INVALID_REQUEST.toIntent(),
@@ -404,7 +404,7 @@ class AuthorizationManagementActivity : AppCompatActivity() {
             cancelIntent: PendingIntent?
         ) = createBaseIntent(context).apply {
             putExtra(KEY_AUTH_INTENT, authIntent)
-            putExtra(KEY_AUTH_REQUEST, request.jsonSerializeString())
+            putExtra(KEY_AUTH_REQUEST, request.asJsonString)
             putExtra(KEY_AUTH_REQUEST_TYPE, requestTypeFor(request).name)
             putExtra(KEY_COMPLETE_INTENT, completeIntent)
             putExtra(KEY_CANCEL_INTENT, cancelIntent)

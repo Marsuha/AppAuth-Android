@@ -13,22 +13,13 @@
  */
 package net.openid.appauth
 
-import net.openid.appauth.AuthorizationServiceDiscovery.Companion.AUTHORIZATION_ENDPOINT
-import net.openid.appauth.AuthorizationServiceDiscovery.Companion.CLAIMS_PARAMETER_SUPPORTED
-import net.openid.appauth.AuthorizationServiceDiscovery.Companion.ID_TOKEN_SIGNING_ALG_VALUES_SUPPORTED
-import net.openid.appauth.AuthorizationServiceDiscovery.Companion.ISSUER
-import net.openid.appauth.AuthorizationServiceDiscovery.Companion.JWKS_URI
-import net.openid.appauth.AuthorizationServiceDiscovery.Companion.REQUEST_PARAMETER_SUPPORTED
-import net.openid.appauth.AuthorizationServiceDiscovery.Companion.REQUEST_URI_PARAMETER_SUPPORTED
-import net.openid.appauth.AuthorizationServiceDiscovery.Companion.REQUIRE_REQUEST_URI_REGISTRATION
-import net.openid.appauth.AuthorizationServiceDiscovery.Companion.RESPONSE_TYPES_SUPPORTED
-import net.openid.appauth.AuthorizationServiceDiscovery.Companion.SUBJECT_TYPES_SUPPORTED
+import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.MissingFieldException
 import net.openid.appauth.TestValues.TEST_ISSUER
 import net.openid.appauth.TestValues.getDiscoveryDocumentJson
-import org.json.JSONObject
-import org.junit.Assert
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Before
 import org.junit.Test
@@ -39,137 +30,42 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28])
 class AuthorizationServiceDiscoveryTest {
-    lateinit var json: JSONObject
     lateinit var discovery: AuthorizationServiceDiscovery
 
     @Before
     @Throws(Exception::class)
     fun setUp() {
-        json = JSONObject(TEST_JSON)
-        discovery = AuthorizationServiceDiscovery(json)
+        discovery = AuthorizationServiceDiscovery.fromJsonString(TEST_JSON)
     }
 
     @Test
-    @Throws(Exception::class)
-    fun testMissingAuthorizationEndpoint() {
-        json.remove(AUTHORIZATION_ENDPOINT.key)
+    fun `test decode json string to AuthServiceDiscovery and back`() {
+        val discoveryDoc = AuthorizationServiceDiscovery.fromJsonString(TEST_JSON)
+        assertEquals(TestValues.testDiscoveryDocument, discoveryDoc)
+        assertEquals(TEST_JSON_STRING, discoveryDoc.asJsonString)
+    }
 
+    @OptIn(ExperimentalSerializationApi::class)
+    @Test
+    @Throws(Exception::class)
+    fun `test missing mandatory fields`() {
         try {
-            AuthorizationServiceDiscovery(json)
-            fail("Expected MissingArgumentException not thrown.")
-        } catch (e: AuthorizationServiceDiscovery.MissingArgumentException) {
-            assertEquals(
-                AUTHORIZATION_ENDPOINT.key,
-                e.missingField
-            )
+            AuthorizationServiceDiscovery.fromJsonString(TEST_JSON_WITHOUT_MANDATORY_FIELD)
+            fail("Expected MissingFieldException not thrown.")
+        } catch (ex: MissingFieldException) {
+            assertEquals(MANDATORY_FIELDS, ex.missingFields)
         }
     }
 
     @Test
-    @Throws(Exception::class)
-    fun testMissingIssuer() {
-        json.remove(ISSUER.key)
+    fun `test default value parameters supported`() {
+        val discoveryDoc = AuthorizationServiceDiscovery
+            .fromJsonString(TEST_JSON_WITHOUT_DEFAULT_FIELDS)
 
-        try {
-            AuthorizationServiceDiscovery(json)
-            fail("Expected MissingArgumentException not thrown.")
-        } catch (e: AuthorizationServiceDiscovery.MissingArgumentException) {
-            assertEquals(
-                ISSUER.key,
-                e.missingField
-            )
-        }
-    }
-
-    @Test
-    @Throws(Exception::class)
-    fun testMissingJwksUri() {
-        json.remove(JWKS_URI.key)
-        try {
-            AuthorizationServiceDiscovery(json)
-            fail("Expected MissingArgumentException not thrown.")
-        } catch (e: AuthorizationServiceDiscovery.MissingArgumentException) {
-            assertEquals(
-                JWKS_URI.key,
-                e.missingField
-            )
-        }
-    }
-
-    @Test
-    @Throws(Exception::class)
-    fun testMissingSubjectTypesSupported() {
-        json.remove(SUBJECT_TYPES_SUPPORTED.key)
-
-        try {
-            AuthorizationServiceDiscovery(json)
-            fail("Expected MissingArgumentException not thrown.")
-        } catch (e: AuthorizationServiceDiscovery.MissingArgumentException) {
-            assertEquals(
-                SUBJECT_TYPES_SUPPORTED.key,
-                e.missingField
-            )
-        }
-    }
-
-    @Test
-    @Throws(Exception::class)
-    fun testMissingResponseTypesSupported() {
-        json.remove(RESPONSE_TYPES_SUPPORTED.key)
-
-        try {
-            AuthorizationServiceDiscovery(json)
-            fail("Expected MissingArgumentException not thrown.")
-        } catch (e: AuthorizationServiceDiscovery.MissingArgumentException) {
-            assertEquals(
-                RESPONSE_TYPES_SUPPORTED.key,
-                e.missingField
-            )
-        }
-    }
-
-    @Test
-    @Throws(Exception::class)
-    fun testMissingIdTokenSigningAlgValuesSupported() {
-        json.remove(ID_TOKEN_SIGNING_ALG_VALUES_SUPPORTED.key)
-
-        try {
-            AuthorizationServiceDiscovery(json)
-            fail("Expected MissingArgumentException not thrown.")
-        } catch (e: AuthorizationServiceDiscovery.MissingArgumentException) {
-            assertEquals(
-                ID_TOKEN_SIGNING_ALG_VALUES_SUPPORTED.key,
-                e.missingField
-            )
-        }
-    }
-
-    @Test
-    @Throws(Exception::class)
-    fun testDefaultValueClaimsParametersSupported() {
-        json.remove(CLAIMS_PARAMETER_SUPPORTED.key)
-        assertFalse(AuthorizationServiceDiscovery(json).isClaimsParameterSupported == true)
-    }
-
-    @Test
-    @Throws(Exception::class)
-    fun testDefaultValueRequestParameterSupported() {
-        json.remove(REQUEST_PARAMETER_SUPPORTED.key)
-        assertFalse(AuthorizationServiceDiscovery(json).isRequestParameterSupported == true)
-    }
-
-    @Test
-    @Throws(Exception::class)
-    fun testDefaultValueRequestUriParameterSupported() {
-        json.remove(REQUEST_URI_PARAMETER_SUPPORTED.key)
-        Assert.assertTrue(AuthorizationServiceDiscovery(json).isRequestUriParameterSupported == true)
-    }
-
-    @Test
-    @Throws(Exception::class)
-    fun testDefaultValueRequireRequestUriRegistration() {
-        json.remove(REQUIRE_REQUEST_URI_REGISTRATION.key)
-        assertFalse(AuthorizationServiceDiscovery(json).requireRequestUriRegistration == true)
+        assertFalse(discoveryDoc.isClaimsParameterSupported)
+        assertFalse(discoveryDoc.isRequestParameterSupported)
+        assertTrue(discoveryDoc.isRequestUriParameterSupported)
+        assertFalse(discoveryDoc.requireRequestUriRegistration)
     }
 
     @Test
@@ -251,20 +147,62 @@ class AuthorizationServiceDiscoveryTest {
         val TEST_TOKEN_ENDPOINT_AUTH_METHODS = listOf("client_secret_post", "client_secret_basic")
         val TEST_CLAIMS_SUPPORTED = listOf("aud", "exp")
 
+        private fun List<String>.removeAll(list: List<String>): List<String> {
+            return filterNot { string ->
+                var result = false
+                list.forEach {
+                    if (string.contains(it)) {
+                        result = true
+                        return@forEach
+                    }
+                }
+
+                result
+            }
+        }
+
         val TEST_JSON: String = getDiscoveryDocumentJson(
-            TEST_ISSUER,
-            TEST_AUTHORIZATION_ENDPOINT,
-            TEST_TOKEN_ENDPOINT,
-            TEST_USERINFO_ENDPOINT,
-            TEST_REGISTRATION_ENDPOINT,
-            TEST_END_SESSION_ENDPOINT,
-            TEST_JWKS_URI,
-            TEST_RESPONSE_TYPES_SUPPORTED,
-            TEST_SUBJECT_TYPES_SUPPORTED,
-            TEST_ID_TOKEN_SIGNING_ALG_VALUES,
-            TEST_SCOPES_SUPPORTED,
-            TEST_TOKEN_ENDPOINT_AUTH_METHODS,
-            TEST_CLAIMS_SUPPORTED
+            issuer = TEST_ISSUER,
+            authorizationEndpoint = TEST_AUTHORIZATION_ENDPOINT,
+            tokenEndpoint = TEST_TOKEN_ENDPOINT,
+            userInfoEndpoint = TEST_USERINFO_ENDPOINT,
+            registrationEndpoint = TEST_REGISTRATION_ENDPOINT,
+            endSessionEndpoint = TEST_END_SESSION_ENDPOINT,
+            jwksUri = TEST_JWKS_URI,
+            responseTypesSupported = TEST_RESPONSE_TYPES_SUPPORTED,
+            subjectTypesSupported = TEST_SUBJECT_TYPES_SUPPORTED,
+            idTokenSigningAlgValues = TEST_ID_TOKEN_SIGNING_ALG_VALUES,
+            scopesSupported = TEST_SCOPES_SUPPORTED,
+            tokenEndpointAuthMethods = TEST_TOKEN_ENDPOINT_AUTH_METHODS,
+            claimsSupported = TEST_CLAIMS_SUPPORTED
         )
+
+        val MANDATORY_FIELDS = listOf(
+            "issuer",
+            "authorization_endpoint",
+            "jwks_uri",
+            "response_types_supported",
+            "subject_types_supported",
+            "id_token_signing_alg_values_supported"
+        )
+
+        val DEFAULT_FIELDS = listOf(
+            "claims_parameter_supported",
+            "request_parameter_supported",
+            "request_uri_parameter_supported",
+            "require_request_uri_registration"
+        )
+
+        val TEST_JSON_WITHOUT_MANDATORY_FIELD = TEST_JSON
+            .split("\n")
+            .removeAll(MANDATORY_FIELDS)
+            .joinToString("")
+
+        val TEST_JSON_WITHOUT_DEFAULT_FIELDS = TEST_JSON
+            .split("\n")
+            .removeAll(DEFAULT_FIELDS)
+            .joinToString("")
+
+        val TEST_JSON_STRING: String = TestValues.testDiscoveryDocument.asJsonString
     }
 }

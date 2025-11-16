@@ -4,7 +4,7 @@ import android.content.Intent
 import android.net.Uri
 import net.openid.appauth.EndSessionResponse.Companion.containsEndSessionResponse
 import net.openid.appauth.EndSessionResponse.Companion.fromIntent
-import net.openid.appauth.EndSessionResponse.Companion.jsonDeserialize
+import net.openid.appauth.EndSessionResponse.Companion.fromJsonString
 import net.openid.appauth.TestValues.testEndSessionRequest
 import org.assertj.core.api.Assertions.assertThat
 import org.json.JSONException
@@ -68,8 +68,8 @@ class EndSessionResponseTest {
                 .setState(TEST_REQUEST.state)
                 .build()
 
-        val endSessionResponseJson = endSessionResponse.jsonSerialize()
-        val deserializeResponse = jsonDeserialize(endSessionResponseJson)
+        val endSessionResponseJson = endSessionResponse.asJsonString
+        val deserializeResponse = fromJsonString(endSessionResponseJson)
 
         assertThat(deserializeResponse).isNotNull()
         assertThat(deserializeResponse.state).isEqualTo(endSessionResponse.state)

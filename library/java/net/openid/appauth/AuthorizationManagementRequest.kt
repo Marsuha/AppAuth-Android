@@ -14,7 +14,6 @@
 package net.openid.appauth
 
 import android.net.Uri
-import org.json.JSONObject
 
 /**
  * A base request for session management models
@@ -23,17 +22,9 @@ import org.json.JSONObject
  */
 sealed interface AuthorizationManagementRequest {
     /**
-     * Produces a JSON representation of the request for persistent storage or local transmission
-     * (e.g. between activities).
+     * A JSON representation of the request, for persistent storage or local transmission.
      */
-    fun jsonSerialize(): JSONObject
-
-    /**
-     * Produces a JSON string representation of the request for persistent storage or
-     * local transmission (e.g. between activities). This method is just a convenience wrapper
-     * for [.jsonSerialize], converting the JSON object to its string form.
-     */
-    fun jsonSerializeString(): String
+    val asJsonString: String
 
     /**
      * An opaque value used by the client to maintain state between the request and callback.

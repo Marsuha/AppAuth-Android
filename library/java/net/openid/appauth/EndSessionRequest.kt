@@ -15,9 +15,12 @@ package net.openid.appauth
 
 import android.net.Uri
 import androidx.annotation.VisibleForTesting
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import net.openid.appauth.AsciiStringListUtil.stringToSet
-import org.json.JSONException
-import org.json.JSONObject
+import net.openid.appauth.internal.UriSerializer
 
 /**
  * An OpenID end session request.
@@ -25,7 +28,7 @@ import org.json.JSONObject
  * @see <a href="https://openid.net/specs/openid-connect-rpinitiated-1_0.html">
  *     OpenID Connect RP-Initiated Logout 1.0 - draft 01</a>
  */
-@Suppress("unused")
+@Serializable
 class EndSessionRequest private constructor(
     /**
      * The service's [configuration][AuthorizationServiceConfiguration].
@@ -34,7 +37,7 @@ class EndSessionRequest private constructor(
      * or [AuthorizationServiceConfiguration.fetchFromUrl]
      * via an OpenID Connect Discovery Document}.
      */
-    @JvmField val configuration: AuthorizationServiceConfiguration,
+    val configuration: AuthorizationServiceConfiguration,
     /**
      * Previously issued ID Token passed to the end session endpoint as a hint about the End-User's
      * current authenticated session with the Client
@@ -45,14 +48,17 @@ class EndSessionRequest private constructor(
      * @see <a href="http://openid.net/specs/openid-connect-core-1_0.html#IDToken">
      *     OpenID Connect Core ID Token, Section 2</a>
      */
-    @JvmField val idTokenHint: String?,
+    @SerialName(PARAM_ID_TOKEN_HINT)
+    val idTokenHint: String?,
     /**
      * The client's redirect URI.
      *
      * @see <a href="https://openid.net/specs/openid-connect-rpinitiated-1_0.html#RedirectionAfterLogout">
      *     OpenID Connect RP-Initiated Logout 1.0 - draft 1, 3.  Redirection to RP After Logout</a>
      */
-    @JvmField val postLogoutRedirectUri: Uri?,
+    @Serializable(with = UriSerializer::class)
+    @SerialName(PARAM_POST_LOGOUT_REDIRECT_URI)
+    val postLogoutRedirectUri: Uri?,
     /**
      * An opaque value used by the client to maintain state between the request and callback. If
      * this value is not explicitly set, this library will automatically add state and perform
@@ -65,6 +71,7 @@ class EndSessionRequest private constructor(
      *
      * @see "The OAuth 2.0 Authorization Framework"
      */
+    @SerialName(PARAM_STATE)
     override val state: String?,
     /**
      * This is a space-separated list of BCP47 RFC5646 language tag values, ordered by preference.
@@ -73,14 +80,31 @@ class EndSessionRequest private constructor(
      * @see <a href="https://openid.net/specs/openid-connect-rpinitiated-1_0.html#RPLogout">
      *     OpenID Connect RP-Initiated Logout 1.0 - draft 01</a>
      */
-    @JvmField val uiLocales: String?,
+    @SerialName(PARAM_UI_LOCALES)
+    val uiLocales: String?,
     /**
      * Additional parameters to be passed as part of the request.
      *
      * @see "The OAuth 2.0 Authorization Framework"
      */
-    @JvmField val additionalParameters: Map<String, String>
+    val additionalParameters: JsonObject
 ) : AuthorizationManagementRequest {
+    /**
+     * The end-user's preferred languages and scripts for the user interface,
+     * represented as a space-separated list of BCP47 `RFC5646` language tag values,
+     * ordered by preference.
+     *
+     * @see <a href="https://openid.net/specs/openid-connect-rpinitiated-1_0.html#RPLogout">
+     *     OpenID Connect RP-Initiated Logout 1.0 - draft 01</a>
+     */
+    val uiLocalesValues get() = uiLocales?.let { stringToSet(it) }
+
+    /**
+     * A JSON representation of the end session request for persistent storage or local
+     * transmission (e.g. between activities).
+     */
+    override val asJsonString get() = Json.encodeToString(this)
+
     /**
      * Creates instances of [EndSessionRequest].
      */
@@ -94,30 +118,31 @@ class EndSessionRequest private constructor(
 
         private var uiLocales: String? = null
 
-        private var additionalParameters: Map<String, String> = emptyMap()
+        private var additionalParameters: JsonObject = JsonObject(emptyMap())
 
         /**
          *  @see [EndSessionRequest.configuration]
          */
+        @Suppress("unused")
         fun setAuthorizationServiceConfiguration(
-            configuration: AuthorizationServiceConfiguration
+            authServiceConfig: AuthorizationServiceConfiguration
         ): Builder {
-            this@Builder.configuration = configuration
+            configuration = authServiceConfig
             return this
         }
 
         /** @see EndSessionRequest.idTokenHint
          */
-        fun setIdTokenHint(idTokenHint: String?): Builder {
-            idTokenHint?.let { require(it.isNotEmpty()) { "idTokenHint must not be empty" } }
-            this@Builder.idTokenHint = idTokenHint
+        fun setIdTokenHint(hint: String?): Builder {
+            hint?.let { require(it.isNotEmpty()) { "idTokenHint must not be empty" } }
+            idTokenHint = hint
             return this
         }
 
         /** @see EndSessionRequest.postLogoutRedirectUri
          */
-        fun setPostLogoutRedirectUri(postLogoutRedirectUri: Uri?): Builder {
-            this@Builder.postLogoutRedirectUri = postLogoutRedirectUri
+        fun setPostLogoutRedirectUri(uri: Uri?): Builder {
+            postLogoutRedirectUri = uri
             return this
         }
 
@@ -131,9 +156,9 @@ class EndSessionRequest private constructor(
 
         /** @see EndSessionRequest.uiLocales
          */
-        fun setUiLocales(uiLocales: String?): Builder {
-            uiLocales?.let { require(it.isNotEmpty()) { "uiLocales must not be empty" } }
-            this@Builder.uiLocales = uiLocales
+        fun setUiLocales(locales: String?): Builder {
+            locales?.let { require(it.isNotEmpty()) { "uiLocales must not be empty" } }
+            uiLocales = locales
             return this
         }
 
@@ -156,8 +181,8 @@ class EndSessionRequest private constructor(
 
         /** @see EndSessionRequest.additionalParameters
          */
-        fun setAdditionalParameters(additionalParameters: Map<String, String>?): Builder {
-            this@Builder.additionalParameters = additionalParameters.checkAdditionalParams(BUILT_IN_PARAMS)
+        fun setAdditionalParameters(parameters: JsonObject?): Builder {
+            additionalParameters = parameters.checkAdditionalParams(BUILT_IN_PARAMS)
             return this
         }
 
@@ -177,10 +202,6 @@ class EndSessionRequest private constructor(
         }
     }
 
-    fun getUiLocales(): Set<String>? {
-        return uiLocales?.let { stringToSet(it) }
-    }
-
     override fun toUri() = configuration.endSessionEndpoint?.buildUpon()?.run {
         idTokenHint?.let { appendQueryParameter(PARAM_ID_TOKEN_HINT, it) }
         state?.let { appendQueryParameter(PARAM_STATE, it) }
@@ -190,33 +211,8 @@ class EndSessionRequest private constructor(
             appendQueryParameter(PARAM_POST_LOGOUT_REDIRECT_URI, it.toString())
         }
 
-        additionalParameters.forEach { (key, value) ->
-            appendQueryParameter(key, value)
-        }
-
+        additionalParameters.forEach { appendQueryParameter(it.key, it.value.toUnquotedString()) }
         build()
-    }
-
-    /**
-     * Produces a JSON representation of the end session request for persistent storage or local
-     * transmission (e.g. between activities).
-     */
-    override fun jsonSerialize() = JSONObject().apply {
-        put(KEY_CONFIGURATION, configuration.toJson())
-        idTokenHint?.let { put(KEY_ID_TOKEN_HINT, it) }
-        postLogoutRedirectUri?.let { put(KEY_POST_LOGOUT_REDIRECT_URI, it.toString()) }
-        state?.let { put(KEY_STATE, it) }
-        uiLocales?.let { put(KEY_UI_LOCALES, it) }
-        put(KEY_ADDITIONAL_PARAMETERS, additionalParameters.toJsonObject())
-    }
-
-    /**
-     * Produces a JSON string representation of the request for persistent storage or
-     * local transmission (e.g. between activities). This method is just a convenience wrapper
-     * for [.jsonSerialize], converting the JSON object to its string form.
-     */
-    override fun jsonSerializeString(): String {
-        return jsonSerialize().toString()
     }
 
     companion object {
@@ -239,39 +235,7 @@ class EndSessionRequest private constructor(
             PARAM_UI_LOCALES
         )
 
-        private const val KEY_CONFIGURATION = "configuration"
-        private const val KEY_ID_TOKEN_HINT = "id_token_hint"
-        private const val KEY_POST_LOGOUT_REDIRECT_URI = "post_logout_redirect_uri"
-        private const val KEY_STATE = "state"
-        private const val KEY_UI_LOCALES = "ui_locales"
-        private const val KEY_ADDITIONAL_PARAMETERS = "additionalParameters"
-
-        /**
-         * Reads an authorization request from a JSON string representation produced by
-         * [.jsonSerialize].
-         * @throws JSONException if the provided JSON does not match the expected structure.
-         */
-        @JvmStatic
-        @Throws(JSONException::class)
-        fun jsonDeserialize(json: JSONObject): EndSessionRequest {
-            return EndSessionRequest(
-                AuthorizationServiceConfiguration.fromJson(json.getJSONObject(KEY_CONFIGURATION)),
-                json.getStringIfDefined(KEY_ID_TOKEN_HINT),
-                json.getUriIfDefined(KEY_POST_LOGOUT_REDIRECT_URI),
-                json.getStringIfDefined(KEY_STATE),
-                json.getStringIfDefined(KEY_UI_LOCALES),
-                json.getStringMap(KEY_ADDITIONAL_PARAMETERS)
-            )
-        }
-
-        /**
-         * Reads an authorization request from a JSON string representation produced by
-         * [.jsonSerializeString]. This method is just a convenience wrapper for
-         * [.jsonDeserialize], converting the JSON string to its JSON object form.
-         * @throws JSONException if the provided JSON does not match the expected structure.
-         */
-        @JvmStatic
-        @Throws(JSONException::class)
-        fun jsonDeserialize(jsonStr: String) = jsonDeserialize(JSONObject(jsonStr))
+        fun fromJsonString(jsonStr: String): EndSessionRequest =
+            Json.decodeFromString(jsonStr)
     }
 }

@@ -15,10 +15,11 @@ package net.openid.appauth
 
 import android.content.Intent
 import android.net.Uri
-import androidx.annotation.VisibleForTesting
 import androidx.core.net.toUri
-import org.json.JSONException
-import org.json.JSONObject
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerializationException
+import kotlinx.serialization.json.Json
+import net.openid.appauth.internal.UriSerializer
 
 /**
  * Returned as a response to OAuth2 requests if they fail. Specifically:
@@ -27,8 +28,8 @@ import org.json.JSONObject
  *
  * - The response to [configuration retrieval][AuthorizationServiceConfiguration.fetchFromUrl].
  */
-@Suppress("unused")
-class AuthorizationException @JvmOverloads constructor(
+@Serializable
+class AuthorizationException : Exception {
     /**
      * The type of the error.
      * @see .TYPE_GENERAL_ERROR
@@ -39,26 +40,47 @@ class AuthorizationException @JvmOverloads constructor(
      *
      * @see .TYPE_RESOURCE_SERVER_AUTHORIZATION_ERROR
      */
-    @JvmField val type: Int,
+    val type: Int
     /**
      * The error code describing the class of problem encountered from the set defined in this
      * class.
      */
-    @JvmField val code: Int,
+    val code: Int
     /**
      * The error string as it is found in the OAuth2 protocol.
      */
-    @JvmField val error: String? = null,
+    val error: String?
     /**
      * The human readable error message associated with this exception, if available.
      */
-    @JvmField val errorDescription: String? = null,
+    val errorDescription: String?
     /**
      * A URI identifying a human-readable web page with information about this error.
      */
-    val errorUri: Uri? = null,
-    rootCause: Throwable? = null
-) : Exception(errorDescription, rootCause) {
+    @Serializable(with = UriSerializer::class)
+    val errorUri: Uri?
+
+    constructor(
+        type: Int,
+        code: Int,
+        error: String? = null,
+        errorDescription: String? = null,
+        errorUri: Uri? = null,
+        rootCause: Throwable? = null
+    ) : super(errorDescription, rootCause) {
+        this.type = type
+        this.code = code
+        this.error = error
+        this.errorDescription = errorDescription
+        this.errorUri = errorUri
+    }
+
+    /**
+     * Provides a JSON string representation of an authorization exception, for transmission or
+     * storage. This does not include any provided root cause.
+     */
+    val asJsonString get() = Json.encodeToString(this)
+
     /**
      * Error codes specific to AppAuth for Android, rather than those defined in the OAuth2 and
      * OpenID specifications.
@@ -74,7 +96,7 @@ class AuthorizationException @JvmOverloads constructor(
         /**
          * Indicates the user manually canceled the OAuth authorization code flow.
          */
-        @JvmField
+
         val USER_CANCELED_AUTH_FLOW: AuthorizationException = generalEx(1, "User cancelled flow")
 
         /**
@@ -86,7 +108,7 @@ class AuthorizationException @JvmOverloads constructor(
         /**
          * Indicates a network error occurred.
          */
-        @JvmField
+
         val NETWORK_ERROR: AuthorizationException = generalEx(3, "Network error")
 
         /**
@@ -122,7 +144,7 @@ class AuthorizationException @JvmOverloads constructor(
         /**
          * Indicates that a received ID token is invalid
          */
-        @JvmField
+
         val ID_TOKEN_VALIDATION_ERROR: AuthorizationException = generalEx(9, "Invalid ID Token")
     }
 
@@ -136,7 +158,7 @@ class AuthorizationException @JvmOverloads constructor(
         /**
          * An `invalid_request` OAuth2 error response.
          */
-        @JvmField
+
         val INVALID_REQUEST: AuthorizationException = authEx(1000, "invalid_request")
 
         /**
@@ -147,7 +169,7 @@ class AuthorizationException @JvmOverloads constructor(
         /**
          * An `access_denied` OAuth2 error response.
          */
-        @JvmField
+
         val ACCESS_DENIED: AuthorizationException = authEx(1002, "access_denied")
 
         /**
@@ -178,7 +200,7 @@ class AuthorizationException @JvmOverloads constructor(
          * An authorization error occurring on the client rather than the server. For example,
          * due to client misconfiguration. This error should be treated as unrecoverable.
          */
-        @JvmField
+
         val CLIENT_ERROR: AuthorizationException = authEx(1007)
 
         /**
@@ -193,7 +215,7 @@ class AuthorizationException @JvmOverloads constructor(
          * Indicates that the response state param did not match the request state param,
          * resulting in the response being discarded.
          */
-        @JvmField
+
         val STATE_MISMATCH: AuthorizationException =
             generalEx(9, "Response state param did not match request state")
 
@@ -242,7 +264,7 @@ class AuthorizationException @JvmOverloads constructor(
         /**
          * An `unauthorized_client` OAuth2 error response.
          */
-        @JvmField
+
         val UNAUTHORIZED_CLIENT: AuthorizationException = tokenEx(2003, "unauthorized_client")
 
         /**
@@ -259,7 +281,7 @@ class AuthorizationException @JvmOverloads constructor(
          * An authorization error occurring on the client rather than the server. For example,
          * due to client misconfiguration. This error should be treated as unrecoverable.
          */
-        @JvmField
+
         val CLIENT_ERROR: AuthorizationException = tokenEx(2006)
 
         /**
@@ -342,29 +364,11 @@ class AuthorizationException @JvmOverloads constructor(
     }
 
     /**
-     * Produces a JSON representation of the authorization exception, for transmission or storage.
-     * This does not include any provided root cause.
-     */
-    fun toJson() = JSONObject().apply {
-        put(KEY_TYPE, type)
-        put(KEY_CODE, code)
-        error?.let { put(KEY_ERROR, it) }
-        errorDescription?.let { put(KEY_ERROR_DESCRIPTION, it) }
-        errorUri?.let { put(KEY_ERROR_URI, it.toString()) }
-    }
-
-    /**
-     * Provides a JSON string representation of an authorization exception, for transmission or
-     * storage. This does not include any provided root cause.
-     */
-    fun toJsonString() = toJson().toString()
-
-    /**
      * Creates an intent from this exception. Used to carry error responses to the handling activity
      * specified in calls to [AuthorizationService.performAuthorizationRequest].
      */
     fun toIntent() = Intent().apply {
-        putExtra(EXTRA_EXCEPTION, toJsonString())
+        putExtra(EXTRA_EXCEPTION, asJsonString)
     }
 
     /**
@@ -380,7 +384,7 @@ class AuthorizationException @JvmOverloads constructor(
     // equivalent to Arrays.hashCode(new int[] { type, code });
     override fun hashCode() = (HASH_MULTIPLIER * (HASH_MULTIPLIER + type)) + code
 
-    override fun toString() = "AuthorizationException: ${toJsonString()}"
+    override fun toString() = "AuthorizationException: $asJsonString"
 
     companion object {
         /**
@@ -426,7 +430,7 @@ class AuthorizationException @JvmOverloads constructor(
          * The error type for OAuth specific errors on the authorization endpoint. This error type is
          * used when the server responds to an authorization request with an explicit OAuth error, as
          * defined by [the OAuth2 specification, section 4.1.2.1](
- * https://tools.ietf.org/html/rfc6749#section-4.1.2.1). If the authorization response is
+         * https://tools.ietf.org/html/rfc6749#section-4.1.2.1). If the authorization response is
          * invalid and not explicitly an error response, another error type will be used.
          *
          * @see "The OAuth 2.0 Authorization Framework
@@ -453,21 +457,6 @@ class AuthorizationException @JvmOverloads constructor(
          * The error type for OAuth specific errors on the registration endpoint.
          */
         const val TYPE_OAUTH_REGISTRATION_ERROR: Int = 4
-
-        @VisibleForTesting
-        const val KEY_TYPE: String = "type"
-
-        @VisibleForTesting
-        const val KEY_CODE: String = "code"
-
-        @VisibleForTesting
-        const val KEY_ERROR: String = "error"
-
-        @VisibleForTesting
-        const val KEY_ERROR_DESCRIPTION: String = "errorDescription"
-
-        @VisibleForTesting
-        const val KEY_ERROR_URI: String = "errorUri"
 
         /**
          * Prime number multiplier used to produce a reasonable hash value distribution.
@@ -569,31 +558,12 @@ class AuthorizationException @JvmOverloads constructor(
 
         /**
          * Reconstructs an [AuthorizationException] from the JSON produced by
-         * [.toJsonString].
-         * @throws JSONException if the JSON is malformed or missing required properties
+         * [asJsonString].
+         * @throws kotlinx.serialization.SerializationException if the JSON is malformed or
+         * missing required properties
          */
-        @Throws(JSONException::class)
-        fun fromJson(jsonStr: String): AuthorizationException {
-            require(jsonStr.isNotEmpty()) { "jsonStr cannot be empty" }
-            return fromJson(JSONObject(jsonStr))
-        }
-
-        /**
-         * Reconstructs an [AuthorizationException] from the JSON produced by
-         * [toJson].
-         * @throws JSONException if the JSON is malformed or missing required properties
-         */
-        @JvmStatic
-        @Throws(JSONException::class)
-        fun fromJson(json: JSONObject): AuthorizationException {
-            return AuthorizationException(
-                type = json.getInt(KEY_TYPE),
-                code = json.getInt(KEY_CODE),
-                error = json.getStringIfDefined(KEY_ERROR),
-                errorDescription = json.getStringIfDefined(KEY_ERROR_DESCRIPTION),
-                errorUri = json.getUriIfDefined(KEY_ERROR_URI),
-            )
-        }
+        fun fromJsonString(jsonStr: String) =
+            Json.decodeFromString<AuthorizationException>(jsonStr)
 
         /**
          * Extracts an [AuthorizationException] from an intent produced by [.toIntent].
@@ -603,8 +573,8 @@ class AuthorizationException @JvmOverloads constructor(
         @JvmStatic
         fun fromIntent(data: Intent): AuthorizationException? {
             try {
-                return data.getStringExtra(EXTRA_EXCEPTION)?.let { fromJson(it) }
-            } catch (ex: JSONException) {
+                return data.getStringExtra(EXTRA_EXCEPTION)?.let { fromJsonString(it) }
+            } catch (ex: SerializationException) {
                 throw IllegalArgumentException("Intent contains malformed exception data", ex)
             }
         }

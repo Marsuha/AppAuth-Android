@@ -14,7 +14,7 @@
 package net.openid.appauth
 
 import kotlinx.coroutines.test.runTest
-import net.openid.appauth.AuthState.Companion.jsonDeserialize
+import kotlinx.serialization.json.JsonObject
 import net.openid.appauth.AuthState.FreshTokenResult
 import net.openid.appauth.ClientAuthentication.UnsupportedAuthenticationMethod
 import net.openid.appauth.TestValues.TEST_ACCESS_TOKEN
@@ -127,7 +127,7 @@ class AuthStateTest {
         val state = AuthState(resp, null)
 
         assertThat(state.scope).isEqualTo(resp.scope)
-        assertThat(state.scopeValues).isEqualTo(resp.scopeSet)
+        assertThat(state.scopeValues).isEqualTo(resp.scopeValues)
     }
 
     @Test
@@ -438,9 +438,9 @@ class AuthStateTest {
         var capturedException: AuthorizationException? = null
 
         state.performActionWithFreshTokens(
-            service,
-            NoClientAuthentication,
-            emptyMap(),
+            service = service,
+            clientAuth = NoClientAuthentication,
+            refreshTokenAdditionalParams = JsonObject(emptyMap()),
             clock,
         ) { result ->
             when (result) {
@@ -510,9 +510,9 @@ class AuthStateTest {
         var capturedException: AuthorizationException? = null
 
         state.performActionWithFreshTokens(
-            service,
-            NoClientAuthentication,
-            emptyMap(),
+            service = service,
+            clientAuth = NoClientAuthentication,
+            refreshTokenAdditionalParams = JsonObject(emptyMap()),
             clock,
         ) { result ->
             when (result) {
@@ -592,9 +592,9 @@ class AuthStateTest {
         var capturedException: AuthorizationException? = null
 
         state.performActionWithFreshTokens(
-            service,
-            NoClientAuthentication,
-            emptyMap(),
+            service = service,
+            clientAuth = NoClientAuthentication,
+            refreshTokenAdditionalParams = JsonObject(emptyMap()),
             clock,
         ) { result ->
             when (result) {
@@ -608,9 +608,9 @@ class AuthStateTest {
         }
 
         state.performActionWithFreshTokens(
-            service,
-            NoClientAuthentication,
-            emptyMap(),
+            service = service,
+            clientAuth = NoClientAuthentication,
+            refreshTokenAdditionalParams = JsonObject(emptyMap()),
             clock,
         ) { result ->
             when (result) {
@@ -665,8 +665,8 @@ class AuthStateTest {
         val state = AuthState(authResp, tokenResp, null)
         state.update(regResp)
 
-        val json = state.jsonSerializeString()
-        val restoredState = jsonDeserialize(json)
+        val json = state.asJsonString
+        val restoredState = AuthState.fromJsonString(json)
 
         assertThat(restoredState.isAuthorized).isEqualTo(state.isAuthorized)
 
@@ -708,8 +708,8 @@ class AuthStateTest {
         val state = AuthState(authResp, tokenResp, null)
         state.update(regResp)
 
-        val firstOutput = state.jsonSerializeString()
-        val secondOutput = jsonDeserialize(firstOutput).jsonSerializeString()
+        val firstOutput = state.asJsonString
+        val secondOutput = AuthState.fromJsonString(firstOutput).asJsonString
 
         assertThat(secondOutput).isEqualTo(firstOutput)
     }
@@ -722,7 +722,7 @@ class AuthStateTest {
             AuthorizationException.AuthorizationRequestErrors.INVALID_REQUEST
         )
 
-        val restored = jsonDeserialize(state.jsonSerializeString())
+        val restored = AuthState.fromJsonString(state.asJsonString)
         assertThat<AuthorizationException?>(restored.authorizationException)
             .isEqualTo(state.authorizationException)
     }

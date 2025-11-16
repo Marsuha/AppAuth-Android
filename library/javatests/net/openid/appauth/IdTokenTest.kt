@@ -1,6 +1,17 @@
 package net.openid.appauth
 
 import android.util.Base64
+import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.MissingFieldException
+import kotlinx.serialization.SerializationException
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.add
+import kotlinx.serialization.json.addAll
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
 import net.openid.appauth.IdToken.Companion.from
 import net.openid.appauth.IdToken.IdTokenException
 import net.openid.appauth.SystemClock.currentTimeMillis
@@ -15,15 +26,13 @@ import net.openid.appauth.TestValues.testAuthCodeExchangeRequest
 import net.openid.appauth.TestValues.testAuthCodeExchangeRequestBuilder
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.contains
-import org.json.JSONArray
-import org.json.JSONException
-import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
+@OptIn(ExperimentalSerializationApi::class)
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28])
 class IdTokenTest {
@@ -51,30 +60,32 @@ class IdTokenTest {
         val nowInSeconds = currentTimeMillis / 1000
         val tenMinutesInSeconds = (10 * 60).toLong()
 
-        val additionalClaims = mapOf(
-            "claim1" to "value1",
-            "claim2" to listOf("value2", "value3")
-        )
+        val additionalClaims = buildJsonObject {
+            put("claim1", "value1")
+            putJsonArray("claim2") {
+                add("value2")
+                add("value3")
+            }
+        }
 
         val testToken: String = getUnsignedIdToken(
-            TEST_ISSUER,
-            TEST_SUBJECT,
-            TEST_AUDIENCE,
-            nowInSeconds + tenMinutesInSeconds,
-            nowInSeconds,
-            TEST_NONCE,
-            additionalClaims
+            issuer = TEST_ISSUER,
+            subject = TEST_SUBJECT,
+            audience = TEST_AUDIENCE,
+            expiration = nowInSeconds + tenMinutesInSeconds,
+            issuedAt = nowInSeconds,
+            nonce = TEST_NONCE,
+            additionalClaims = additionalClaims
         )
 
         val idToken = from(testToken)
 
-        assertEquals("value1", idToken.additionalClaims["claim1"])
+        assertEquals("value1", idToken.additionalClaims["claim1"]?.jsonPrimitive?.content)
 
-        @Suppress("UNCHECKED_CAST")
-        (assertEquals(
+        assertEquals(
             "value2",
-            (idToken.additionalClaims["claim2"] as List<String>)[0]
-        ))
+            idToken.additionalClaims["claim2"]?.jsonArray[0]?.jsonPrimitive?.content
+        )
     }
 
     @Test
@@ -98,19 +109,16 @@ class IdTokenTest {
     }
 
     @Test(expected = IdTokenException::class)
-    @Throws(IdTokenException::class, JSONException::class)
     fun testFrom_shouldFailOnMissingSection() {
         from("header.")
     }
 
-    @Test(expected = JSONException::class)
-    @Throws(IdTokenException::class, JSONException::class)
+    @Test(expected = SerializationException::class)
     fun testFrom_shouldFailOnMalformedInput() {
         from("header.claims")
     }
 
-    @Test(expected = JSONException::class)
-    @Throws(IdTokenException::class, JSONException::class)
+    @Test(expected = MissingFieldException::class)
     fun testFrom_shouldFailOnMissingIssuer() {
         val testToken: String = getUnsignedIdToken(
             null,
@@ -122,8 +130,7 @@ class IdTokenTest {
         from(testToken)
     }
 
-    @Test(expected = JSONException::class)
-    @Throws(IdTokenException::class, JSONException::class)
+    @Test(expected = MissingFieldException::class)
     fun testFrom_shouldFailOnMissingSubject() {
         val testToken: String = getUnsignedIdToken(
             TEST_ISSUER,
@@ -135,8 +142,7 @@ class IdTokenTest {
         from(testToken)
     }
 
-    @Test(expected = JSONException::class)
-    @Throws(IdTokenException::class, JSONException::class)
+    @Test(expected = MissingFieldException::class)
     fun testFrom_shouldFailOnMissingAudience() {
         val testToken: String = getUnsignedIdToken(
             TEST_ISSUER,
@@ -148,8 +154,7 @@ class IdTokenTest {
         from(testToken)
     }
 
-    @Test(expected = JSONException::class)
-    @Throws(IdTokenException::class, JSONException::class)
+    @Test(expected = MissingFieldException::class)
     fun testFrom_shouldFailOnMissingExpiration() {
         val testToken: String = getUnsignedIdToken(
             TEST_ISSUER,
@@ -163,8 +168,7 @@ class IdTokenTest {
         from(testToken)
     }
 
-    @Test(expected = JSONException::class)
-    @Throws(IdTokenException::class, JSONException::class)
+    @Test(expected = MissingFieldException::class)
     fun testFrom_shouldFailOnMissingIssuedAt() {
         val testToken: String = getUnsignedIdToken(
             TEST_ISSUER,
@@ -179,7 +183,6 @@ class IdTokenTest {
     }
 
     @Test
-    @Throws(AuthorizationException::class)
     fun testValidate() {
         val idToken: IdToken = validIdToken
         val tokenRequest = this.authCodeExchangeRequestWithNonce
@@ -188,7 +191,6 @@ class IdTokenTest {
     }
 
     @Test
-    @Throws(AuthorizationException::class)
     fun testValidate_withoutNonce() {
         val nowInSeconds = currentTimeMillis / 1000
         val tenMinutesInSeconds = (10 * 60).toLong()
@@ -207,7 +209,6 @@ class IdTokenTest {
     }
 
     @Test(expected = AuthorizationException::class)
-    @Throws(AuthorizationException::class)
     fun testValidate_shouldFailOnIssuerMismatch() {
         val nowInSeconds = currentTimeMillis / 1000
         val tenMinutesInSeconds = (10 * 60).toLong()
@@ -226,11 +227,6 @@ class IdTokenTest {
     }
 
     @Test(expected = AuthorizationException::class)
-    @Throws(
-        AuthorizationException::class,
-        JSONException::class,
-        AuthorizationServiceDiscovery.MissingArgumentException::class
-    )
     fun testValidate_shouldFailOnNonHttpsIssuer() {
         val nowInSeconds = currentTimeMillis / 1000
         val tenMinutesInSeconds = (10 * 60).toLong()
@@ -244,7 +240,7 @@ class IdTokenTest {
         )
 
         val serviceDocJsonWithOtherIssuer = getDiscoveryDocJsonWithIssuer("http://other.issuer")
-        val discoveryDoc = AuthorizationServiceDiscovery(JSONObject(serviceDocJsonWithOtherIssuer))
+        val discoveryDoc = AuthorizationServiceDiscovery.fromJsonString(serviceDocJsonWithOtherIssuer)
         val serviceConfiguration = AuthorizationServiceConfiguration(discoveryDoc)
 
         val tokenRequest = TokenRequest.Builder(serviceConfiguration, TEST_CLIENT_ID)
@@ -259,11 +255,6 @@ class IdTokenTest {
     }
 
     @Test
-    @Throws(
-        AuthorizationException::class,
-        JSONException::class,
-        AuthorizationServiceDiscovery.MissingArgumentException::class
-    )
     fun testValidate_shouldSkipNonHttpsIssuer() {
         val nowInSeconds = currentTimeMillis / 1000
         val tenMinutesInSeconds = (10 * 60).toLong()
@@ -277,7 +268,7 @@ class IdTokenTest {
         )
 
         val serviceDocJsonWithOtherIssuer = getDiscoveryDocJsonWithIssuer("http://other.issuer")
-        val discoveryDoc = AuthorizationServiceDiscovery(JSONObject(serviceDocJsonWithOtherIssuer))
+        val discoveryDoc = AuthorizationServiceDiscovery.fromJsonString(serviceDocJsonWithOtherIssuer)
         val serviceConfiguration = AuthorizationServiceConfiguration(discoveryDoc)
 
         val tokenRequest = TokenRequest.Builder(serviceConfiguration, TEST_CLIENT_ID)
@@ -292,11 +283,6 @@ class IdTokenTest {
     }
 
     @Test(expected = AuthorizationException::class)
-    @Throws(
-        AuthorizationException::class,
-        JSONException::class,
-        AuthorizationServiceDiscovery.MissingArgumentException::class
-    )
     fun testValidate_shouldFailOnIssuerMissingHost() {
         val nowInSeconds = currentTimeMillis / 1000
         val tenMinutesInSeconds = (10 * 60).toLong()
@@ -310,8 +296,9 @@ class IdTokenTest {
         )
 
         val serviceDocJsonWithIssuerMissingHost = getDiscoveryDocJsonWithIssuer("https://")
-        val discoveryDoc =
-            AuthorizationServiceDiscovery(JSONObject(serviceDocJsonWithIssuerMissingHost))
+        val discoveryDoc = AuthorizationServiceDiscovery
+            .fromJsonString(serviceDocJsonWithIssuerMissingHost)
+
         val serviceConfiguration = AuthorizationServiceConfiguration(discoveryDoc)
 
         val tokenRequest = TokenRequest.Builder(serviceConfiguration, TEST_CLIENT_ID)
@@ -326,11 +313,6 @@ class IdTokenTest {
     }
 
     @Test(expected = AuthorizationException::class)
-    @Throws(
-        AuthorizationException::class,
-        JSONException::class,
-        AuthorizationServiceDiscovery.MissingArgumentException::class
-    )
     fun testValidate_shouldFailOnIssuerWithQueryParam() {
         val nowInSeconds = currentTimeMillis / 1000
         val tenMinutesInSeconds = (10 * 60).toLong()
@@ -343,12 +325,11 @@ class IdTokenTest {
             nowInSeconds
         )
 
-        val serviceDocJsonWithIssuerMissingHost = getDiscoveryDocJsonWithIssuer(
-            "https://some.issuer?param=value"
-        )
+        val serviceDocJsonWithIssuerMissingHost =
+            getDiscoveryDocJsonWithIssuer("https://some.issuer?param=value")
 
-        val discoveryDoc =
-            AuthorizationServiceDiscovery(JSONObject(serviceDocJsonWithIssuerMissingHost))
+        val discoveryDoc = AuthorizationServiceDiscovery
+            .fromJsonString(serviceDocJsonWithIssuerMissingHost)
 
         val serviceConfiguration = AuthorizationServiceConfiguration(discoveryDoc)
 
@@ -364,11 +345,6 @@ class IdTokenTest {
     }
 
     @Test(expected = AuthorizationException::class)
-    @Throws(
-        AuthorizationException::class,
-        JSONException::class,
-        AuthorizationServiceDiscovery.MissingArgumentException::class
-    )
     fun testValidate_shouldFailOnIssuerWithFragment() {
         val nowInSeconds = currentTimeMillis / 1000
         val tenMinutesInSeconds = (10 * 60).toLong()
@@ -381,11 +357,11 @@ class IdTokenTest {
             nowInSeconds
         )
 
-        val serviceDocJsonWithIssuerMissingHost = getDiscoveryDocJsonWithIssuer(
-            "https://some.issuer/#/fragment"
-        )
-        val discoveryDoc =
-            AuthorizationServiceDiscovery(JSONObject(serviceDocJsonWithIssuerMissingHost))
+        val serviceDocJsonWithIssuerMissingHost =
+            getDiscoveryDocJsonWithIssuer("https://some.issuer/#/fragment")
+
+        val discoveryDoc = AuthorizationServiceDiscovery
+            .fromJsonString(serviceDocJsonWithIssuerMissingHost)
 
         val serviceConfiguration = AuthorizationServiceConfiguration(discoveryDoc)
 
@@ -401,7 +377,6 @@ class IdTokenTest {
     }
 
     @Test
-    @Throws(AuthorizationException::class)
     fun testValidate_audienceMatch() {
         val nowInSeconds = currentTimeMillis / 1000
         val tenMinutesInSeconds = (10 * 60).toLong()
@@ -420,7 +395,6 @@ class IdTokenTest {
     }
 
     @Test(expected = AuthorizationException::class)
-    @Throws(AuthorizationException::class)
     fun testValidate_shouldFailOnAudienceMismatch() {
         val nowInSeconds = currentTimeMillis / 1000
         val tenMinutesInSeconds = (10 * 60).toLong()
@@ -439,7 +413,6 @@ class IdTokenTest {
     }
 
     @Test
-    @Throws(AuthorizationException::class)
     fun testValidate_authorizedPartyMatch() {
         val nowInSeconds = currentTimeMillis / 1000
         val tenMinutesInSeconds = (10 * 60).toLong()
@@ -460,7 +433,6 @@ class IdTokenTest {
     }
 
     @Test(expected = AuthorizationException::class)
-    @Throws(AuthorizationException::class)
     fun testValidate_shouldFailOnAudienceAndAuthorizedPartyMismatch() {
         val nowInSeconds = currentTimeMillis / 1000
         val tenMinutesInSeconds = (10 * 60).toLong()
@@ -473,7 +445,7 @@ class IdTokenTest {
             nowInSeconds,
             TEST_NONCE,
             "some_other_party",
-            emptyMap()
+            emptyJsonObject()
         )
         val tokenRequest = this.authCodeExchangeRequestWithNonce
         val clock: Clock = SystemClock
@@ -481,7 +453,6 @@ class IdTokenTest {
     }
 
     @Test(expected = AuthorizationException::class)
-    @Throws(AuthorizationException::class)
     fun testValidate_shouldFailOnExpiredToken() {
         val nowInSeconds = currentTimeMillis / 1000
         val tenMinutesInSeconds = (10 * 60).toLong()
@@ -500,7 +471,6 @@ class IdTokenTest {
     }
 
     @Test(expected = AuthorizationException::class)
-    @Throws(AuthorizationException::class)
     fun testValidate_shouldFailOnIssuedAtOverTenMinutesAgo() {
         val nowInSeconds = currentTimeMillis / 1000
         val tenMinutesInSeconds = (10 * 60).toLong()
@@ -519,7 +489,6 @@ class IdTokenTest {
     }
 
     @Test(expected = AuthorizationException::class)
-    @Throws(AuthorizationException::class)
     fun testValidate_shouldFailOnNonceMismatch() {
         val nowInSeconds = currentTimeMillis / 1000
         val tenMinutesInSeconds = (10 * 60).toLong()
@@ -586,7 +555,7 @@ class IdTokenTest {
                     nowInSeconds,
                     TEST_NONCE,
                     TEST_CLIENT_ID,
-                    emptyMap()
+                    emptyJsonObject()
                 )
             }
 
@@ -636,15 +605,18 @@ class IdTokenTest {
             issuedAt: Long?,
             nonce: String?
         ): String {
-            val header = JSONObject().put("typ", "JWT")
+            val header = buildJsonObject {
+                put("alg", "none")
+                put("typ", "JWT")
+            }
 
-            val claims = JSONObject().apply {
-                putIfNotNull("iss", issuer)
-                putIfNotNull("sub", subject)
-                put("aud", JSONArray(audience))
-                putIfNotNull("exp", expiration?.toString())
-                putIfNotNull("iat", issuedAt?.toString())
-                putIfNotNull("nonce", nonce)
+            val claims = buildJsonObject {
+                issuer?.let { put("iss", it) }
+                subject?.let { put("sub", it) }
+                putJsonArray("aud") { addAll(audience) }
+                expiration?.let { put("exp", it) }
+                issuedAt?.let { put("iat", it) }
+                nonce?.let { put("nonce", it) }
             }
 
             val encodedHeader = base64UrlNoPaddingEncode(header.toString().toByteArray())
@@ -666,7 +638,7 @@ class IdTokenTest {
             expiration,
             issuedAt,
             nonce,
-            emptyMap()
+            emptyJsonObject()
         )
 
         fun getUnsignedIdToken(
@@ -676,21 +648,17 @@ class IdTokenTest {
             expiration: Long?,
             issuedAt: Long?,
             nonce: String?,
-            additionalClaims: Map<String, Any>
+            additionalClaims: JsonObject
         ): String {
-            val header = JSONObject().put("typ", "JWT")
-
-            val claims = JSONObject().apply {
-                putIfNotNull("iss", issuer)
-                putIfNotNull("sub", subject)
-                putIfNotNull("aud", audience)
-                putIfNotNull("exp", expiration?.toString())
-                putIfNotNull("iat", issuedAt?.toString())
-                putIfNotNull("nonce", nonce)
-
-                additionalClaims.forEach {
-                    putIfNotNull(it.key, it.value)
-                }
+            val header = buildJsonObject { put("typ", "JWT") }
+            val claims = buildJsonObject {
+                issuer?.let { put("iss", it) }
+                subject?.let { put("sub", it) }
+                audience?.let { put("aud", it) }
+                expiration?.let { put("exp", it) }
+                issuedAt?.let { put("iat", it) }
+                nonce?.let { put("nonce", it) }
+                additionalClaims.forEach { put(it.key, it.value) }
             }
 
             val encodedHeader = base64UrlNoPaddingEncode(header.toString().toByteArray())

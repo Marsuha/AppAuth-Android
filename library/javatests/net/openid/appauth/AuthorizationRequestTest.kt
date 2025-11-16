@@ -13,10 +13,16 @@
  */
 package net.openid.appauth
 
-import net.openid.appauth.AuthorizationRequest.Companion.jsonDeserialize
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.put
+import net.openid.appauth.AuthorizationRequest.Companion.PARAM_SCOPE
+import net.openid.appauth.AuthorizationRequest.Companion.fromJsonString
 import net.openid.appauth.AuthorizationRequest.Prompt.CONSENT
 import net.openid.appauth.AuthorizationRequest.Prompt.LOGIN
 import net.openid.appauth.AuthorizationRequest.Prompt.SELECT_ACCOUNT
+import net.openid.appauth.AuthorizationRequest.Scope
 import net.openid.appauth.CodeVerifierUtil.codeVerifierChallengeMethod
 import net.openid.appauth.CodeVerifierUtil.deriveCodeVerifierChallenge
 import net.openid.appauth.TestValues.TEST_APP_REDIRECT_URI
@@ -26,8 +32,6 @@ import net.openid.appauth.TestValues.TEST_NONCE
 import net.openid.appauth.TestValues.TEST_STATE
 import net.openid.appauth.TestValues.testServiceConfig
 import org.assertj.core.api.Assertions.assertThat
-import org.json.JSONException
-import org.json.JSONObject
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -416,11 +420,10 @@ class AuthorizationRequestTest {
     }
 
     @Test
-    @Throws(JSONException::class)
     fun testClaims() {
-        val claims = JSONObject(TEST_CLAIMS)
+        val claims = Json.parseToJsonElement(TEST_CLAIMS).jsonObject
         val req = requestBuilder.setClaims(claims).build()
-        assertThat(req.claims.toString()).isEqualTo(claims.toString())
+        assertThat(req.claims).isEqualTo(claims)
     }
 
     @Test
@@ -507,9 +510,7 @@ class AuthorizationRequestTest {
     /* ******************************* additionalParams *******************************************/
     @Test(expected = IllegalArgumentException::class)
     fun testBuilder_setAdditionalParams_withBuiltInParam() {
-        val additionalParams =
-            mapOf(AuthorizationRequest.PARAM_SCOPE to AuthorizationRequest.Scope.EMAIL)
-
+        val additionalParams = buildJsonObject { put(PARAM_SCOPE, Scope.EMAIL) }
         requestBuilder.setAdditionalParameters(additionalParams)
     }
 
@@ -635,14 +636,14 @@ class AuthorizationRequestTest {
     @Test
     fun testToUri_scopeParam() {
         val uri = requestBuilder
-            .setScope(AuthorizationRequest.Scope.EMAIL)
+            .setScope(Scope.EMAIL)
             .build()
             .toUri()
 
-        assertThat(uri.getQueryParameterNames()).contains(AuthorizationRequest.PARAM_SCOPE)
+        assertThat(uri.getQueryParameterNames()).contains(PARAM_SCOPE)
 
-        assertThat(uri.getQueryParameter(AuthorizationRequest.PARAM_SCOPE))
-            .isEqualTo(AuthorizationRequest.Scope.EMAIL)
+        assertThat(uri.getQueryParameter(PARAM_SCOPE))
+            .isEqualTo(Scope.EMAIL)
     }
 
     @Test
@@ -684,10 +685,9 @@ class AuthorizationRequestTest {
     }
 
     @Test
-    @Throws(JSONException::class)
     fun testToUri_claimsParam() {
         val req = requestBuilder
-            .setClaims(JSONObject(TEST_CLAIMS))
+            .setClaims(Json.parseToJsonElement(TEST_CLAIMS).jsonObject)
             .build()
 
         val uri = req.toUri()
@@ -713,10 +713,11 @@ class AuthorizationRequestTest {
     @Test
     @Throws(Exception::class)
     fun testToUri_additionalParams() {
-        val additionalParams = mapOf(
-            "my_param" to "1234",
-            "another_param" to "5678"
-        )
+        val additionalParams = buildJsonObject {
+            put("my_param", "1234")
+            put("another_param", "5678")
+            put("other_param", 123)
+        }
 
         val req = requestBuilder
             .setAdditionalParameters(additionalParams)
@@ -726,6 +727,7 @@ class AuthorizationRequestTest {
 
         assertThat(uri.getQueryParameter("my_param")).isEqualTo("1234")
         assertThat(uri.getQueryParameter("another_param")).isEqualTo("5678")
+        assertThat(uri.getQueryParameter("other_param")).isEqualTo(123.toString())
     }
 
     /* ************************** jsonSerialize() / jsonDeserialize() *****************************/
@@ -805,9 +807,9 @@ class AuthorizationRequestTest {
     @Throws(Exception::class)
     fun testJsonSerialize_scope() {
         val copy = serializeDeserialize(
-            requestBuilder.setScope(AuthorizationRequest.Scope.EMAIL).build()
+            requestBuilder.setScope(Scope.EMAIL).build()
         )
-        assertThat(copy.scope).isEqualTo(AuthorizationRequest.Scope.EMAIL)
+        assertThat(copy.scope).isEqualTo(Scope.EMAIL)
     }
 
     @Test
@@ -834,9 +836,9 @@ class AuthorizationRequestTest {
     @Test
     @Throws(Exception::class)
     fun testJsonSerialize_claims() {
-        val claims = JSONObject(TEST_CLAIMS)
+        val claims = Json.parseToJsonElement(TEST_CLAIMS).jsonObject
         val copy = serializeDeserialize(requestBuilder.setClaims(claims).build())
-        assertThat(copy.claims.toString()).isEqualTo(claims.toString())
+        assertThat(copy.claims).isEqualTo(claims)
     }
 
     @Test
@@ -859,9 +861,8 @@ class AuthorizationRequestTest {
         )
     }
 
-    @Throws(JSONException::class)
     private fun serializeDeserialize(request: AuthorizationRequest): AuthorizationRequest {
-        return jsonDeserialize(request.jsonSerializeString())
+        return fromJsonString(request.asJsonString)
     }
 
     private fun generateString(length: Int): String {
@@ -881,14 +882,16 @@ class AuthorizationRequestTest {
         private const val TEST_CODE_VERIFIER =
             "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_~."
 
-        private val TEST_ADDITIONAL_PARAMS = mapOf(
-            "test_key1" to "test_value1",
-            "test_key2" to "test_value2"
-        )
+        private val TEST_ADDITIONAL_PARAMS = buildJsonObject {
+            put("test_key1", "test_value1")
+            put("test_key2", "test_value2")
+        }
 
-        private const val TEST_CLAIMS = ("{\n"
-                + " \"userinfo\":{\"email\":{\"essential\":true}},\n"
-                + " \"id_token\":{\"gender\":null}\n"
-                + "}")
+        private val TEST_CLAIMS = """
+            {
+                "userinfo": { "email": { "essential": true } },
+                "id_token": { "gender": null }
+            }
+        """.trimIndent()
     }
 }

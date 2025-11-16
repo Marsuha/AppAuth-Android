@@ -15,11 +15,16 @@ package net.openid.appauth
 
 import android.net.Uri
 import androidx.annotation.VisibleForTesting
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.encodeToJsonElement
+import kotlinx.serialization.json.jsonObject
 import net.openid.appauth.AsciiStringListUtil.stringToSet
 import net.openid.appauth.CodeVerifierUtil.checkCodeVerifier
 import net.openid.appauth.CodeVerifierUtil.deriveCodeVerifierChallenge
-import org.json.JSONException
-import org.json.JSONObject
+import net.openid.appauth.internal.UriSerializer
 
 /**
  * An OAuth2 authorization request.
@@ -28,6 +33,7 @@ import org.json.JSONObject
  * @see "The OAuth 2.0 Authorization Framework
  */
 @Suppress("KDocUnresolvedReference")
+@Serializable
 class AuthorizationRequest private constructor(
     /**
      * The service's [configuration][AuthorizationServiceConfiguration].
@@ -37,14 +43,15 @@ class AuthorizationRequest private constructor(
      * created manually}, or [AuthorizationServiceConfiguration.fetchFromUrl] via an OpenID Connect
      * Discovery Document}.
      */
-    @JvmField val configuration: AuthorizationServiceConfiguration,
+    val configuration: AuthorizationServiceConfiguration,
     /**
      * The client identifier.
      *
      * @see "The OAuth 2.0 Authorization Framework
      * @see "The OAuth 2.0 Authorization Framework
      */
-    @JvmField val clientId: String,
+    @SerialName(PARAM_CLIENT_ID)
+    val clientId: String,
     /**
      * The expected response type.
      *
@@ -52,13 +59,16 @@ class AuthorizationRequest private constructor(
      * @see <a href="https://openid.net/specs/openid-connect-core-1_0.html#rfc.section.3">
      *     OpenID Connect Core 1.0, Section 3</a>
      */
-    @JvmField val responseType: String,
+    @SerialName(PARAM_RESPONSE_TYPE)
+    val responseType: String,
     /**
      * The client's redirect URI.
      *
      * @see "The OAuth 2.0 Authorization Framework
      */
-    @JvmField val redirectUri: Uri,
+    @Serializable(with = UriSerializer::class)
+    @SerialName(PARAM_REDIRECT_URI)
+    val redirectUri: Uri,
     /**
      * The OpenID Connect 1.0 `display` parameter. This is a string that specifies how the
      * Authorization Server displays the authentication and consent user interface pages to the
@@ -67,7 +77,8 @@ class AuthorizationRequest private constructor(
      * @see <a href="https://openid.net/specs/openid-connect-core-1_0.html#rfc.section.3.1.2.1">
      *     OpenID Connect Core 1.0, Section 3.1.2.1</a>
      */
-    @JvmField val display: String?,
+    @SerialName(PARAM_DISPLAY)
+    val display: String?,
     /**
      * The OpenID Connect 1.0 `login_hint` parameter. This is a string hint to the
      * Authorization Server about the login identifier the End-User might use to log in, typically
@@ -76,7 +87,8 @@ class AuthorizationRequest private constructor(
      * @see <a href="https://openid.net/specs/openid-connect-core-1_0.html#rfc.section.3.1.2.1">
      *     OpenID Connect Core 1.0, Section 3.1.2.1</a>
      */
-    @JvmField val loginHint: String?,
+    @SerialName(PARAM_LOGIN_HINT)
+    val loginHint: String?,
     /**
      * The OpenID Connect 1.0 `prompt` parameter. This is a space delimited, case sensitive
      * list of ASCII strings that specifies whether the Authorization Server prompts the End-User
@@ -87,7 +99,8 @@ class AuthorizationRequest private constructor(
      * @see <a href="https://openid.net/specs/openid-connect-core-1_0.html#rfc.section.3.1.2.1">
      *     OpenID Connect Core 1.0, Section 3.1.2.1</a>
      */
-    @JvmField val prompt: String?,
+    @SerialName(PARAM_PROMPT)
+    val prompt: String?,
     /**
      * The OpenID Connect 1.0 `ui_locales` parameter. This is a space-separated list of
      * BCP47 [RFC5646] language tag values, ordered by preference. It represents End-User's
@@ -96,14 +109,16 @@ class AuthorizationRequest private constructor(
      * @see <a href="https://openid.net/specs/openid-connect-core-1_0.html#rfc.section.3.1.2.1">
      *     OpenID Connect Core 1.0, Section 3.1.2.1</a>
      */
-    @JvmField val uiLocales: String?,
+    @SerialName(PARAM_UI_LOCALES)
+    val uiLocales: String?,
     /**
      * The optional set of scopes expressed as a space-delimited, case-sensitive string.
      *
      * @see "The OAuth 2.0 Authorization Framework
      * @see "The OAuth 2.0 Authorization Framework
      */
-    @JvmField val scope: String?,
+    @SerialName(PARAM_SCOPE)
+    val scope: String?,
     /**
      * An opaque value used by the client to maintain state between the request and callback. If
      * this value is not explicitly set, this library will automatically add state and perform
@@ -115,6 +130,7 @@ class AuthorizationRequest private constructor(
      * @see "The OAuth 2.0 Authorization Framework
      * @see "The OAuth 2.0 Authorization Framework
      */
+    @SerialName(PARAM_STATE)
     override val state: String?,
     /**
      * String value used to associate a Client session with an ID Token, and to mitigate replay
@@ -126,7 +142,8 @@ class AuthorizationRequest private constructor(
      * @see <a href="https://openid.net/specs/openid-connect-core-1_0.html#rfc.section.3.1.2.1">
      *     OpenID Connect Core 1.0, Section 3.1.2.1</a>
      */
-    @JvmField val nonce: String?,
+    @SerialName(PARAM_NONCE)
+    val nonce: String?,
     /**
      * The proof key for code exchange. This is an opaque value used to associate an authorization
      * request with a subsequent code exchange, in order to prevent any eavesdropping party from
@@ -138,7 +155,7 @@ class AuthorizationRequest private constructor(
      * @see Builder.setCodeVerifier
      * @see "Proof Key for Code Exchange by OAuth Public Clients
      */
-    @JvmField val codeVerifier: String?,
+    val codeVerifier: String?,
     /**
      * The challenge derived from the [code verifier][.codeVerifier], using the
      * [challenge method][.codeVerifierChallengeMethod]. If a code verifier is not being
@@ -148,7 +165,8 @@ class AuthorizationRequest private constructor(
      * @see Builder.setCodeVerifier
      * @see "Proof Key for Code Exchange by OAuth Public Clients
      */
-    @JvmField val codeVerifierChallenge: String?,
+    @SerialName(PARAM_CODE_CHALLENGE)
+    val codeVerifierChallenge: String?,
     /**
      * The challenge method used to generate a [challenge][.codeVerifierChallenge] from
      * the [code verifier][.codeVerifier]. If a code verifier is not being used for this
@@ -158,7 +176,8 @@ class AuthorizationRequest private constructor(
      * @see Builder.setCodeVerifier
      * @see "Proof Key for Code Exchange by OAuth Public Clients
      */
-    @JvmField val codeVerifierChallengeMethod: String?,
+    @SerialName(PARAM_CODE_CHALLENGE_METHOD)
+    val codeVerifierChallengeMethod: String?,
     /**
      * Instructs the authorization service on the mechanism to be used for returning
      * response parameters from the authorization endpoint. This use of this parameter is
@@ -168,7 +187,8 @@ class AuthorizationRequest private constructor(
      * @see <a href="https://openid.net/specs/openid-connect-core-1_0.html#rfc.section.3.1.2.1">
      *     OpenID Connect Core 1.0, Section 3.1.2.1</a>
      */
-    @JvmField val responseMode: String?,
+    @SerialName(PARAM_RESPONSE_MODE)
+    val responseMode: String?,
     /**
      * Requests that specific Claims be returned.
      * The value is a JSON object listing the requested Claims.
@@ -176,7 +196,8 @@ class AuthorizationRequest private constructor(
      * @see <a href="https://openid.net/specs/openid-connect-core-1_0.html#rfc.section.5.5">
      *     OpenID Connect Core 1.0, Section 5.5</a>
      */
-    @JvmField val claims: JSONObject?,
+    @SerialName(PARAM_CLAIMS)
+    val claims: JsonObject?,
     /**
      * End-User's preferred languages and scripts for Claims being returned, represented as a
      * space-separated list of BCP47 [RFC5646] language tag values, ordered by preference.
@@ -184,13 +205,14 @@ class AuthorizationRequest private constructor(
      * @see <a href="https://openid.net/specs/openid-connect-core-1_0.html#rfc.section.5.2">
      *     OpenID Connect Core 1.0, Section 5.2</a>
      */
-    @JvmField val claimsLocales: String?,
+    @SerialName(PARAM_CLAIMS_LOCALES)
+    val claimsLocales: String?,
     /**
      * Additional parameters to be passed as part of the request.
      *
      * @see "The OAuth 2.0 Authorization Framework
      */
-    @JvmField val additionalParameters: Map<String, String>
+    val additionalParameters: JsonObject
 ) : AuthorizationManagementRequest {
     /**
      * The set of scopes from the consolidated, space-delimited `scope` field.
@@ -230,6 +252,12 @@ class AuthorizationRequest private constructor(
      */
     val claimsLocalesValues: Set<String>?
         get() = claimsLocales?.let { stringToSet(it) }
+
+    override val asJsonString get() = Json.encodeToString(this)
+
+    @Suppress("unused")
+    @VisibleForTesting
+    val asJsonObject get() = Json.encodeToJsonElement(this).jsonObject
 
     /**
      * All spec-defined values for the OpenID Connect 1.0 `display` parameter.
@@ -474,19 +502,19 @@ class AuthorizationRequest private constructor(
 
         private var responseMode: String? = null
 
-        private var claims: JSONObject? = null
+        private var claims: JsonObject? = null
 
         private var claimsLocales: String? = null
 
-        private var additionalParameters: Map<String, String> = emptyMap()
+        private var additionalParameters = emptyJsonObject()
 
         /**
          * Specifies the service configuration to be used in dispatching this request.
          */
         fun setAuthorizationServiceConfiguration(
-            configuration: AuthorizationServiceConfiguration
+            config: AuthorizationServiceConfiguration
         ): Builder {
-            this@Builder.configuration = configuration
+            configuration = config
             return this
         }
 
@@ -496,9 +524,9 @@ class AuthorizationRequest private constructor(
          * @see "The OAuth 2.0 Authorization Framework
          * @see "The OAuth 2.0 Authorization Framework
          */
-        fun setClientId(clientId: String): Builder {
-            require(clientId.isNotEmpty()) { "client id cannot be empty" }
-            this@Builder.clientId = clientId
+        fun setClientId(id: String): Builder {
+            require(id.isNotEmpty()) { "client id cannot be empty" }
+            clientId = id
             return this
         }
 
@@ -522,9 +550,9 @@ class AuthorizationRequest private constructor(
          * @see <a href="https://openid.net/specs/openid-connect-core-1_0.html#rfc.section.3.1.2.1">
          *     OpenID Connect Core 1.0, Section 3.1.2.1</a>
          */
-        fun setLoginHint(loginHint: String?): Builder {
-            loginHint?.let { require(it.isNotEmpty()) { "login hint must be null or not empty" } }
-            this@Builder.loginHint = loginHint
+        fun setLoginHint(hint: String?): Builder {
+            hint?.let { require(it.isNotEmpty()) { "login hint must be null or not empty" } }
+            loginHint = hint
             return this
         }
 
@@ -583,9 +611,9 @@ class AuthorizationRequest private constructor(
          * @see <a href="https://openid.net/specs/openid-connect-core-1_0.html#rfc.section.3.1.2.1">
          *     OpenID Connect Core 1.0, Section 3.1.2.1</a>
          */
-        fun setUiLocales(uiLocales: String?): Builder {
-            uiLocales?.let { require(it.isNotEmpty()) { "uiLocales must be null or not empty" } }
-            this@Builder.uiLocales = uiLocales
+        fun setUiLocales(locales: String?): Builder {
+            locales?.let { require(it.isNotEmpty()) { "uiLocales must be null or not empty" } }
+            uiLocales = locales
             return this
         }
 
@@ -624,9 +652,9 @@ class AuthorizationRequest private constructor(
          * @see <a href="https://openid.net/specs/openid-connect-core-1_0.html#rfc.section.3">
          *     OpenID Connect Core 1.0, Section 3</a>
          */
-        fun setResponseType(responseType: String): Builder {
-            require(responseType.isNotEmpty()) { "response type cannot be empty" }
-            this@Builder.responseType = responseType
+        fun setResponseType(type: String): Builder {
+            require(type.isNotEmpty()) { "response type cannot be empty" }
+            responseType = type
             return this
         }
 
@@ -635,8 +663,8 @@ class AuthorizationRequest private constructor(
          *
          * @see "The OAuth 2.0 Authorization Framework
          */
-        fun setRedirectUri(redirectUri: Uri): Builder {
-            this@Builder.redirectUri = redirectUri
+        fun setRedirectUri(uri: Uri): Builder {
+            redirectUri = uri
             return this
         }
 
@@ -721,12 +749,13 @@ class AuthorizationRequest private constructor(
          *
          * @see "Proof Key for Code Exchange by OAuth Public Clients
          */
-        fun setCodeVerifier(codeVerifier: String?): Builder {
-            codeVerifier?.let { checkCodeVerifier(it) }
-            this@Builder.codeVerifier = codeVerifier
-            codeVerifierChallenge = codeVerifier?.let { deriveCodeVerifierChallenge(it) }
+        fun setCodeVerifier(verifier: String?): Builder {
+            verifier?.let { checkCodeVerifier(it) }
+            codeVerifier = verifier
+            codeVerifierChallenge = verifier?.let { deriveCodeVerifierChallenge(it) }
             codeVerifierChallengeMethod =
-                codeVerifier?.let { CodeVerifierUtil.codeVerifierChallengeMethod }
+                verifier?.let { CodeVerifierUtil.codeVerifierChallengeMethod }
+
             return this
         }
 
@@ -741,29 +770,25 @@ class AuthorizationRequest private constructor(
          * @see "Proof Key for Code Exchange by OAuth Public Clients
          */
         fun setCodeVerifier(
-            codeVerifier: String?,
-            codeVerifierChallenge: String?,
-            codeVerifierChallengeMethod: String?
+            verifier: String?,
+            verifierChallenge: String?,
+            verifierChallengeMethod: String?
         ): Builder {
-            if (codeVerifier != null) {
-                checkCodeVerifier(codeVerifier)
+            if (verifier != null) {
+                checkCodeVerifier(verifier)
 
-                require(!codeVerifierChallenge.isNullOrEmpty()) {
+                require(!verifierChallenge.isNullOrEmpty()) {
                     "code verifier challenge cannot be null or empty if verifier is set"
                 }
 
-                require(!codeVerifierChallengeMethod.isNullOrEmpty()) {
+                require(!verifierChallengeMethod.isNullOrEmpty()) {
                     "code verifier challenge method cannot be null or empty if verifier is set"
                 }
             }
 
-            this@Builder.codeVerifier = codeVerifier
-            this@Builder.codeVerifierChallenge =
-                codeVerifierChallenge.takeIf { codeVerifier != null }
-
-            this@Builder.codeVerifierChallengeMethod =
-                codeVerifierChallengeMethod.takeIf { codeVerifier != null }
-
+            codeVerifier = verifier
+            codeVerifierChallenge = verifierChallenge.takeIf { verifier != null }
+            codeVerifierChallengeMethod = verifierChallengeMethod.takeIf { verifier != null }
             return this
         }
 
@@ -777,9 +802,9 @@ class AuthorizationRequest private constructor(
          * @see <a href="https://openid.net/specs/oauth-v2-multiple-response-types-1_0.html#rfc.section.2">
          *     OAuth 2.0 Multiple Response Type Encoding Practices, Section 2
          */
-        fun setResponseMode(responseMode: String?): Builder {
-            responseMode?.let { require(it.isNotEmpty()) { "responseMode must be null or not empty" } }
-            this@Builder.responseMode = responseMode
+        fun setResponseMode(mode: String?): Builder {
+            mode?.let { require(it.isNotEmpty()) { "responseMode must be null or not empty" } }
+            responseMode = mode
             return this
         }
 
@@ -790,7 +815,7 @@ class AuthorizationRequest private constructor(
          * @see <a href="https://openid.net/specs/openid-connect-core-1_0.html#rfc.section.5.5">
          *     OpenID Connect Core 1.0, Section 5.5</a>
          */
-        fun setClaims(claims: JSONObject?): Builder {
+        fun setClaims(claims: JsonObject?): Builder {
             this@Builder.claims = claims
             return this
         }
@@ -802,9 +827,9 @@ class AuthorizationRequest private constructor(
          * @see <a href="https://openid.net/specs/openid-connect-core-1_0.html#rfc.section.5.2">
          *     OpenID Connect Core 1.0, Section 5.2</a>
          */
-        fun setClaimsLocales(claimsLocales: String?): Builder {
-            claimsLocales?.let { require(it.isNotEmpty()) { "claimsLocales must be null or not empty" } }
-            this@Builder.claimsLocales = claimsLocales
+        fun setClaimsLocales(locales: String?): Builder {
+            locales?.let { require(it.isNotEmpty()) { "claimsLocales must be null or not empty" } }
+            claimsLocales = locales
             return this
         }
 
@@ -838,9 +863,8 @@ class AuthorizationRequest private constructor(
          *
          * @see "The OAuth 2.0 Authorization Framework
          */
-        fun setAdditionalParameters(additionalParameters: Map<String, String>?): Builder {
-            this@Builder.additionalParameters =
-                additionalParameters.checkAdditionalParams(BUILT_IN_PARAMS)
+        fun setAdditionalParameters(parameters: JsonObject?): Builder {
+            additionalParameters = parameters.checkAdditionalParams(BUILT_IN_PARAMS)
             return this
         }
 
@@ -902,43 +926,9 @@ class AuthorizationRequest private constructor(
 
         claims?.let { appendQueryParameter(PARAM_CLAIMS, it.toString()) }
         claimsLocales?.let { appendQueryParameter(PARAM_CLAIMS_LOCALES, it) }
-        additionalParameters.forEach { appendQueryParameter(it.key, it.value) }
-
+        additionalParameters.forEach { appendQueryParameter(it.key, it.value.toUnquotedString()) }
         build()
     }
-
-
-    /**
-     * Produces a JSON representation of the authorization request for persistent storage or local
-     * transmission (e.g. between activities).
-     */
-    override fun jsonSerialize() = JSONObject().apply {
-        put(KEY_CONFIGURATION, configuration.toJson())
-        put(KEY_CLIENT_ID, clientId)
-        put(KEY_RESPONSE_TYPE, responseType)
-        put(KEY_REDIRECT_URI, redirectUri.toString())
-        display?.let { put(KEY_DISPLAY, it) }
-        loginHint?.let { put(KEY_LOGIN_HINT, it) }
-        scope?.let { put(KEY_SCOPE, it) }
-        prompt?.let { put(KEY_PROMPT, it) }
-        uiLocales?.let { put(KEY_UI_LOCALES, it) }
-        state?.let { put(KEY_STATE, it) }
-        nonce?.let { put(KEY_NONCE, it) }
-        codeVerifier?.let { put(KEY_CODE_VERIFIER, it) }
-        codeVerifierChallenge?.let { put(KEY_CODE_VERIFIER_CHALLENGE, it) }
-        codeVerifierChallengeMethod?.let { put(KEY_CODE_VERIFIER_CHALLENGE_METHOD, it) }
-        responseMode?.let { put(KEY_RESPONSE_MODE, it) }
-        claims?.let { put(KEY_CLAIMS, it) }
-        claimsLocales?.let { put(KEY_CLAIMS_LOCALES, it) }
-        put(KEY_ADDITIONAL_PARAMETERS, additionalParameters.toJsonObject())
-    }
-
-    /**
-     * Produces a JSON string representation of the request for persistent storage or
-     * local transmission (e.g. between activities). This method is just a convenience wrapper
-     * for [.jsonSerialize], converting the JSON object to its string form.
-     */
-    override fun jsonSerializeString() = jsonSerialize().toString()
 
     companion object {
         /**
@@ -1018,71 +1008,12 @@ class AuthorizationRequest private constructor(
             PARAM_CLAIMS_LOCALES
         )
 
-        private const val KEY_CONFIGURATION = "configuration"
-        private const val KEY_CLIENT_ID = "clientId"
-        private const val KEY_DISPLAY = "display"
-        private const val KEY_LOGIN_HINT = "login_hint"
-        private const val KEY_PROMPT = "prompt"
-        private const val KEY_UI_LOCALES = "ui_locales"
-        private const val KEY_RESPONSE_TYPE = "responseType"
-        private const val KEY_REDIRECT_URI = "redirectUri"
-        private const val KEY_SCOPE = "scope"
-        private const val KEY_STATE = "state"
-        private const val KEY_NONCE = "nonce"
-        private const val KEY_CODE_VERIFIER = "codeVerifier"
-        private const val KEY_CODE_VERIFIER_CHALLENGE = "codeVerifierChallenge"
-        private const val KEY_CODE_VERIFIER_CHALLENGE_METHOD = "codeVerifierChallengeMethod"
-        private const val KEY_RESPONSE_MODE = "responseMode"
-        private const val KEY_CLAIMS = "claims"
-        private const val KEY_CLAIMS_LOCALES = "claimsLocales"
-        private const val KEY_ADDITIONAL_PARAMETERS = "additionalParameters"
-
         /**
-         * Reads an authorization request from a JSON string representation produced by
-         * [.jsonSerialize].
-         * @throws JSONException if the provided JSON does not match the expected structure.
+         * Reads an authorization request from a JSON string. This method is the reciprocal of
+         * [asJsonString], and is useful for retrieving a request from storage.
+         * @throws kotlinx.serialization.SerializationException if the JSON is malformed or
+         * missing a required field.
          */
-        @JvmStatic
-        @Throws(JSONException::class)
-        fun jsonDeserialize(json: JSONObject): AuthorizationRequest {
-            return AuthorizationRequest(
-                configuration = AuthorizationServiceConfiguration.fromJson(
-                    json.getJSONObject(
-                        KEY_CONFIGURATION
-                    )
-                ),
-                clientId = json.getString(KEY_CLIENT_ID),
-                responseType = json.getString(KEY_RESPONSE_TYPE),
-                redirectUri = json.getUri(KEY_REDIRECT_URI),
-                display = json.getStringIfDefined(KEY_DISPLAY),
-                loginHint = json.getStringIfDefined(KEY_LOGIN_HINT),
-                prompt = json.getStringIfDefined(KEY_PROMPT),
-                uiLocales = json.getStringIfDefined(KEY_UI_LOCALES),
-                scope = json.getStringIfDefined(KEY_SCOPE),
-                state = json.getStringIfDefined(KEY_STATE),
-                nonce = json.getStringIfDefined(KEY_NONCE),
-                codeVerifier = json.getStringIfDefined(KEY_CODE_VERIFIER),
-                codeVerifierChallenge = json.getStringIfDefined(KEY_CODE_VERIFIER_CHALLENGE),
-                codeVerifierChallengeMethod = json.getStringIfDefined(
-                    KEY_CODE_VERIFIER_CHALLENGE_METHOD
-                ),
-                responseMode = json.getStringIfDefined(KEY_RESPONSE_MODE),
-                claims = json.getJsonObjectIfDefined(KEY_CLAIMS),
-                claimsLocales = json.getStringIfDefined(KEY_CLAIMS_LOCALES),
-                additionalParameters = json.getStringMap(KEY_ADDITIONAL_PARAMETERS)
-            )
-        }
-
-        /**
-         * Reads an authorization request from a JSON string representation produced by
-         * [.jsonSerializeString]. This method is just a convenience wrapper for
-         * [.jsonDeserialize], converting the JSON string to its JSON object form.
-         * @throws JSONException if the provided JSON does not match the expected structure.
-         */
-        @JvmStatic
-        @Throws(JSONException::class)
-        fun jsonDeserialize(jsonStr: String): AuthorizationRequest {
-            return jsonDeserialize(JSONObject(jsonStr))
-        }
+        fun fromJsonString(json: String) = Json.decodeFromString<AuthorizationRequest>(json)
     }
 }

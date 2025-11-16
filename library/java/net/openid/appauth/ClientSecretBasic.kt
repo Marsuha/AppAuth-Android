@@ -14,7 +14,7 @@
 package net.openid.appauth
 
 import android.util.Base64
-import net.openid.appauth.internal.UriUtil.formUrlEncodeValue
+import net.openid.appauth.internal.formUrlEncode
 
 /**
  * Implementation of the client authentication method 'client_secret_basic'.
@@ -26,8 +26,8 @@ class ClientSecretBasic(private val clientSecret: String) : ClientAuthentication
     override fun getRequestHeaders(clientId: String): Map<String, String> {
         // From the OAuth2 RFC, client ID and secret should be encoded prior to concatenation and
         // conversion to Base64: https://tools.ietf.org/html/rfc6749#section-2.3.1
-        val encodedClientId = formUrlEncodeValue(clientId)
-        val encodedClientSecret = formUrlEncodeValue(clientSecret)
+        val encodedClientId = clientId.formUrlEncode()
+        val encodedClientSecret = clientSecret.formUrlEncode()
         val credentials = "$encodedClientId:$encodedClientSecret"
         val basicAuth = Base64.encodeToString(credentials.toByteArray(), Base64.NO_WRAP)
         return mapOf("Authorization" to "Basic $basicAuth")

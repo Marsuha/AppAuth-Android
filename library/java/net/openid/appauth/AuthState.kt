@@ -18,6 +18,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerializationException
+import kotlinx.serialization.Transient
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import net.openid.appauth.AuthorizationException.AuthorizationRequestErrors
 import net.openid.appauth.AuthorizationException.Companion.TYPE_OAUTH_AUTHORIZATION_ERROR
 import net.openid.appauth.AuthorizationException.Companion.TYPE_OAUTH_TOKEN_ERROR
@@ -27,8 +32,6 @@ import net.openid.appauth.ClientAuthentication.UnsupportedAuthenticationMethod
 import net.openid.appauth.IdToken.Companion.from
 import net.openid.appauth.IdToken.IdTokenException
 import net.openid.appauth.internal.Logger.Companion.warn
-import org.json.JSONException
-import org.json.JSONObject
 import kotlin.contracts.ExperimentalContracts
 import kotlin.contracts.contract
 
@@ -37,7 +40,7 @@ import kotlin.contracts.contract
  * the creation of subsequent requests based on this state, and allows for this state to be
  * persisted easily.
  */
-@Suppress("unused")
+@Serializable
 class AuthState {
     /**
      * Creates an empty, unauthenticated [AuthState].
@@ -87,6 +90,12 @@ class AuthState {
     }
 
     /**
+     * Produces a JSON string representation of the authorization state for persistent storage or
+     * local transmission (e.g. between activities).
+     */
+    val asJsonString get() = Json.encodeToString(this)
+
+    /**
      * The most recent refresh token received from the server, if available. Rather than using
      * this property directly as part of any request depending on authorization state, it is
      * recommended to call [performActionWithFreshTokens][.performActionWithFreshTokens] to ensure that fresh tokens are available.
@@ -101,7 +110,7 @@ class AuthState {
     var scope: String? = null
         private set
 
-    private var config: AuthorizationServiceConfiguration? = null
+    var config: AuthorizationServiceConfiguration? = null
 
     /**
      * The most recent authorization response used to update the authorization state. For the
@@ -147,8 +156,11 @@ class AuthState {
     var authorizationException: AuthorizationException? = null
         private set
 
+    @Transient
     private val mutex = Mutex()
+    @Transient
     private var pendingRefreshActions: MutableList<suspend (FreshTokenResult) -> Unit>? = null
+    @Transient
     private var isTokenRefreshForced = false
 
     /**
@@ -206,7 +218,7 @@ class AuthState {
         get() = idToken?.let {
             try {
                 from(it)
-            } catch (_: JSONException) {
+            } catch (_: SerializationException) {
                 null
             } catch (_: IdTokenException) {
                 null
@@ -419,7 +431,7 @@ class AuthState {
     suspend fun performActionWithFreshTokens(
         service: AuthorizationService,
         clientAuth: ClientAuthentication = clientAuthentication,
-        refreshTokenAdditionalParams: Map<String, String> = emptyMap(),
+        refreshTokenAdditionalParams: JsonObject = JsonObject(emptyMap()),
         action: suspend (FreshTokenResult) -> Unit
     ) {
         try {
@@ -460,7 +472,7 @@ class AuthState {
     suspend fun performActionWithFreshTokens(
         service: AuthorizationService,
         clientAuth: ClientAuthentication,
-        refreshTokenAdditionalParams: Map<String, String>,
+        refreshTokenAdditionalParams: JsonObject,
         clock: Clock,
         action: suspend (result: FreshTokenResult) -> Unit
     ) {
@@ -522,7 +534,7 @@ class AuthState {
      */
     @JvmOverloads
     fun createTokenRefreshRequest(
-        additionalParameters: Map<String, String> = emptyMap()
+        additionalParameters: JsonObject = JsonObject(emptyMap())
     ): TokenRequest {
         checkNotNull(refreshToken) { "No refresh token available for refresh request" }
         checkNotNull(lastAuthorizationResponse) { "No authorization configuration available for refresh request" }
@@ -538,27 +550,7 @@ class AuthState {
             .build()
     }
 
-    /**
-     * Produces a JSON representation of the authorization state for persistent storage or local
-     * transmission (e.g. between activities).
-     */
-    fun jsonSerialize() = JSONObject().apply {
-        refreshToken?.let { put(KEY_REFRESH_TOKEN, it) }
-        scope?.let { put(KEY_SCOPE, it) }
-        config?.let { put(KEY_CONFIG, it.toJson()) }
-        authorizationException?.let { put(KEY_AUTHORIZATION_EXCEPTION, it.toJson()) }
-        lastAuthorizationResponse?.let { put(KEY_LAST_AUTHORIZATION_RESPONSE, it.jsonSerialize()) }
-        lastTokenResponse?.let { put(KEY_LAST_TOKEN_RESPONSE, it.jsonSerialize()) }
-        lastRegistrationResponse?.let { put(KEY_LAST_REGISTRATION_RESPONSE, it.jsonSerialize()) }
-    }
-
-    /**
-     * Produces a JSON string representation of the authorization state for persistent storage or
-     * local transmission (e.g. between activities). This method is just a convenience wrapper
-     * for [.jsonSerialize], converting the JSON object to its string form.
-     */
-    fun jsonSerializeString() = jsonSerialize().toString()
-
+    @Serializable
     sealed class FreshTokenResult {
         data class Success(val accessToken: String?, val idToken: String?) : FreshTokenResult()
         data class Failure(val exception: AuthorizationException) : FreshTokenResult()
@@ -572,63 +564,11 @@ class AuthState {
          */
         const val EXPIRY_TIME_TOLERANCE_MS: Int = 60000
 
-        private const val KEY_CONFIG = "config"
-        private const val KEY_REFRESH_TOKEN = "refreshToken"
-        private const val KEY_SCOPE = "scope"
-        private const val KEY_LAST_AUTHORIZATION_RESPONSE = "lastAuthorizationResponse"
-        private const val KEY_LAST_TOKEN_RESPONSE = "mLastTokenResponse"
-        private const val KEY_AUTHORIZATION_EXCEPTION = "mAuthorizationException"
-        private const val KEY_LAST_REGISTRATION_RESPONSE = "lastRegistrationResponse"
-
         /**
          * Reads an authorization state instance from a JSON string representation produced by
-         * [.jsonSerialize].
-         * @throws JSONException if the provided JSON does not match the expected structure.
+         * [asJsonString].
+         * @throws SerializationException if the provided JSON does not match the expected structure.
          */
-        @Throws(JSONException::class)
-        fun jsonDeserialize(json: JSONObject) = AuthState().apply {
-            refreshToken = json.getStringIfDefined(KEY_REFRESH_TOKEN)
-            scope = json.getStringIfDefined(KEY_SCOPE)
-
-            if (json.has(KEY_CONFIG)) {
-                config = AuthorizationServiceConfiguration.fromJson(
-                    json.getJSONObject(KEY_CONFIG)
-                )
-            }
-
-            if (json.has(KEY_AUTHORIZATION_EXCEPTION)) {
-                authorizationException = AuthorizationException.fromJson(
-                    json.getJSONObject(KEY_AUTHORIZATION_EXCEPTION)
-                )
-            }
-
-            if (json.has(KEY_LAST_AUTHORIZATION_RESPONSE)) {
-                lastAuthorizationResponse = AuthorizationResponse.jsonDeserialize(
-                    json.getJSONObject(KEY_LAST_AUTHORIZATION_RESPONSE)
-                )
-            }
-
-            if (json.has(KEY_LAST_TOKEN_RESPONSE)) {
-                lastTokenResponse = TokenResponse.jsonDeserialize(
-                    json.getJSONObject(KEY_LAST_TOKEN_RESPONSE)
-                )
-            }
-
-            if (json.has(KEY_LAST_REGISTRATION_RESPONSE)) {
-                lastRegistrationResponse = RegistrationResponse.jsonDeserialize(
-                    json.getJSONObject(KEY_LAST_REGISTRATION_RESPONSE)
-                )
-            }
-        }
-
-        /**
-         * Reads an authorization state instance from a JSON string representation produced by
-         * [.jsonSerializeString]. This method is just a convenience wrapper for
-         * [.jsonDeserialize], converting the JSON string to its JSON object form.
-         * @throws JSONException if the provided JSON does not match the expected structure.
-         */
-        @JvmStatic
-        @Throws(JSONException::class)
-        fun jsonDeserialize(jsonStr: String) = jsonDeserialize(JSONObject(jsonStr))
+        fun fromJsonString(jsonStr: String) = Json.decodeFromString<AuthState>(jsonStr)
     }
 }

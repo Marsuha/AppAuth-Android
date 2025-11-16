@@ -13,6 +13,8 @@
  */
 package net.openid.appauth
 
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import net.openid.appauth.TestValues.TEST_APP_REDIRECT_URI
 import net.openid.appauth.TestValues.TEST_CLIENT_ID
 import net.openid.appauth.TestValues.TEST_CODE_VERIFIER
@@ -75,7 +77,7 @@ class TokenRequestTest {
     @Test(expected = IllegalArgumentException::class)
     fun testBuilder_setAdditionalParams_withBuiltInParam() {
         minimalBuilder.setAdditionalParameters(
-            mapOf(TokenRequest.PARAM_SCOPE to "scope")
+            buildJsonObject { put(TokenRequest.PARAM_SCOPE, "scope") }
         )
     }
 
@@ -148,7 +150,10 @@ class TokenRequestTest {
 
     @Test
     fun testToUri_withAdditionalParameters() {
-        val additionalParams = mapOf("p1" to "v1", "p2" to "v2")
+        val additionalParams = buildJsonObject {
+            put("p1", "v1")
+            put("p2", "v2")
+        }
 
         val request = authorizationCodeRequestBuilder
             .setAdditionalParameters(additionalParams)

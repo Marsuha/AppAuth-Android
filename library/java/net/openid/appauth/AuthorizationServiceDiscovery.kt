@@ -14,109 +14,76 @@
 package net.openid.appauth
 
 import android.net.Uri
-import androidx.annotation.VisibleForTesting
-import org.json.JSONException
-import org.json.JSONObject
+import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.Required
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonIgnoreUnknownKeys
+import net.openid.appauth.internal.UriSerializer
 
 /**
  * An OpenID Connect 1.0 Discovery Document.
  *
- * @see <a href="https://openid.net/specs/openid-connect-discovery-1_0.html.rfc#section.3">
+ * @see <a href="https://openid.net/specs/openid-connect-discovery-1_0.html#rfc.section.3">
  *     OpenID Connect discovery 1.0, Section 3</a>
  */
-@Suppress("unused")
-class AuthorizationServiceDiscovery(
-    /**
-     * The JSON representation of the discovery document.
-     */
-    @JvmField
-    val discoveryDoc: JSONObject
-) {
-    /**
-     * Extracts a discovery document from its standard JSON representation.
-     * @throws org.json.JSONException if the provided JSON does not match the expected structure.
-     * @throws MissingArgumentException if a mandatory property is missing from the discovery
-     * document.
-     */
-    init {
-        for (mandatory in MANDATORY_METADATA) {
-            if (!discoveryDoc.has(mandatory)) {
-                throw MissingArgumentException(mandatory)
-            } else {
-                try {
-                    discoveryDoc[mandatory]
-                } catch (_: JSONException) {
-                    throw MissingArgumentException(mandatory)
-                }
-
-            }
-        }
-    }
-
-    /**
-     * Thrown when a mandatory property is missing from the discovery document.
-     * Indicates that the specified mandatory field is missing from the discovery document.
-     */
-    class MissingArgumentException(val missingField: String) :
-        Exception("Missing mandatory configuration field: $missingField")
-
-    /**
-     * Retrieves a metadata value from the discovery document. This need only be used
-     * for the retrieval of a non-standard metadata value. Convenience methods are defined on this
-     * class for all standard metadata values.
-     */
-    private fun <T> get(field: Field<T>) = discoveryDoc[field]
-
-    /**
-     * Retrieves a metadata value from the discovery document. This need only be used
-     * for the retrieval of a non-standard metadata value. Convenience methods are defined on this
-     * class for all standard metadata values.
-     */
-    private fun <T> get(field: ListField<T>) = discoveryDoc[field]
-
+@OptIn(ExperimentalSerializationApi::class)
+@Serializable
+@JsonIgnoreUnknownKeys
+data class AuthorizationServiceDiscovery(
     /**
      * The asserted issuer identifier.
      */
-    val issuer: String
-        get() = get(ISSUER)!!
+    @Required
+    @SerialName("issuer")
+    val issuer: String,
 
     /**
      * The OAuth 2 authorization endpoint URI.
      */
-    val authorizationEndpoint: Uri
-        get() = get(AUTHORIZATION_ENDPOINT)!!
+    @Required
+    @Serializable(with = UriSerializer::class)
+    @SerialName("authorization_endpoint")
+    val authorizationEndpoint: Uri,
 
     /**
      * The OAuth 2 token endpoint URI. Not specified if only the implicit flow is used.
      */
-    val tokenEndpoint: Uri?
-        get() = get(TOKEN_ENDPOINT)
+    @Serializable(with = UriSerializer::class)
+    @SerialName("token_endpoint")
+    val tokenEndpoint: Uri? = null,
 
     /**
      * The OAuth 2 emd session endpoint URI. Not specified test OAuth implementation
      */
-    val endSessionEndpoint: Uri?
-        get() = get(END_SESSION_ENDPOINT)
+    @Serializable(with = UriSerializer::class)
+    @SerialName("end_session_endpoint")
+    val endSessionEndpoint: Uri? = null,
 
     /**
      * The OpenID Connect UserInfo endpoint URI.
      */
-    val userinfoEndpoint: Uri?
-        get() = get(USERINFO_ENDPOINT)
+    @Serializable(with = UriSerializer::class)
+    @SerialName("userinfo_endpoint")
+    val userinfoEndpoint: Uri? = null,
 
     /**
      * The JSON web key set document URI.
      *
      * @see "JSON Web Key
      */
-    val jwksUri: Uri
-        get() = get(JWKS_URI)!!
+    @Required
+    @Serializable(with = UriSerializer::class)
+    @SerialName("jwks_uri")
+    val jwksUri: Uri,
 
     /**
      * The dynamic client registration endpoint URI.
      */
-    val registrationEndpoint: Uri?
-        get() = get(REGISTRATION_ENDPOINT)
+    @Serializable(with = UriSerializer::class)
+    @SerialName("registration_endpoint")
+    val registrationEndpoint: Uri? = null,
 
     /**
      * The OAuth 2 `scope` values supported.
@@ -124,14 +91,15 @@ class AuthorizationServiceDiscovery(
      * @see <a href="https://openid.net/specs/openid-connect-discovery-1_0.html">
      *     OpenID Connect Dynamic Client Registration 1.0
      */
-    val scopesSupported: List<String>?
-        get() = get(SCOPES_SUPPORTED)
+    @SerialName("scopes_supported")
+    val scopesSupported: List<String>? = null,
 
     /**
      * The OAuth 2 `response_type` values supported.
      */
-    val responseTypesSupported: List<String>
-        get() = get(RESPONSE_TYPES_SUPPORTED)!!
+    @Required
+    @SerialName("response_types_supported")
+    val responseTypesSupported: List<String>,
 
     /**
      * The OAuth 2 `response_mode` values supported.
@@ -139,51 +107,53 @@ class AuthorizationServiceDiscovery(
      * @see <a href="https://openid.net/specs/oauth-v2-multiple-response-types-1_0.html">
      *     OAuth 2.0 Multiple Response Type Encoding Practices</a>
      */
-    val responseModesSupported: List<String>?
-        get() = get(RESPONSE_MODES_SUPPORTED)
+    @SerialName("response_modes_supported")
+    val responseModesSupported: List<String>? = null,
 
     /**
      * The OAuth 2 `grant_type` values supported. Defaults to `authorization_code` and `implicit`
      * if not specified in the discovery document, as suggested by the discovery specification.
      */
-    val grantTypesSupported: List<String>
-        get() = get(GRANT_TYPES_SUPPORTED)!!
+    @SerialName("grant_types_supported")
+    val grantTypesSupported: List<String> = listOf("authorization_code", "implicit"),
 
     /**
      * The authentication context class references supported.
      */
-    val acrValuesSupported: List<String>?
-        get() = get(ACR_VALUES_SUPPORTED)
+    @SerialName("acr_values_supported")
+    val acrValuesSupported: List<String>? = null,
 
     /**
      * The subject identifier types supported.
      */
-    val subjectTypesSupported: List<String>
-        get() = get(SUBJECT_TYPES_SUPPORTED)!!
+    @Required
+    @SerialName("subject_types_supported")
+    val subjectTypesSupported: List<String>,
 
     /**
      * The JWS signing algorithms (alg values) supported for encoding ID token claims.
      *
      * @see "JSON Web Token
      */
-    val idTokenSigningAlgorithmValuesSupported: List<String>
-        get() = get(ID_TOKEN_SIGNING_ALG_VALUES_SUPPORTED)!!
+    @Required
+    @SerialName("id_token_signing_alg_values_supported")
+    val idTokenSigningAlgorithmValuesSupported: List<String>,
 
     /**
      * The JWE encryption algorithms (alg values) supported for encoding ID token claims.
      *
      * @see "JSON Web Token
      */
-    val idTokenEncryptionAlgorithmValuesSupported: List<String>?
-        get() = get(ID_TOKEN_ENCRYPTION_ALG_VALUES_SUPPORTED)
+    @SerialName("id_token_encryption_alg_values_supported")
+    val idTokenEncryptionAlgorithmValuesSupported: List<String>? = null,
 
     /**
      * The JWE encryption encodings (enc values) supported for encoding ID token claims.
      *
      * @see "JSON Web Token
      */
-    val idTokenEncryptionEncodingValuesSupported: List<String>?
-        get() = get(ID_TOKEN_ENCRYPTION_ENC_VALUES_SUPPORTED)
+    @SerialName("id_token_encryption_enc_values_supported")
+    val idTokenEncryptionEncodingValuesSupported: List<String>? = null,
 
     /**
      * The JWS signing algorithms (alg values) supported by the UserInfo Endpoint
@@ -193,8 +163,8 @@ class AuthorizationServiceDiscovery(
      * @see "JSON Web Algorithms
      * @see "JSON Web Token
      */
-    val userinfoSigningAlgorithmValuesSupported: List<String>?
-        get() = get(USERINFO_SIGNING_ALG_VALUES_SUPPORTED)
+    @SerialName("userinfo_signing_alg_values_supported")
+    val userinfoSigningAlgorithmValuesSupported: List<String>? = null,
 
     /**
      * The JWE encryption algorithms (alg values) supported by the UserInfo Endpoint
@@ -204,8 +174,8 @@ class AuthorizationServiceDiscovery(
      * @see "JSON Web Algorithms
      * @see "JSON Web Token
      */
-    val userinfoEncryptionAlgorithmValuesSupported: List<String>?
-        get() = get(USERINFO_ENCRYPTION_ALG_VALUES_SUPPORTED)
+    @SerialName("userinfo_encryption_alg_values_supported")
+    val userinfoEncryptionAlgorithmValuesSupported: List<String>? = null,
 
     /**
      * The JWE encryption encodings (enc values) supported by the UserInfo Endpoint
@@ -213,8 +183,8 @@ class AuthorizationServiceDiscovery(
      *
      * @see "JSON Web Token
      */
-    val userinfoEncryptionEncodingValuesSupported: List<String>?
-        get() = get(USERINFO_ENCRYPTION_ENC_VALUES_SUPPORTED)
+    @SerialName("userinfo_encryption_enc_values_supported")
+    val userinfoEncryptionEncodingValuesSupported: List<String>? = null,
 
     /**
      * The JWS signing algorithms (alg values) supported for Request Objects.
@@ -222,20 +192,20 @@ class AuthorizationServiceDiscovery(
      * @see <a href="https://openid.net/specs/openid-connect-core-1_0.html#rfc.section.6.1">
      *     OpenID Connect Core 1.0, Section 6.1</a>
      */
-    val requestObjectSigningAlgorithmValuesSupported: List<String>?
-        get() = get(REQUEST_OBJECT_SIGNING_ALG_VALUES_SUPPORTED)
+    @SerialName("request_object_signing_alg_values_supported")
+    val requestObjectSigningAlgorithmValuesSupported: List<String>? = null,
 
     /**
      * The JWE encryption algorithms (alg values) supported for Request Objects.
      */
-    val requestObjectEncryptionAlgorithmValuesSupported: List<String>?
-        get() = get(REQUEST_OBJECT_ENCRYPTION_ALG_VALUES_SUPPORTED)
+    @SerialName("request_object_encryption_alg_values_supported")
+    val requestObjectEncryptionAlgorithmValuesSupported: List<String>? = null,
 
     /**
      * The JWE encryption encodings (enc values) supported for Request Objects.
      */
-    val requestObjectEncryptionEncodingValuesSupported: List<String>?
-        get() = get(REQUEST_OBJECT_ENCRYPTION_ENC_VALUES_SUPPORTED)
+    @SerialName("request_object_encryption_enc_values_supported")
+    val requestObjectEncryptionEncodingValuesSupported: List<String>? = null,
 
     /**
      * The client authentication methods supported by the token endpoint. Defaults to
@@ -247,8 +217,8 @@ class AuthorizationServiceDiscovery(
      *
      * @see "The OAuth 2.0 Authorization Framework"
      */
-    val tokenEndpointAuthMethodsSupported: List<String>
-        get() = get(TOKEN_ENDPOINT_AUTH_METHODS_SUPPORTED)!!
+    @SerialName("token_endpoint_auth_methods_supported")
+    val tokenEndpointAuthMethodsSupported: List<String> = listOf("client_secret_basic"),
 
     /**
      * The JWS signing algorithms (alg values) supported by the token endpoint for the signature on
@@ -257,8 +227,8 @@ class AuthorizationServiceDiscovery(
      *
      * @see "JSON Web Token"
      */
-    val tokenEndpointAuthSigningAlgorithmValuesSupported: List<String>?
-        get() = get(TOKEN_ENDPOINT_AUTH_SIGNING_ALG_VALUES_SUPPORTED)
+    @SerialName("token_endpoint_auth_signing_alg_values_supported")
+    val tokenEndpointAuthSigningAlgorithmValuesSupported: List<String>? = null,
 
     /**
      * The `display` parameter values supported.
@@ -266,8 +236,8 @@ class AuthorizationServiceDiscovery(
      * @see <a href="https://openid.net/specs/openid-connect-core-1_0.html#rfc.section.3.1.2.1">
      *     OpenID Connect Core 1.0, Section 3.1.2.1</a>
      */
-    val displayValuesSupported: List<String>?
-        get() = get(DISPLAY_VALUES_SUPPORTED)
+    @SerialName("display_values_supported")
+    val displayValuesSupported: List<String>? = null,
 
     /**
      * The claim types supported. Defaults to `normal` if not specified by the discovery
@@ -276,21 +246,22 @@ class AuthorizationServiceDiscovery(
      * @see <a href="https://openid.net/specs/openid-connect-core-1_0.html#rfc.section.5.6">
      *     OpenID Connect Core 1.0, Section 5.6</a>
      */
-    val claimTypesSupported: List<String>?
-        get() = get(CLAIM_TYPES_SUPPORTED)
+    @SerialName("claim_types_supported")
+    val claimTypesSupported: List<String> = listOf("normal"),
 
     /**
      * The claim names of the claims that the provider _may_ be able to supply values for.
      */
-    val claimsSupported: List<String>?
-        get() = get(CLAIMS_SUPPORTED)
+    @SerialName("claims_supported")
+    val claimsSupported: List<String>? = null,
 
     /**
      * A page containing human-readable information that developers might want or need to know when
      * using this provider.
      */
-    val serviceDocumentation: Uri?
-        get() = get(SERVICE_DOCUMENTATION)
+    @Serializable(with = UriSerializer::class)
+    @SerialName("service_documentation")
+    val serviceDocumentation: Uri? = null,
 
     /**
      * Languages and scripts supported for values in claims being returned.
@@ -298,8 +269,8 @@ class AuthorizationServiceDiscovery(
      *
      * @see "Tags for Identifying Languages"
      */
-    val claimsLocalesSupported: List<String>?
-        get() = get(CLAIMS_LOCALES_SUPPORTED)
+    @SerialName("claims_locales_supported")
+    val claimsLocalesSupported: List<String>? = null,
 
     /**
      * Languages and scripts supported for the user interface.
@@ -307,8 +278,8 @@ class AuthorizationServiceDiscovery(
      *
      * @see "Tags for Identifying Languages"
      */
-    val uiLocalesSupported: List<String>?
-        get() = get(UI_LOCALES_SUPPORTED)
+    @SerialName("ui_locales_supported")
+    val uiLocalesSupported: List<String>? = null,
 
     /**
      * Specifies whether the `claims` parameter is supported for authorization requests.
@@ -316,8 +287,8 @@ class AuthorizationServiceDiscovery(
      * @see <a href="https://openid.net/specs/openid-connect-core-1_0.html#rfc.section.5.5">
      *     OpenID Connect Core 1.0, Section 5.5</a>
      */
-    val isClaimsParameterSupported: Boolean?
-        get() = get(CLAIMS_PARAMETER_SUPPORTED)
+    @SerialName("claims_parameter_supported")
+    val isClaimsParameterSupported: Boolean = false,
 
     /**
      * Specifies whether the `request` parameter is supported for authorization requests.
@@ -325,8 +296,8 @@ class AuthorizationServiceDiscovery(
      * @see <a href="https://openid.net/specs/openid-connect-core-1_0.html#rfc.section.6.1">
      *     OpenID Connect Core 1.0, Section 6.1</a>
      */
-    val isRequestParameterSupported: Boolean?
-        get() = get(REQUEST_PARAMETER_SUPPORTED)
+    @SerialName("request_parameter_supported")
+    val isRequestParameterSupported: Boolean = false,
 
     /**
      * Specifies whether the `request_uri` parameter is supported for authorization requests.
@@ -334,8 +305,8 @@ class AuthorizationServiceDiscovery(
      * @see <a href="https://openid.net/specs/openid-connect-core-1_0.html#rfc.section.6.2">
      *     OpenID Connect Core 1.0, Section 6.2</a>
      */
-    val isRequestUriParameterSupported: Boolean?
-        get() = get(REQUEST_URI_PARAMETER_SUPPORTED)
+    @SerialName("request_uri_parameter_supported")
+    val isRequestUriParameterSupported: Boolean = true,
 
     /**
      * Specifies whether `request_uri` values are required to be pre-registered before use.
@@ -343,194 +314,32 @@ class AuthorizationServiceDiscovery(
      * @see <a href="https://openid.net/specs/openid-connect-core-1_0.html#rfc.section.6.2">
      *     OpenID Connect Core 1.0, Section 6.2</a>
      */
-    val requireRequestUriRegistration: Boolean?
-        get() = get(REQUIRE_REQUEST_URI_REGISTRATION)
+    @SerialName("require_request_uri_registration")
+    val requireRequestUriRegistration: Boolean = false,
 
     /**
      * A page articulating the policy regarding the use of data provided by the provider.
      */
-    val opPolicyUri: Uri?
-        get() = get(OP_POLICY_URI)
+    @Serializable(with = UriSerializer::class)
+    @SerialName("op_policy_uri")
+    val opPolicyUri: Uri? = null,
 
     /**
      * A page articulating the terms of service for the provider.
      */
-    val opTosUri: Uri?
-        get() = get(OP_TOS_URI)
+    @Serializable(with = UriSerializer::class)
+    @SerialName("op_tos_uri")
+    val opTosUri: Uri? = null,
+) {
+    val asJsonString get() = Json.encodeToString(this)
 
     companion object {
-        @JvmField
-        @VisibleForTesting
-        val ISSUER: StringField = str("issuer")
-
-        @JvmField
-        @VisibleForTesting
-        val AUTHORIZATION_ENDPOINT: UriField = uri("authorization_endpoint")
-
-        @VisibleForTesting
-        val TOKEN_ENDPOINT: UriField = uri("token_endpoint")
-
-        @VisibleForTesting
-        val END_SESSION_ENDPOINT: UriField = uri("end_session_endpoint")
-
-        @VisibleForTesting
-        val USERINFO_ENDPOINT: UriField = uri("userinfo_endpoint")
-
-        @JvmField
-        @VisibleForTesting
-        val JWKS_URI: UriField = uri("jwks_uri")
-
-        @VisibleForTesting
-        val REGISTRATION_ENDPOINT: UriField = uri("registration_endpoint")
-
-        @VisibleForTesting
-        val SCOPES_SUPPORTED: StringListField = strList("scopes_supported")
-
-        @JvmField
-        @VisibleForTesting
-        val RESPONSE_TYPES_SUPPORTED: StringListField = strList("response_types_supported")
-
-        @VisibleForTesting
-        val RESPONSE_MODES_SUPPORTED: StringListField = strList("response_modes_supported")
-
-        @VisibleForTesting
-        val GRANT_TYPES_SUPPORTED: StringListField = strList(
-            "grant_types_supported",
-            listOf("authorization_code", "implicit")
-        )
-
-        @VisibleForTesting
-        val ACR_VALUES_SUPPORTED: StringListField = strList("acr_values_supported")
-
-        @JvmField
-        @VisibleForTesting
-        val SUBJECT_TYPES_SUPPORTED: StringListField = strList("subject_types_supported")
-
-        @JvmField
-        @VisibleForTesting
-        val ID_TOKEN_SIGNING_ALG_VALUES_SUPPORTED: StringListField =
-            strList("id_token_signing_alg_values_supported")
-
-        @VisibleForTesting
-        val ID_TOKEN_ENCRYPTION_ALG_VALUES_SUPPORTED: StringListField =
-            strList("id_token_encryption_enc_values_supported")
-
-        @VisibleForTesting
-        val ID_TOKEN_ENCRYPTION_ENC_VALUES_SUPPORTED: StringListField =
-            strList("id_token_encryption_enc_values_supported")
-
-        @VisibleForTesting
-        val USERINFO_SIGNING_ALG_VALUES_SUPPORTED: StringListField =
-            strList("userinfo_signing_alg_values_supported")
-
-        @VisibleForTesting
-        val USERINFO_ENCRYPTION_ALG_VALUES_SUPPORTED: StringListField =
-            strList("userinfo_encryption_alg_values_supported")
-
-        @VisibleForTesting
-        val USERINFO_ENCRYPTION_ENC_VALUES_SUPPORTED: StringListField =
-            strList("userinfo_encryption_enc_values_supported")
-
-        @VisibleForTesting
-        val REQUEST_OBJECT_SIGNING_ALG_VALUES_SUPPORTED: StringListField =
-            strList("request_object_signing_alg_values_supported")
-
-        @VisibleForTesting
-        val REQUEST_OBJECT_ENCRYPTION_ALG_VALUES_SUPPORTED: StringListField =
-            strList("request_object_encryption_alg_values_supported")
-
-        @VisibleForTesting
-        val REQUEST_OBJECT_ENCRYPTION_ENC_VALUES_SUPPORTED: StringListField =
-            strList("request_object_encryption_enc_values_supported")
-
-        @VisibleForTesting
-        val TOKEN_ENDPOINT_AUTH_METHODS_SUPPORTED: StringListField = strList(
-            "token_endpoint_auth_methods_supported",
-            listOf("client_secret_basic")
-        )
-
-        @VisibleForTesting
-        val TOKEN_ENDPOINT_AUTH_SIGNING_ALG_VALUES_SUPPORTED: StringListField =
-            strList("token_endpoint_auth_signing_alg_values_supported")
-
-        @VisibleForTesting
-        val DISPLAY_VALUES_SUPPORTED: StringListField = strList("display_values_supported")
-
-        @VisibleForTesting
-        val CLAIM_TYPES_SUPPORTED: StringListField =
-            strList("claim_types_supported", listOf("normal"))
-
-        @VisibleForTesting
-        val CLAIMS_SUPPORTED: StringListField = strList("claims_supported")
-
-        @VisibleForTesting
-        val SERVICE_DOCUMENTATION: UriField = uri("service_documentation")
-
-        @VisibleForTesting
-        val CLAIMS_LOCALES_SUPPORTED: StringListField = strList("claims_locales_supported")
-
-        @VisibleForTesting
-        val UI_LOCALES_SUPPORTED: StringListField = strList("ui_locales_supported")
-
-        @JvmField
-        @VisibleForTesting
-        val CLAIMS_PARAMETER_SUPPORTED: BooleanField = bool("claims_parameter_supported", false)
-
-        @JvmField
-        @VisibleForTesting
-        val REQUEST_PARAMETER_SUPPORTED: BooleanField = bool("request_parameter_supported", false)
-
-        @JvmField
-        @VisibleForTesting
-        val REQUEST_URI_PARAMETER_SUPPORTED: BooleanField =
-            bool("request_uri_parameter_supported", true)
-
-        @JvmField
-        @VisibleForTesting
-        val REQUIRE_REQUEST_URI_REGISTRATION: BooleanField =
-            bool("require_request_uri_registration", false)
-
-        @VisibleForTesting
-        val OP_POLICY_URI: UriField = uri("op_policy_uri")
-
-        @VisibleForTesting
-        val OP_TOS_URI: UriField = uri("op_tos_uri")
-
         /**
-         * The fields which are marked as mandatory in the OpenID discovery spec.
+         * Creates a discovery document from a JSON string.
+         * @param json The JSON string.
+         * @throws IllegalArgumentException if the JSON is malformed or missing required properties.
          */
-        private val MANDATORY_METADATA: List<String> = listOf(
-            ISSUER.key,
-            AUTHORIZATION_ENDPOINT.key,
-            JWKS_URI.key,
-            RESPONSE_TYPES_SUPPORTED.key,
-            SUBJECT_TYPES_SUPPORTED.key,
-            ID_TOKEN_SIGNING_ALG_VALUES_SUPPORTED.key
-        )
-
-        /**
-         * Shorthand method for creating a string metadata extractor.
-         */
-        private fun str(@Suppress("SameParameterValue") key: String) = StringField(key)
-
-        /**
-         * Shorthand method for creating a URI metadata extractor.
-         */
-        private fun uri(key: String) = UriField(key)
-
-        /**
-         * Shorthand method for creating a string list metadata extractor.
-         */
-        private fun strList(key: String) = StringListField(key)
-
-        /**
-         * Shorthand method for creating a string list metadata extractor, with a default value.
-         */
-        private fun strList(key: String, defaults: List<String>) = StringListField(key, defaults)
-
-        /**
-         * Shorthand method for creating a boolean metadata extractor.
-         */
-        private fun bool(key: String, defaultValue: Boolean) = BooleanField(key, defaultValue)
+        fun fromJsonString(json: String) =
+            Json.decodeFromString<AuthorizationServiceDiscovery>(json)
     }
 }

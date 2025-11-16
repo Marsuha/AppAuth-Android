@@ -13,8 +13,24 @@
  */
 package net.openid.appauth
 
-import android.net.Uri
+import androidx.core.net.toUri
 import com.google.testing.junit.testparameterinjector.TestParameter
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.long
+import kotlinx.serialization.json.put
+import net.openid.appauth.RegistrationResponse.Companion.KEY_ADDITIONAL_PARAMETERS
+import net.openid.appauth.RegistrationResponse.Companion.KEY_REQUEST
+import net.openid.appauth.RegistrationResponse.Companion.PARAM_CLIENT_ID
+import net.openid.appauth.RegistrationResponse.Companion.PARAM_CLIENT_ID_ISSUED_AT
+import net.openid.appauth.RegistrationResponse.Companion.PARAM_CLIENT_SECRET
+import net.openid.appauth.RegistrationResponse.Companion.PARAM_CLIENT_SECRET_EXPIRES_AT
+import net.openid.appauth.RegistrationResponse.Companion.PARAM_REGISTRATION_ACCESS_TOKEN
+import net.openid.appauth.RegistrationResponse.Companion.PARAM_REGISTRATION_CLIENT_URI
+import net.openid.appauth.RegistrationResponse.Companion.PARAM_TOKEN_ENDPOINT_AUTH_METHOD
 import net.openid.appauth.TestValues.TEST_APP_REDIRECT_URI
 import net.openid.appauth.TestValues.TEST_CLIENT_ID
 import net.openid.appauth.TestValues.TEST_CLIENT_SECRET
@@ -22,7 +38,6 @@ import net.openid.appauth.TestValues.TEST_CLIENT_SECRET_EXPIRES_AT
 import net.openid.appauth.TestValues.testRegistrationRequest
 import net.openid.appauth.TestValues.testServiceConfig
 import org.assertj.core.api.Assertions.assertThat
-import org.json.JSONObject
 import org.junit.Assert
 import org.junit.Before
 import org.junit.Test
@@ -42,123 +57,113 @@ object RegistrationResponseTest {
         "https://test.openid.com/register?client_id=$TEST_CLIENT_ID"
     private const val TEST_TOKEN_ENDPOINT_AUTH_METHOD = "client_secret_basic"
 
-    private const val TEST_JSON = ("{\n"
-            + " \"client_id\": \"" + TEST_CLIENT_ID + "\",\n"
-            + " \"client_id_issued_at\": \"" + TEST_CLIENT_ID_ISSUED_AT + "\",\n"
-            + " \"client_secret\": \"" + TEST_CLIENT_SECRET + "\",\n"
-            + " \"client_secret_expires_at\": \"" + TEST_CLIENT_SECRET_EXPIRES_AT + "\",\n"
-            + " \"registration_access_token\": \"" + TEST_REGISTRATION_ACCESS_TOKEN + "\",\n"
-            + " \"registration_client_uri\": \"" + TEST_REGISTRATION_CLIENT_URI + "\",\n"
-            + " \"application_type\": \"" + RegistrationRequest.APPLICATION_TYPE_NATIVE + "\",\n"
-            + " \"token_endpoint_auth_method\": \"" + TEST_TOKEN_ENDPOINT_AUTH_METHOD + "\"\n"
-            + "}")
+    private val TEST_JSON = """
+        {
+            "client_id": "$TEST_CLIENT_ID",
+            "client_id_issued_at": $TEST_CLIENT_ID_ISSUED_AT,
+            "client_secret": "$TEST_CLIENT_SECRET",
+            "client_secret_expires_at": $TEST_CLIENT_SECRET_EXPIRES_AT,
+            "registration_access_token": "$TEST_REGISTRATION_ACCESS_TOKEN",
+            "registration_client_uri": "$TEST_REGISTRATION_CLIENT_URI",
+            "application_type": "${RegistrationRequest.APPLICATION_TYPE_NATIVE}",
+            "token_endpoint_auth_method": "$TEST_TOKEN_ENDPOINT_AUTH_METHOD"
+        }
+    """.trimIndent()
+
+    private val testRegistrationRequestJson = testRegistrationRequest.asJsonObject
 
     @RunWith(RobolectricTestRunner::class)
     @Config(sdk = [28])
     class RegistrationResponseSingleTest {
         private lateinit var minimalBuilder: RegistrationResponse.Builder
-        private lateinit var testJson: JSONObject
+
+        private lateinit var response: RegistrationResponse
+
+        private lateinit var testJson: JsonObject
 
         @Before
-        @Throws(Exception::class)
         fun setUp() {
-            testJson = JSONObject(TEST_JSON)
+            testJson = Json.parseToJsonElement(TEST_JSON).jsonObject
             minimalBuilder = RegistrationResponse.Builder(testRegistrationRequest)
+            response = RegistrationResponse.buildFromJson(testRegistrationRequest, testJson)
+            assertValues(response)
         }
 
         @Test(expected = IllegalArgumentException::class)
         fun testBuilder_setAdditionalParams_withBuiltInParam() {
             minimalBuilder.setAdditionalParameters(
-                mapOf(RegistrationResponse.PARAM_CLIENT_ID to "client1")
+                buildJsonObject { put(PARAM_CLIENT_ID, "client1") }
             )
         }
 
         @Test
-        @Throws(Exception::class)
-        fun testFromJson() {
-            val response = RegistrationResponse.fromJson(testRegistrationRequest, testJson)
-            assertValues(response)
-        }
-
-        @Test
-        @Throws(Exception::class)
         fun testSerialize() {
-            val json = RegistrationResponse.fromJson(testRegistrationRequest, testJson)
-                .jsonSerialize()
+            val json = response.asJsonObject
 
-            assertThat(json.get(RegistrationResponse.KEY_REQUEST).toString())
-                .isEqualTo(testRegistrationRequest.jsonSerialize().toString())
+            assertThat(json[KEY_REQUEST]?.toString())
+                .isEqualTo(testRegistrationRequest.asJsonString)
 
-            assertThat(json.getLong(RegistrationResponse.PARAM_CLIENT_ID_ISSUED_AT))
+            assertThat(json[PARAM_CLIENT_ID_ISSUED_AT]?.jsonPrimitive?.long)
                 .isEqualTo(TEST_CLIENT_ID_ISSUED_AT)
 
-            assertThat(json.getString(RegistrationResponse.PARAM_CLIENT_SECRET))
+            assertThat(json[PARAM_CLIENT_SECRET]?.jsonPrimitive?.content)
                 .isEqualTo(TEST_CLIENT_SECRET)
 
-            assertThat(json.getLong(RegistrationResponse.PARAM_CLIENT_SECRET_EXPIRES_AT))
+            assertThat(json[PARAM_CLIENT_SECRET_EXPIRES_AT]?.jsonPrimitive?.long)
                 .isEqualTo(TEST_CLIENT_SECRET_EXPIRES_AT)
 
-            assertThat(json.getString(RegistrationResponse.PARAM_REGISTRATION_ACCESS_TOKEN))
+            assertThat(json[PARAM_REGISTRATION_ACCESS_TOKEN]?.jsonPrimitive?.content)
                 .isEqualTo(TEST_REGISTRATION_ACCESS_TOKEN)
 
-            assertThat(json.getUri(RegistrationResponse.PARAM_REGISTRATION_CLIENT_URI))
-                .isEqualTo(Uri.parse(TEST_REGISTRATION_CLIENT_URI))
+            assertThat(json[PARAM_REGISTRATION_CLIENT_URI]?.jsonPrimitive?.content)
+                .isEqualTo(TEST_REGISTRATION_CLIENT_URI)
 
-            assertThat(json.getString(RegistrationResponse.PARAM_TOKEN_ENDPOINT_AUTH_METHOD))
+            assertThat(json[PARAM_TOKEN_ENDPOINT_AUTH_METHOD]?.jsonPrimitive?.content)
                 .isEqualTo(TEST_TOKEN_ENDPOINT_AUTH_METHOD)
         }
 
         @Test
-        @Throws(Exception::class)
         fun testSerialize_withAdditionalParameters() {
-            val additionalParameters = mapOf("test1" to "value1")
-            val json = minimalBuilder.setClientId(TEST_CLIENT_ID)
+            val additionalParameters = buildJsonObject { put("test1", "value1") }
+            val json = minimalBuilder
+                .setClientId(TEST_CLIENT_ID)
                 .setAdditionalParameters(additionalParameters)
                 .build()
-                .jsonSerialize()
+                .asJsonObject
 
-            assertThat(json.getStringMap(RegistrationResponse.KEY_ADDITIONAL_PARAMETERS))
-                .isEqualTo(additionalParameters)
+            assertThat(json[KEY_ADDITIONAL_PARAMETERS]).isEqualTo(additionalParameters)
         }
 
         @Test(expected = IllegalArgumentException::class)
-        @Throws(Exception::class)
         fun testDeserialize_withoutRequest() {
-            RegistrationResponse.jsonDeserialize(testJson)
+            RegistrationResponse.fromJsonString(TEST_JSON)
         }
 
         @Test
-        @Throws(Exception::class)
         fun testDeserialize() {
-            testJson.put(
-                RegistrationResponse.KEY_REQUEST,
-                testRegistrationRequest.jsonSerialize()
-            )
-
-            val response = RegistrationResponse.jsonDeserialize(testJson)
+            val regRequest = buildJsonObject { put(KEY_REQUEST, testRegistrationRequestJson) }
+            val json = JsonObject(testJson + regRequest)
+            val response = RegistrationResponse.fromJsonString(json.toString())
             assertValues(response)
         }
 
         @Test
-        @Throws(Exception::class)
         fun testSerialization_doesNotChange() {
-            testJson.put(
-                RegistrationResponse.KEY_REQUEST,
-                testRegistrationRequest.jsonSerialize()
-            )
+            val regRequest = buildJsonObject { put(KEY_REQUEST, testRegistrationRequestJson) }
+            val json = JsonObject(testJson + regRequest)
+            val response = RegistrationResponse.fromJsonString(json.toString())
 
-            val response = RegistrationResponse.jsonDeserialize(testJson)
-
-            val firstOutput = response.jsonSerializeString()
-            val secondOutput = RegistrationResponse.jsonDeserialize(testJson).jsonSerializeString()
+            val firstOutput = response.asJsonString
+            val secondOutput = RegistrationResponse
+                .fromJsonString(json.toString())
+                .asJsonString
 
             assertThat(secondOutput).isEqualTo(firstOutput)
         }
 
         @Test
-        @Throws(Exception::class)
         fun testHasExpired_withValidClientSecret() {
-            val response = RegistrationResponse.fromJson(testRegistrationRequest, testJson)
+            val response = RegistrationResponse.buildFromJson(testRegistrationRequest, testJson)
             val now = TimeUnit.SECONDS.toMillis(TEST_CLIENT_SECRET_EXPIRES_AT - 1L)
             assertThat(response.hasClientSecretExpired(TestClock(now))).isFalse()
         }
@@ -166,7 +171,7 @@ object RegistrationResponseTest {
         @Test
         @Throws(Exception::class)
         fun testHasExpired_withExpiredClientSecret() {
-            val response = RegistrationResponse.fromJson(testRegistrationRequest, testJson)
+            val response = RegistrationResponse.buildFromJson(testRegistrationRequest, testJson)
             val now = TimeUnit.SECONDS.toMillis(TEST_CLIENT_SECRET_EXPIRES_AT + 1L)
             assertThat(response.hasClientSecretExpired(TestClock(now))).isTrue()
         }
@@ -177,9 +182,7 @@ object RegistrationResponseTest {
             assertThat(response.clientSecret).isEqualTo(TEST_CLIENT_SECRET)
             assertThat(response.clientSecretExpiresAt).isEqualTo(TEST_CLIENT_SECRET_EXPIRES_AT)
             assertThat(response.registrationAccessToken).isEqualTo(TEST_REGISTRATION_ACCESS_TOKEN)
-            assertThat(response.registrationClientUri)
-                .isEqualTo(Uri.parse(TEST_REGISTRATION_CLIENT_URI))
-
+            assertThat(response.registrationClientUri).isEqualTo(TEST_REGISTRATION_CLIENT_URI.toUri())
             assertThat(response.tokenEndpointAuthMethod).isEqualTo(TEST_TOKEN_ENDPOINT_AUTH_METHOD)
         }
     }
@@ -188,19 +191,18 @@ object RegistrationResponseTest {
     @Config(sdk = [28])
     class RegistrationResponseParameterTest(
         @param:TestParameter(
-            RegistrationResponse.PARAM_CLIENT_SECRET_EXPIRES_AT,
-            RegistrationResponse.PARAM_REGISTRATION_ACCESS_TOKEN,
-            RegistrationResponse.PARAM_REGISTRATION_CLIENT_URI
+            PARAM_CLIENT_SECRET_EXPIRES_AT,
+            PARAM_REGISTRATION_ACCESS_TOKEN,
+            PARAM_REGISTRATION_CLIENT_URI
         )
         var missingParameter: String
     ) {
-        private lateinit var responseJson: JSONObject
+        private lateinit var responseJson: JsonObject
         private lateinit var minimalRegistrationRequest: RegistrationRequest
 
         @Before
-        @Throws(Exception::class)
         fun setUp() {
-            responseJson = JSONObject(TEST_JSON)
+            responseJson = Json.parseToJsonElement(TEST_JSON).jsonObject
 
             minimalRegistrationRequest = RegistrationRequest.Builder(
                 testServiceConfig,
@@ -209,12 +211,15 @@ object RegistrationResponseTest {
         }
 
         @Test
-        @Throws(Exception::class)
         fun testBuilder_fromJsonNWithMissingRequiredParameter() {
-            responseJson.remove(missingParameter)
+            val json = JsonObject(responseJson.filterKeys { it != missingParameter })
 
             try {
-                RegistrationResponse.fromJson(minimalRegistrationRequest, responseJson)
+                RegistrationResponse.buildFromJson(
+                    minimalRegistrationRequest,
+                    json
+                )
+
                 Assert.fail("Expected MissingArgumentException not thrown.")
             } catch (e: RegistrationResponse.MissingArgumentException) {
                 assertThat(missingParameter).isEqualTo(e.missingField)

@@ -23,12 +23,10 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import net.openid.appauth.AuthState
-import net.openid.appauth.AuthState.Companion.jsonDeserialize
 import net.openid.appauth.AuthorizationException
 import net.openid.appauth.AuthorizationResponse
 import net.openid.appauth.RegistrationResponse
 import net.openid.appauth.TokenResponse
-import org.json.JSONException
 
 /**
  * An example persistence mechanism for an [AuthState] instance.
@@ -96,8 +94,8 @@ class AuthStateManager private constructor(context: Context) {
         val currentState = prefs.getString(KEY_STATE, null) ?: return AuthState()
 
         try {
-            return jsonDeserialize(currentState)
-        } catch (_: JSONException) {
+            return AuthState.fromJsonString(currentState)
+        } catch (_: IllegalArgumentException) {
             Log.w(TAG, "Failed to deserialize stored auth state - discarding")
             return AuthState()
         }
@@ -108,7 +106,7 @@ class AuthStateManager private constructor(context: Context) {
             if (state == null) {
                 remove(KEY_STATE)
             } else {
-                putString(KEY_STATE, state.jsonSerializeString())
+                putString(KEY_STATE, state.asJsonString)
             }
         }
     }

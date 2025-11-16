@@ -35,7 +35,7 @@ import net.openid.appauth.browser.BrowserDescriptor
 import net.openid.appauth.browser.Browsers.Chrome.customTab
 import net.openid.appauth.browser.CustomTabManager
 import net.openid.appauth.connectivity.ConnectionBuilder
-import net.openid.appauth.internal.UriUtil.formUrlDecodeUnique
+import net.openid.appauth.internal.formUrlDecodeUnique
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.Assert
 import org.junit.Assert.assertEquals
@@ -45,8 +45,6 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.mockito.ArgumentMatcher
-import org.mockito.ArgumentMatchers
 import org.mockito.Mock
 import org.mockito.Mockito
 import org.mockito.junit.MockitoJUnit
@@ -54,6 +52,10 @@ import org.mockito.junit.MockitoRule
 import org.mockito.kotlin.any
 import org.mockito.kotlin.argThat
 import org.mockito.kotlin.argumentCaptor
+import org.mockito.kotlin.doReturn
+import org.mockito.kotlin.doThrow
+import org.mockito.kotlin.eq
+import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import org.robolectric.RobolectricTestRunner
@@ -65,6 +67,7 @@ import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 import java.net.HttpURLConnection
+import java.net.HttpURLConnection.HTTP_BAD_REQUEST
 
 @Suppress("DEPRECATION")
 @RunWith(RobolectricTestRunner::class)
@@ -96,7 +99,6 @@ class AuthorizationServiceTest {
     lateinit var customTabManager: CustomTabManager
 
     @Before
-    @Throws(Exception::class)
     fun setUp() = runTest {
         browserDescriptor = customTab("46")
 
@@ -109,10 +111,8 @@ class AuthorizationServiceTest {
 
         outputStream = ByteArrayOutputStream()
 
-        whenever(connectionProvider.openConnection(any<Uri>()))
-            .thenReturn(httpConnection)
-
-        whenever(httpConnection.getOutputStream()).thenReturn(outputStream)
+        whenever(connectionProvider.openConnection(any())) doReturn httpConnection
+        whenever(httpConnection.getOutputStream()) doReturn outputStream
 
         whenever(
             context.bindService(
@@ -120,13 +120,12 @@ class AuthorizationServiceTest {
                 any<CustomTabsServiceConnection>(),
                 any<Int>()
             )
-        ).thenReturn(true)
+        ) doReturn true
 
-        whenever(customTabManager.createTabBuilder()).thenReturn(CustomTabsIntent.Builder())
+        whenever(customTabManager.createTabBuilder()) doReturn CustomTabsIntent.Builder()
     }
 
     @Test
-    @Throws(Exception::class)
     fun testAuthorizationRequest_withSpecifiedState() = runTest {
         val request = TestValues.testAuthRequestBuilder
             .setState(TestValues.TEST_STATE)
@@ -139,7 +138,6 @@ class AuthorizationServiceTest {
     }
 
     @Test
-    @Throws(Exception::class)
     fun testEndSessionRequest_withSpecifiedState() = runTest {
         val request = TestValues.testEndSessionRequestBuilder
             .setState(TestValues.TEST_STATE)
@@ -152,7 +150,6 @@ class AuthorizationServiceTest {
     }
 
     @Test
-    @Throws(Exception::class)
     fun testAuthorizationRequest_withSpecifiedNonce() = runTest {
         val request = TestValues.testAuthRequestBuilder
             .setNonce(TestValues.TEST_NONCE)
@@ -165,7 +162,6 @@ class AuthorizationServiceTest {
     }
 
     @Test
-    @Throws(Exception::class)
     fun testAuthorizationRequest_withDefaultRandomStateAndNonce() = runTest {
         val request = TestValues.testAuthRequestBuilder.build()
         service.performAuthorizationRequest(request, pendingIntent)
@@ -174,7 +170,6 @@ class AuthorizationServiceTest {
     }
 
     @Test
-    @Throws(Exception::class)
     fun testAuthorizationRequest_customization() = runTest {
         val customTabsIntent = CustomTabsIntent.Builder()
             .setToolbarColor(Color.GREEN)
@@ -191,7 +186,6 @@ class AuthorizationServiceTest {
     }
 
     @Test
-    @Throws(Exception::class)
     fun testEndSessionRequest_customization() = runTest {
         val customTabsIntent = CustomTabsIntent.Builder()
             .setToolbarColor(Color.GREEN)
@@ -208,7 +202,6 @@ class AuthorizationServiceTest {
     }
 
     @Test(expected = IllegalStateException::class)
-    @Throws(Exception::class)
     fun testAuthorizationRequest_afterDispose() = runTest {
         service.dispose()
 
@@ -219,7 +212,6 @@ class AuthorizationServiceTest {
     }
 
     @Test(expected = IllegalStateException::class)
-    @Throws(Exception::class)
     fun testEndSessionRequest_afterDispose() = runTest {
         service.dispose()
         service.performEndSessionRequest(TestValues.testEndSessionRequest, pendingIntent)
@@ -233,7 +225,7 @@ class AuthorizationServiceTest {
         assertThat(intent.hasExtra(KEY_AUTH_INTENT)).isTrue()
 
         assertThat(intent.getStringExtra(AuthorizationManagementActivity.KEY_AUTH_REQUEST))
-            .isEqualTo(request.jsonSerializeString())
+            .isEqualTo(request.asJsonString)
     }
 
     @Test
@@ -267,12 +259,11 @@ class AuthorizationServiceTest {
     }
 
     @Test
-    @Throws(Exception::class)
     fun testTokenRequest() = runTest {
         val `is`: InputStream = ByteArrayInputStream(authCodeExchangeResponseJson.toByteArray())
-        Mockito.`when`(httpConnection.inputStream).thenReturn(`is`)
-        Mockito.`when`(httpConnection.getRequestProperty("Accept")).thenReturn(null)
-        Mockito.`when`(httpConnection.responseCode).thenReturn(HttpURLConnection.HTTP_OK)
+        whenever(httpConnection.inputStream) doReturn `is`
+        whenever(httpConnection.getRequestProperty("Accept")) doReturn null
+        whenever(httpConnection.responseCode) doReturn HttpURLConnection.HTTP_OK
 
         val request = TestValues.testAuthCodeExchangeRequest
         val result = performTokenRequest(request)
@@ -283,9 +274,9 @@ class AuthorizationServiceTest {
 
         // by default, we set application/json as an acceptable response type if a value was not
         // already set
-        Mockito.verify(httpConnection).setRequestProperty("Accept", "application/json")
+        verify(httpConnection).setRequestProperty("Accept", "application/json")
 
-        val params = formUrlDecodeUnique(postBody)
+        val params = postBody.formUrlDecodeUnique()
 
         request.requestParameters.forEach {
             assertThat(params).containsEntry(it.key, it.value)
@@ -295,7 +286,6 @@ class AuthorizationServiceTest {
     }
 
     @Test
-    @Throws(Exception::class)
     fun testTokenRequest_withNonceValidation() = runTest {
         val idToken = TestValues.getTestIdTokenWithNonce(TestValues.TEST_NONCE)
 
@@ -319,15 +309,12 @@ class AuthorizationServiceTest {
     }
 
     @Test
-    @Throws(Exception::class)
     fun testTokenRequest_clientSecretBasicAuth() = runTest {
         val `is`: InputStream = ByteArrayInputStream(authCodeExchangeResponseJson.toByteArray())
 
-        Mockito.`when`(httpConnection.inputStream).thenReturn(`is`)
-        Mockito.`when`(httpConnection.getRequestProperty("Accept")).thenReturn(null)
-
-        Mockito.`when`(httpConnection.responseCode)
-            .thenReturn(HttpURLConnection.HTTP_OK)
+        whenever(httpConnection.inputStream) doReturn `is`
+        whenever(httpConnection.getRequestProperty("Accept")) doReturn null
+        whenever(httpConnection.responseCode) doReturn HttpURLConnection.HTTP_OK
 
         val request = TestValues.testAuthCodeExchangeRequest
         val clientAuth = ClientSecretBasic("SUPER_SECRET")
@@ -339,37 +326,32 @@ class AuthorizationServiceTest {
 
         // client secret basic does not send the client ID in the body - explicitly check for
         // this as a possible regression, as this can break integration with IDPs if present.
-        val params = formUrlDecodeUnique(postBody)
+        val params = postBody.formUrlDecodeUnique()
         assertThat(params).doesNotContainKey(TokenRequest.PARAM_CLIENT_ID)
     }
 
     @Test
-    @Throws(Exception::class)
     fun testTokenRequest_leaveExistingAcceptUntouched() = runTest {
         val `is`: InputStream = ByteArrayInputStream(authCodeExchangeResponseJson.toByteArray())
 
         // emulate some content types having already been set as an Accept value
-        Mockito.`when`(httpConnection.getRequestProperty("Accept"))
-            .thenReturn("text/plain")
-
-        Mockito.`when`(httpConnection.inputStream).thenReturn(`is`)
-        Mockito.`when`(httpConnection.responseCode)
-            .thenReturn(HttpURLConnection.HTTP_OK)
+        whenever(httpConnection.getRequestProperty("Accept")) doReturn "text/plain"
+        whenever(httpConnection.inputStream) doReturn `is`
+        whenever(httpConnection.responseCode) doReturn HttpURLConnection.HTTP_OK
 
         val request = TestValues.testAuthCodeExchangeRequest
         performTokenRequest(request)
 
         // application/json should be added after the existing string
-        Mockito.verify(httpConnection, Mockito.never()).setRequestProperty(
-            ArgumentMatchers.eq("Accept"), ArgumentMatchers.any(String::class.java)
-        )
+        verify(httpConnection, never())
+            .setRequestProperty(eq("Accept"), any<String>())
     }
 
     @Test
-    @Throws(Exception::class)
     fun testTokenRequest_withBasicAuth() = runTest {
         val csb = ClientSecretBasic(TEST_CLIENT_SECRET)
         val `is`: InputStream = ByteArrayInputStream(authCodeExchangeResponseJson.toByteArray())
+
         whenever(httpConnection.responseCode).thenReturn(HttpURLConnection.HTTP_OK)
         whenever(httpConnection.inputStream).thenReturn(`is`)
 
@@ -388,14 +370,12 @@ class AuthorizationServiceTest {
     }
 
     @Test
-    @Throws(Exception::class)
     fun testTokenRequest_withPostAuth() = runTest {
         val csp = ClientSecretPost(TEST_CLIENT_SECRET)
         val `is`: InputStream = ByteArrayInputStream(authCodeExchangeResponseJson.toByteArray())
-        Mockito.`when`(httpConnection.getInputStream()).thenReturn(`is`)
 
-        Mockito.`when`(httpConnection.getResponseCode())
-            .thenReturn(HttpURLConnection.HTTP_OK)
+        whenever(httpConnection.getInputStream()) doReturn `is`
+        whenever(httpConnection.getResponseCode()) doReturn HttpURLConnection.HTTP_OK
 
         val request = TestValues.testAuthCodeExchangeRequest
         val result = performTokenRequest(request, csp)
@@ -403,7 +383,6 @@ class AuthorizationServiceTest {
         assertTokenResponse(result.getOrNull(), request)
 
         val postBody = outputStream.toString()
-
         val expectedRequestBody =
             request.requestParameters + csp.getRequestParameters(TEST_CLIENT_ID)
 
@@ -411,15 +390,12 @@ class AuthorizationServiceTest {
     }
 
     @Test
-    @Throws(Exception::class)
     fun testTokenRequest_withInvalidGrant() = runTest {
         val csp = ClientSecretPost(TEST_CLIENT_SECRET)
         val `is`: InputStream = ByteArrayInputStream(INVALID_GRANT_RESPONSE_JSON.toByteArray())
 
-        Mockito.`when`(httpConnection.errorStream).thenReturn(`is`)
-
-        Mockito.`when`(httpConnection.responseCode)
-            .thenReturn(HttpURLConnection.HTTP_BAD_REQUEST)
+        whenever(httpConnection.errorStream) doReturn `is`
+        whenever(httpConnection.responseCode) doReturn HTTP_BAD_REQUEST
 
         val request = TestValues.testAuthCodeExchangeRequest
         val result = performTokenRequest(request, csp)
@@ -428,12 +404,11 @@ class AuthorizationServiceTest {
     }
 
     @Test
-    @Throws(Exception::class)
     fun testTokenRequest_withInvalidGrant2() = runTest {
         val csp = ClientSecretPost(TEST_CLIENT_SECRET)
         val `is`: InputStream = ByteArrayInputStream(INVALID_GRANT_RESPONSE_JSON.toByteArray())
-        Mockito.`when`(httpConnection.errorStream).thenReturn(`is`)
-        Mockito.`when`(httpConnection.responseCode).thenReturn(199)
+        whenever(httpConnection.errorStream) doReturn `is`
+        whenever(httpConnection.responseCode) doReturn 199
 
         val request = TestValues.testAuthCodeExchangeRequest
         val result = performTokenRequest(request, csp)
@@ -442,17 +417,14 @@ class AuthorizationServiceTest {
     }
 
     @Test
-    @Throws(Exception::class)
     fun testTokenRequest_withInvalidGrantWithNoDesc() = runTest {
         val csp = ClientSecretPost(TEST_CLIENT_SECRET)
 
         val `is`: InputStream =
             ByteArrayInputStream(INVALID_GRANT_NO_DESC_RESPONSE_JSON.toByteArray())
 
-        Mockito.`when`(httpConnection.errorStream).thenReturn(`is`)
-
-        Mockito.`when`(httpConnection.responseCode)
-            .thenReturn(HttpURLConnection.HTTP_BAD_REQUEST)
+        whenever(httpConnection.errorStream) doReturn `is`
+        whenever(httpConnection.responseCode) doReturn HTTP_BAD_REQUEST
 
         val request = TestValues.testAuthCodeExchangeRequest
         val result = performTokenRequest(request, csp)
@@ -461,18 +433,14 @@ class AuthorizationServiceTest {
     }
 
     @Test
-    @Throws(Exception::class)
     fun testTokenRequest_IoException() = runTest {
         val ex: Exception = IOException()
-        Mockito.`when`(httpConnection.getInputStream()).thenThrow(ex)
-
-        Mockito.`when`(httpConnection.responseCode)
-            .thenReturn(HttpURLConnection.HTTP_OK)
+        whenever(httpConnection.getInputStream()) doThrow ex
+        whenever(httpConnection.responseCode) doReturn HttpURLConnection.HTTP_OK
 
         val result = performTokenRequest(TestValues.testAuthCodeExchangeRequest)
 
         assertNotNull(result.exceptionOrNull())
-
         assertEquals(
             AuthorizationException.GeneralErrors.NETWORK_ERROR,
             result.exceptionOrNull()
@@ -480,28 +448,25 @@ class AuthorizationServiceTest {
     }
 
     @Test
-    @Throws(Exception::class)
     fun testRegistrationRequest() = runTest {
         val `is`: InputStream = ByteArrayInputStream(REGISTRATION_RESPONSE_JSON.toByteArray())
-        Mockito.`when`(httpConnection.inputStream).thenReturn(`is`)
+        whenever(httpConnection.inputStream) doReturn `is`
         val request = TestValues.testRegistrationRequest
         val result = performRegistrationRequest(request)
 
         assertRegistrationResponse(result.getOrNull(), request)
         val postBody = outputStream.toString()
-        assertThat(postBody).isEqualTo(request.toJsonString())
+        assertThat(postBody).isEqualTo(request.asRequestJsonString)
     }
 
     @Test
-    @Throws(Exception::class)
     fun testRegistrationRequest_IoException() = runTest {
         val ex: Exception = IOException()
-        Mockito.`when`(httpConnection.inputStream).thenThrow(ex)
+        whenever(httpConnection.inputStream) doThrow ex
 
         val result = performRegistrationRequest(TestValues.testRegistrationRequest)
 
         assertNotNull(result.exceptionOrNull())
-
         assertEquals(
             AuthorizationException.GeneralErrors.NETWORK_ERROR,
             result.exceptionOrNull()
@@ -509,14 +474,12 @@ class AuthorizationServiceTest {
     }
 
     @Test(expected = IllegalStateException::class)
-    @Throws(Exception::class)
     fun testTokenRequest_afterDispose() = runTest {
         service.dispose()
         performTokenRequest(TestValues.testAuthCodeExchangeRequest)
     }
 
     @Test(expected = IllegalStateException::class)
-    @Throws(Exception::class)
     fun testCreateCustomTabsIntentBuilder_afterDispose() = runTest {
         service.dispose()
         service.createCustomTabsIntentBuilder()
@@ -623,58 +586,47 @@ class AuthorizationServiceTest {
         assertTrue((expected == null) || ((expected == color) && (color != Color.TRANSPARENT)))
     }
 
-    /**
-     * Custom matcher for verifying the intent fired during token request.
-     */
-    private class CustomTabsServiceMatcher : ArgumentMatcher<Intent> {
-        override fun matches(intent: Intent): Boolean {
-            return TEST_BROWSER_PACKAGE == intent.`package`
-        }
-
-        override fun toString(): String {
-            return "$TEST_BROWSER_PACKAGE == intent.`package`"
-        }
-    }
-
     val authCodeExchangeResponseJson: String
-        get() = getAuthCodeExchangeResponseJson(null)
+        get() = getAuthCodeExchangeResponseJson()
 
-    fun getAuthCodeExchangeResponseJson(idToken: String?): String {
-        var idToken = idToken
-        if (idToken == null) {
-            idToken = TestValues.TEST_ID_TOKEN
-        }
-        return ("{\n"
-                + "  \"refresh_token\": \"" + TestValues.TEST_REFRESH_TOKEN + "\",\n"
-                + "  \"access_token\": \"" + TestValues.TEST_ACCESS_TOKEN + "\",\n"
-                + "  \"expires_in\": \"" + TEST_EXPIRES_IN + "\",\n"
-                + "  \"id_token\": \"" + idToken + "\",\n"
-                + "  \"token_type\": \"" + AuthorizationResponse.TOKEN_TYPE_BEARER + "\"\n"
-                + "}")
-    }
+    fun getAuthCodeExchangeResponseJson(idToken: String = TestValues.TEST_ID_TOKEN) = """
+            {
+                "refresh_token": "${TestValues.TEST_REFRESH_TOKEN}",
+                "access_token": "${TestValues.TEST_ACCESS_TOKEN}",
+                "expires_in": $TEST_EXPIRES_IN,
+                "id_token": "$idToken",
+                "token_type": "${AuthorizationResponse.TOKEN_TYPE_BEARER}"
+            }
+        """.trimIndent()
 
     companion object {
         private const val TEST_EXPIRES_IN = 3600
         private const val TEST_BROWSER_PACKAGE = "com.browser.test"
 
-        private const val REGISTRATION_RESPONSE_JSON = ("{\n"
-                + " \"client_id\": \"" + TEST_CLIENT_ID + "\",\n"
-                + " \"client_secret\": \"" + TEST_CLIENT_SECRET + "\",\n"
-                + " \"client_secret_expires_at\": \"" + TestValues.TEST_CLIENT_SECRET_EXPIRES_AT + "\",\n"
-                + " \"application_type\": " + RegistrationRequest.APPLICATION_TYPE_NATIVE + "\n"
-                + "}")
+        private val REGISTRATION_RESPONSE_JSON = """
+            {
+                "client_id": "$TEST_CLIENT_ID",
+                "client_secret": "$TEST_CLIENT_SECRET",
+                "client_secret_expires_at": ${TestValues.TEST_CLIENT_SECRET_EXPIRES_AT},
+                "application_type": "${RegistrationRequest.APPLICATION_TYPE_NATIVE}"
+            }
+        """.trimIndent()
 
-        private const val INVALID_GRANT_RESPONSE_JSON = ("{\n"
-                + "  \"error\": \"invalid_grant\",\n"
-                + "  \"error_description\": \"invalid_grant description\"\n"
-                + "}")
+        private val INVALID_GRANT_RESPONSE_JSON = """
+            {
+                "error": "invalid_grant",
+                "error_description": "invalid_grant description"
+            }
+        """.trimIndent()
 
-        private const val INVALID_GRANT_NO_DESC_RESPONSE_JSON = ("{\n"
-                + "  \"error\": \"invalid_grant\"\n"
-                + "}")
+        private val INVALID_GRANT_NO_DESC_RESPONSE_JSON = """
+            {
+                "error": "invalid_grant"
+            }
+        """.trimIndent()
 
         private const val TEST_INVALID_GRANT_CODE = 2002
 
-        fun serviceIntentEq(): Intent = argThat<Intent>(CustomTabsServiceMatcher())
+        fun serviceIntentEq(): Intent = argThat<Intent> { TEST_BROWSER_PACKAGE == `package` }
     }
 }

@@ -14,27 +14,30 @@
 package net.openid.appauth
 
 import android.content.Intent
-import org.json.JSONObject
 
 /**
  * A base response for session management models
  * [AuthorizationResponse] and [EndSessionResponse]
  */
 sealed interface AuthorizationManagementResponse {
+    /**
+     * The `state` parameter that was sent in the `AuthorizationRequest`.
+     *
+     * This is used to protect against Cross-Site Request Forgery (CSRF) attacks. The client
+     * should verify that this value matches the one sent in the original request.
+     *
+     * @see "The OAuth 2.0 Authorization Framework, Section 10.12"
+     * @see "https://tools.ietf.org/html/rfc6749#section-10.12"
+     */
     val state: String?
 
+    /**
+     * A convenience property that returns the JSON serialization of this response as a string.
+     */
+    val asJsonString: String
+
+    /**
+     * Creates an intent containing the serializable form of the response.
+     */
     fun toIntent(): Intent
-
-    /**
-     * Produces a JSON representation of the request for persistent storage or local transmission
-     * (e.g. between activities).
-     */
-    fun jsonSerialize(): JSONObject
-
-    /**
-     * Produces a JSON representation of the end session response for persistent storage or local
-     * transmission (e.g. between activities). This method is just a convenience wrapper
-     * for [.jsonSerialize], converting the JSON object to its string form.
-     */
-    fun jsonSerializeString() = jsonSerialize().toString()
 }

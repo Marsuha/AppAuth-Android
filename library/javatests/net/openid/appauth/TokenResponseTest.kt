@@ -13,6 +13,8 @@
  */
 package net.openid.appauth
 
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import net.openid.appauth.TestValues.TEST_APP_REDIRECT_URI
 import net.openid.appauth.TestValues.TEST_AUTH_CODE
 import net.openid.appauth.TestValues.TEST_CLIENT_ID
@@ -20,9 +22,14 @@ import net.openid.appauth.TestValues.TEST_ID_TOKEN
 import net.openid.appauth.TestValues.TEST_REFRESH_TOKEN
 import net.openid.appauth.TestValues.TEST_SCOPE
 import net.openid.appauth.TestValues.testServiceConfig
-import net.openid.appauth.TokenResponse.Companion.jsonDeserialize
+import net.openid.appauth.TokenResponse.Companion.KEY_EXPIRES_AT
+import net.openid.appauth.TokenResponse.Companion.PARAM_ACCESS_TOKEN
+import net.openid.appauth.TokenResponse.Companion.PARAM_ID_TOKEN
+import net.openid.appauth.TokenResponse.Companion.PARAM_REFRESH_TOKEN
+import net.openid.appauth.TokenResponse.Companion.PARAM_SCOPE
+import net.openid.appauth.TokenResponse.Companion.PARAM_TOKEN_TYPE
+import net.openid.appauth.TokenResponse.Companion.fromJsonString
 import org.assertj.core.api.Assertions.assertThat
-import org.json.JSONException
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -49,13 +56,15 @@ class TokenResponseTest {
 
     @Test(expected = IllegalArgumentException::class)
     fun testBuilder_setAdditionalParams_withBuiltInParam() {
-        minimalBuilder.setAdditionalParameters(mapOf(TokenRequest.PARAM_SCOPE to "scope"))
+        val json = buildJsonObject { put(PARAM_SCOPE, "scope") }
+        minimalBuilder.setAdditionalParameters(json)
     }
 
     @Test
-    @Throws(JSONException::class)
     fun testBuilder_fromResponseJsonStringWithScope() {
-        val tokenResponse = minimalBuilder.fromResponseJsonString(TEST_JSON_WITH_SCOPE).build()
+        val tokenResponse = minimalBuilder
+            .fromResponseJsonString(TEST_JSON_WITH_SCOPE)
+            .build()
 
         assertNotNull(tokenResponse)
         assertEquals(TEST_KEY_ACCESS_TOKEN, tokenResponse.accessToken)
@@ -65,18 +74,15 @@ class TokenResponseTest {
         assertEquals(TEST_KEY_KEY_EXPIRES_AT, tokenResponse.accessTokenExpirationTime)
 
         assertEquals(TEST_KEY_SCOPES, tokenResponse.scope)
-        assertThat(tokenResponse.scopeSet).isEqualTo(
+        assertThat(tokenResponse.scopeValues).isEqualTo(
             setOf(TEST_KEY_SCOPE_1, TEST_KEY_SCOPE_2, TEST_KEY_SCOPE_3)
         )
     }
 
-    @Test(expected = JSONException::class)
-    @Throws(JSONException::class)
+    @Test(expected = IllegalArgumentException::class)
     fun testBuilder_fromResponseJsonString_emptyJson() {
         val tokenResponse = minimalBuilder.fromResponseJsonString("{}").build()
 
-        assertNotNull(tokenResponse)
-
         assertEquals(TEST_KEY_ACCESS_TOKEN, tokenResponse.accessToken)
         assertEquals(TEST_KEY_TOKEN_TYPE, tokenResponse.tokenType)
         assertEquals(TEST_KEY_REFRESH_TOKEN, tokenResponse.refreshToken)
@@ -84,16 +90,14 @@ class TokenResponseTest {
         assertEquals(TEST_KEY_KEY_EXPIRES_AT, tokenResponse.accessTokenExpirationTime)
 
         assertThat(tokenResponse.scope).isNullOrEmpty()
-        assertNull(tokenResponse.scopeSet)
+        assertNull(tokenResponse.scopeValues)
     }
 
     @Test
-    @Throws(JSONException::class)
     fun testBuilder_fromResponseJsonStringWithoutScopeField() {
-        val tokenResponse =
-            minimalBuilder.fromResponseJsonString(TEST_JSON_WITHOUT_SCOPE_FIELD).build()
-
-        assertNotNull(tokenResponse)
+        val tokenResponse = minimalBuilder
+            .fromResponseJsonString(TEST_JSON_WITHOUT_SCOPE_FIELD)
+            .build()
 
         assertEquals(TEST_KEY_ACCESS_TOKEN, tokenResponse.accessToken)
         assertEquals(TEST_KEY_TOKEN_TYPE, tokenResponse.tokenType)
@@ -102,11 +106,10 @@ class TokenResponseTest {
         assertEquals(TEST_KEY_KEY_EXPIRES_AT, tokenResponse.accessTokenExpirationTime)
 
         assertThat(tokenResponse.scope).isNullOrEmpty()
-        assertNull(tokenResponse.scopeSet)
+        assertNull(tokenResponse.scopeValues)
     }
 
     @Test
-    @Throws(JSONException::class)
     fun testJsonSerialization() {
         val response = minimalBuilder
             .setAccessToken(TEST_KEY_ACCESS_TOKEN)
@@ -117,8 +120,8 @@ class TokenResponseTest {
             .setTokenType(TEST_KEY_TOKEN_TYPE)
             .build()
 
-        val output = response.jsonSerializeString()
-        val input = jsonDeserialize(output)
+        val output = response.asJsonString
+        val input = fromJsonString(output)
 
         assertThat(input.accessToken).isEqualTo(response.accessToken)
         assertThat(input.accessTokenExpirationTime)
@@ -135,8 +138,8 @@ class TokenResponseTest {
     fun testJsonSerialization_doesNotChange() {
         val tokenResponse = minimalBuilder.fromResponseJsonString(TEST_JSON_WITH_SCOPE).build()
 
-        val firstOutput = tokenResponse.jsonSerializeString()
-        val secondOutput = jsonDeserialize(firstOutput).jsonSerializeString()
+        val firstOutput = tokenResponse.asJsonString
+        val secondOutput = fromJsonString(firstOutput).asJsonString
 
         assertThat(secondOutput).isEqualTo(firstOutput)
     }
@@ -154,29 +157,36 @@ class TokenResponseTest {
         private const val TEST_KEY_SCOPES: String =
             "$TEST_KEY_SCOPE_1 $TEST_KEY_SCOPE_2 $TEST_KEY_SCOPE_3"
 
-        private const val TEST_JSON_WITH_SCOPE = "{\n" +
-                "    \"" + TokenResponse.KEY_ACCESS_TOKEN + "\": \"" + TEST_KEY_ACCESS_TOKEN + "\",\n" +
-                "    \"" + TokenResponse.KEY_TOKEN_TYPE + "\": \"" + TEST_KEY_TOKEN_TYPE + "\",\n" +
-                "    \"" + TokenResponse.KEY_REFRESH_TOKEN + "\": \"" + TEST_KEY_REFRESH_TOKEN + "\",\n" +
-                "    \"" + TokenResponse.KEY_ID_TOKEN + "\": \"" + TEST_KEY_ID_TOKEN + "\",\n" +
-                "    \"" + TokenResponse.KEY_EXPIRES_AT + "\": " + TEST_KEY_KEY_EXPIRES_AT + ",\n" +
-                "    \"" + TokenResponse.KEY_SCOPE + "\": \"" + TEST_KEY_SCOPES + "\"\n" +
-                "}"
+        private val TEST_JSON_WITH_SCOPE = """
+            {
+                "$PARAM_ACCESS_TOKEN": "$TEST_KEY_ACCESS_TOKEN",
+                "$PARAM_TOKEN_TYPE": "$TEST_KEY_TOKEN_TYPE",
+                "$PARAM_REFRESH_TOKEN": "$TEST_KEY_REFRESH_TOKEN",
+                "$PARAM_ID_TOKEN": "$TEST_KEY_ID_TOKEN",
+                "$KEY_EXPIRES_AT": $TEST_KEY_KEY_EXPIRES_AT,
+                "$PARAM_SCOPE": "$TEST_KEY_SCOPES"
+            }
+        """.trimIndent()
 
-        private const val TEST_JSON_WITHOUT_SCOPE = "{\n" +
-                "    \"" + TokenResponse.KEY_ACCESS_TOKEN + "\": \"" + TEST_KEY_ACCESS_TOKEN + "\",\n" +
-                "    \"" + TokenResponse.KEY_TOKEN_TYPE + "\": \"" + TEST_KEY_TOKEN_TYPE + "\",\n" +
-                "    \"" + TokenResponse.KEY_REFRESH_TOKEN + "\": \"" + TEST_KEY_REFRESH_TOKEN + "\",\n" +
-                "    \"" + TokenResponse.KEY_ID_TOKEN + "\": \"" + TEST_KEY_ID_TOKEN + "\",\n" +
-                "    \"" + TokenResponse.KEY_EXPIRES_AT + "\": " + TEST_KEY_KEY_EXPIRES_AT + ",\n" +
-                "    \"" + TokenResponse.KEY_SCOPE + "\":\"\"\n" +
-                "}"
-        private const val TEST_JSON_WITHOUT_SCOPE_FIELD = "{\n" +
-                "    \"" + TokenResponse.KEY_ACCESS_TOKEN + "\": \"" + TEST_KEY_ACCESS_TOKEN + "\",\n" +
-                "    \"" + TokenResponse.KEY_TOKEN_TYPE + "\": \"" + TEST_KEY_TOKEN_TYPE + "\",\n" +
-                "    \"" + TokenResponse.KEY_REFRESH_TOKEN + "\": \"" + TEST_KEY_REFRESH_TOKEN + "\",\n" +
-                "    \"" + TokenResponse.KEY_ID_TOKEN + "\": \"" + TEST_KEY_ID_TOKEN + "\",\n" +
-                "    \"" + TokenResponse.KEY_EXPIRES_AT + "\": " + TEST_KEY_KEY_EXPIRES_AT + "\n" +
-                "}"
+        private val TEST_JSON_WITHOUT_SCOPE = """
+            {
+                "$PARAM_ACCESS_TOKEN": "$TEST_KEY_ACCESS_TOKEN",
+                "$PARAM_TOKEN_TYPE": "$TEST_KEY_TOKEN_TYPE",
+                "$PARAM_REFRESH_TOKEN": "$TEST_KEY_REFRESH_TOKEN",
+                "$PARAM_ID_TOKEN": "$TEST_KEY_ID_TOKEN",
+                "$KEY_EXPIRES_AT": $TEST_KEY_KEY_EXPIRES_AT,
+                "$PARAM_SCOPE": ""
+            }
+        """.trimIndent()
+
+        private val TEST_JSON_WITHOUT_SCOPE_FIELD = """
+            {
+                "$PARAM_ACCESS_TOKEN": "$TEST_KEY_ACCESS_TOKEN",
+                "$PARAM_TOKEN_TYPE": "$TEST_KEY_TOKEN_TYPE",
+                "$PARAM_REFRESH_TOKEN": "$TEST_KEY_REFRESH_TOKEN",
+                "$PARAM_ID_TOKEN": "$TEST_KEY_ID_TOKEN",
+                "$KEY_EXPIRES_AT": $TEST_KEY_KEY_EXPIRES_AT
+            }
+        """.trimIndent()
     }
 }

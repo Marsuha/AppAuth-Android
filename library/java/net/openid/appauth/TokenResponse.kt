@@ -14,8 +14,13 @@
 package net.openid.appauth
 
 import androidx.annotation.VisibleForTesting
-import org.json.JSONException
-import org.json.JSONObject
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerializationException
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.long
 import java.util.concurrent.TimeUnit
 
 /**
@@ -25,12 +30,13 @@ import java.util.concurrent.TimeUnit
  *
  * @see "The OAuth 2.0 Authorization Framework
  */
-@Suppress("unused")
+//@Suppress("unused")
+@Serializable
 class TokenResponse internal constructor(
     /**
      * The token request associated with this response.
      */
-    @JvmField val request: TokenRequest,
+    val request: TokenRequest,
     /**
      * The type of the token returned. Typically this is [.TOKEN_TYPE_BEARER], or some
      * other token type that the client has negotiated with the authorization service.
@@ -38,104 +44,118 @@ class TokenResponse internal constructor(
      * @see "The OAuth 2.0 Authorization Framework
      * @see "The OAuth 2.0 Authorization Framework
      */
-    @JvmField val tokenType: String?,
+    val tokenType: String? = null,
     /**
      * The access token, if provided.
      *
      * @see "The OAuth 2.0 Authorization Framework
      */
-    @JvmField val accessToken: String?,
+    val accessToken: String? = null,
     /**
      * The expiration time of the access token, if provided. If an access token is provided but the
      * expiration time is not, then the expiration time is typically some default value specified
      * by the identity provider through some other means, such as documentation or an additional
      * non-standard field.
      */
-    @JvmField val accessTokenExpirationTime: Long?,
+    val accessTokenExpirationTime: Long? = null,
     /**
      * The ID token describing the authenticated user, if provided.
      *
-     * @see "OpenID Connect Core 1.0, Section 2
-     * <https:></https:>//openid.net/specs/openid-connect-core-1_0.html.rfc.section.2>"
+     * @see <a href="https://openid.net/specs/openid-connect-core-1_0.html#rfc.section.2">
+     *     OpenID Connect Core 1.0, Section 2</a>
      */
-    @JvmField val idToken: String?,
+    val idToken: String? = null,
     /**
      * The refresh token, if provided.
      *
      * @see "The OAuth 2.0 Authorization Framework
      */
-    @JvmField val refreshToken: String?,
+    val refreshToken: String? = null,
     /**
      * The scope of the access token. If the scope is identical to that originally
      * requested, then this value is optional.
      *
      * @see "The OAuth 2.0 Authorization Framework
      */
-    @JvmField val scope: String?,
+    val scope: String? = null,
     /**
      * Additional, non-standard parameters in the response.
      */
-    val additionalParameters: Map<String, String>
+    val additionalParameters: JsonObject = JsonObject(emptyMap())
 ) {
+
+    /**
+     * The set of scopes returned in the response. This is derived from the
+     * [scope] property. If the scope is `null`, this will also be `null`.
+     *
+     * @see <a href="https://tools.ietf.org/html/rfc6749#section-5.1">
+     *     The OAuth 2.0 Authorization Framework, Section 5.1</a>
+     */
+    val scopeValues: Set<String>?
+        get() = scope?.let { AsciiStringListUtil.stringToSet(it) }
+
+    /**
+     * Serializes the token response to a JSON string.
+     */
+    val asJsonString get() = Json.encodeToString(this)
+
     /**
      * Creates instances of [TokenResponse].
      */
-    class Builder(request: TokenRequest) {
-        private var mRequest: TokenRequest = request
+    class Builder(private var request: TokenRequest) {
 
-        private var mTokenType: String? = null
+        private var tokenType: String? = null
 
-        private var mAccessToken: String? = null
+        private var accessToken: String? = null
 
-        private var mAccessTokenExpirationTime: Long? = null
+        private var accessTokenExpirationTime: Long? = null
 
-        private var mIdToken: String? = null
+        private var idToken: String? = null
 
-        private var mRefreshToken: String? = null
+        private var refreshToken: String? = null
 
-        private var mScope: String? = null
+        private var scope: String? = null
 
-        private var mAdditionalParameters: Map<String, String> = emptyMap()
-
-        /**
-         * Extracts token response fields from a JSON string.
-         *
-         * @throws JSONException if the JSON is malformed or has incorrect value types for fields.
-         */
-        @Throws(JSONException::class)
-        fun fromResponseJsonString(jsonStr: String): Builder {
-            require(jsonStr.isNotEmpty()) { "json cannot be empty" }
-            return fromResponseJson(JSONObject(jsonStr))
-        }
+        private var additionalParameters: JsonObject = JsonObject(emptyMap())
 
         /**
          * Extracts token response fields from a JSON object.
          *
-         * @throws JSONException if the JSON is malformed or has incorrect value types for fields.
+         * @throws SerializationException if the JSON is malformed or has incorrect value types for fields.
          */
-        @Throws(JSONException::class)
-        fun fromResponseJson(json: JSONObject): Builder {
-            setTokenType(json.getString(KEY_TOKEN_TYPE))
-            setAccessToken(json.getStringIfDefined(KEY_ACCESS_TOKEN))
-            setAccessTokenExpirationTime(json.getLongIfDefined(KEY_EXPIRES_AT))
+        @VisibleForTesting
+        fun fromResponseJsonString(jsonStr: String): Builder {
+            require(jsonStr.isNotEmpty()) { "json cannot be empty" }
+            val json = Json.parseToJsonElement(jsonStr).jsonObject
+            return fromResponseJson(json)
+        }
 
-            if (json.has(KEY_EXPIRES_IN)) {
-                setAccessTokenExpiresIn(json.getLong(KEY_EXPIRES_IN))
-            }
-
-            setRefreshToken(json.getStringIfDefined(KEY_REFRESH_TOKEN))
-            setIdToken(json.getStringIfDefined(KEY_ID_TOKEN))
-            setScope(json.getStringIfDefined(KEY_SCOPE))
-            setAdditionalParameters(json.extractAdditionalParams(BUILT_IN_PARAMS))
-
+        /**
+         * Extracts token response fields from a JSON string.
+         *
+         * @throws SerializationException if the JSON is malformed or has incorrect value types for fields.
+         */
+        @Throws(IllegalArgumentException::class)
+        fun fromResponseJson(json: JsonObject): Builder {
+            require(json.isNotEmpty()) { "json cannot be empty" }
+            val additionalParams = json.extractAdditionalParams(BUILT_IN_PARAMS)
+            setTokenType(json[PARAM_TOKEN_TYPE]?.jsonPrimitive?.content)
+            setAccessToken(json[PARAM_ACCESS_TOKEN]?.jsonPrimitive?.content)
+            setAccessTokenExpirationTime(json[KEY_EXPIRES_AT]?.jsonPrimitive?.long)
+            json[PARAM_EXPIRES_IN]?.let { setAccessTokenExpiresIn(it.jsonPrimitive.long) }
+            setRefreshToken(json[PARAM_REFRESH_TOKEN]?.jsonPrimitive?.content)
+            setIdToken(json[PARAM_ID_TOKEN]?.jsonPrimitive?.content)
+            setScope(json[PARAM_SCOPE]?.jsonPrimitive?.content)
+            setAdditionalParameters(additionalParams)
             return this
         }
 
         /**
          * Specifies the request associated with this response. Must not be null.
          */
-        fun setRequest(request: TokenRequest): Builder {
-            mRequest = request
+        @Suppress("unused")
+        fun setRequest(tokenRequest: TokenRequest): Builder {
+            request = tokenRequest
             return this
         }
 
@@ -143,18 +163,18 @@ class TokenResponse internal constructor(
          * Specifies the token type of the access token in this response. If not null, the value
          * must be non-empty.
          */
-        fun setTokenType(tokenType: String?): Builder {
-            tokenType?.let { require(it.isNotEmpty()) { "token type must not be empty if defined" } }
-            mTokenType = tokenType
+        fun setTokenType(type: String?): Builder {
+            type?.let { require(it.isNotEmpty()) { "token type must not be empty if defined" } }
+            tokenType = type
             return this
         }
 
         /**
          * Specifies the access token. If not null, the value must be non-empty.
          */
-        fun setAccessToken(accessToken: String?): Builder {
-            accessToken?.let { require(it.isNotEmpty()) { "access token cannot be empty if specified" } }
-            mAccessToken = accessToken
+        fun setAccessToken(token: String?): Builder {
+            token?.let { require(it.isNotEmpty()) { "access token cannot be empty if specified" } }
+            accessToken = token
             return this
         }
 
@@ -172,7 +192,7 @@ class TokenResponse internal constructor(
          */
         @VisibleForTesting
         fun setAccessTokenExpiresIn(expiresIn: Long?, clock: Clock): Builder {
-            mAccessTokenExpirationTime = expiresIn?.let {
+            accessTokenExpirationTime = expiresIn?.let {
                 (clock.currentTimeMillis + TimeUnit.SECONDS.toMillis(it))
             }
 
@@ -183,25 +203,25 @@ class TokenResponse internal constructor(
          * Sets the exact expiration time of the access token, in milliseconds since the UNIX epoch.
          */
         fun setAccessTokenExpirationTime(expiresAt: Long?): Builder {
-            mAccessTokenExpirationTime = expiresAt
+            accessTokenExpirationTime = expiresAt
             return this
         }
 
         /**
          * Specifies the ID token. If not null, the value must be non-empty.
          */
-        fun setIdToken(idToken: String?): Builder {
-            idToken?.let { require(it.isNotEmpty()) { "id token must not be empty if defined" } }
-            mIdToken = idToken
+        fun setIdToken(token: String?): Builder {
+            token?.let { require(it.isNotEmpty()) { "id token must not be empty if defined" } }
+            idToken = token
             return this
         }
 
         /**
          * Specifies the refresh token. If not null, the value must be non-empty.
          */
-        fun setRefreshToken(refreshToken: String?): Builder {
-            refreshToken?.let { require(it.isNotEmpty()) { "refresh token must not be empty if defined" } }
-            mRefreshToken = refreshToken
+        fun setRefreshToken(token: String?): Builder {
+            token?.let { require(it.isNotEmpty()) { "refresh token must not be empty if defined" } }
+            refreshToken = token
             return this
         }
 
@@ -212,7 +232,7 @@ class TokenResponse internal constructor(
          * @see "The OAuth 2.0 Authorization Framework
          */
         fun setScope(scope: String?): Builder {
-            mScope = scope?.takeIf { it.isNotEmpty() }?.let { scope ->
+            this@Builder.scope = scope?.takeIf { it.isNotEmpty() }?.let { scope ->
                 setScopes(*scope.split(" +").dropLastWhile { it.isEmpty() }.toTypedArray())
                 scope
             }
@@ -250,15 +270,15 @@ class TokenResponse internal constructor(
          * @see "The OAuth 2.0 Authorization Framework
          */
         fun setScopes(scopes: Iterable<String>): Builder {
-            mScope = AsciiStringListUtil.iterableToString(scopes)
+            scope = AsciiStringListUtil.iterableToString(scopes)
             return this
         }
 
         /**
          * Specifies the additional, non-standard parameters received as part of the response.
          */
-        fun setAdditionalParameters(additionalParameters: Map<String, String>?): Builder {
-            mAdditionalParameters = additionalParameters.checkAdditionalParams(BUILT_IN_PARAMS)
+        fun setAdditionalParameters(parameters: JsonObject?): Builder {
+            additionalParameters = parameters.checkAdditionalParams(BUILT_IN_PARAMS)
             return this
         }
 
@@ -267,47 +287,17 @@ class TokenResponse internal constructor(
          */
         fun build(): TokenResponse {
             return TokenResponse(
-                mRequest,
-                mTokenType,
-                mAccessToken,
-                mAccessTokenExpirationTime,
-                mIdToken,
-                mRefreshToken,
-                mScope,
-                mAdditionalParameters
+                request,
+                tokenType,
+                accessToken,
+                accessTokenExpirationTime,
+                idToken,
+                refreshToken,
+                scope,
+                additionalParameters
             )
         }
     }
-
-    /**
-     * Derives the set of scopes from the consolidated, space-delimited scopes in the
-     * [.scope] field. If no scopes were specified on this response, the method will
-     * return `null`.
-     */
-    val scopeSet: Set<String>?
-        get() = scope?.let { AsciiStringListUtil.stringToSet(it) }
-
-    /**
-     * Produces a JSON string representation of the token response for persistent storage or
-     * local transmission (e.g. between activities).
-     */
-    fun jsonSerialize() = JSONObject().apply {
-        put(KEY_REQUEST, request.jsonSerialize())
-        tokenType?.let { put(KEY_TOKEN_TYPE, it) }
-        accessToken?.let { put(KEY_ACCESS_TOKEN, it) }
-        accessTokenExpirationTime?.let { put(KEY_EXPIRES_AT, it) }
-        idToken?.let { put(KEY_ID_TOKEN, it) }
-        refreshToken?.let { put(KEY_REFRESH_TOKEN, it) }
-        scope?.let { put(KEY_SCOPE, it) }
-        put(KEY_ADDITIONAL_PARAMETERS, additionalParameters.toJsonObject())
-    }
-
-    /**
-     * Produces a JSON string representation of the token response for persistent storage or
-     * local transmission (e.g. between activities). This method is just a convenience wrapper
-     * for [.jsonSerialize], converting the JSON object to its string form.
-     */
-    fun jsonSerializeString() = jsonSerialize().toString()
 
     companion object {
         /**
@@ -318,74 +308,40 @@ class TokenResponse internal constructor(
         const val TOKEN_TYPE_BEARER: String = "Bearer"
 
         @VisibleForTesting
-        const val KEY_REQUEST: String = "request"
-
-        @VisibleForTesting
         const val KEY_EXPIRES_AT: String = "expires_at"
 
-        // TODO: rename all KEY_* below to PARAM_*
         @VisibleForTesting
-        const val KEY_TOKEN_TYPE: String = "token_type"
+        const val PARAM_TOKEN_TYPE: String = "token_type"
 
         @VisibleForTesting
-        const val KEY_ACCESS_TOKEN: String = "access_token"
+        const val PARAM_ACCESS_TOKEN: String = "access_token"
 
         @VisibleForTesting
-        const val KEY_EXPIRES_IN: String = "expires_in"
+        const val PARAM_EXPIRES_IN: String = "expires_in"
 
         @VisibleForTesting
-        const val KEY_REFRESH_TOKEN: String = "refresh_token"
+        const val PARAM_REFRESH_TOKEN: String = "refresh_token"
 
         @VisibleForTesting
-        const val KEY_ID_TOKEN: String = "id_token"
+        const val PARAM_ID_TOKEN: String = "id_token"
 
         @VisibleForTesting
-        const val KEY_SCOPE: String = "scope"
-
-        @VisibleForTesting
-        const val KEY_ADDITIONAL_PARAMETERS: String = "additionalParameters"
+        const val PARAM_SCOPE: String = "scope"
 
         private val BUILT_IN_PARAMS: Set<String> = setOf(
-            KEY_TOKEN_TYPE,
-            KEY_ACCESS_TOKEN,
-            KEY_EXPIRES_IN,
-            KEY_REFRESH_TOKEN,
-            KEY_ID_TOKEN,
-            KEY_SCOPE
+            PARAM_TOKEN_TYPE,
+            PARAM_ACCESS_TOKEN,
+            PARAM_EXPIRES_IN,
+            PARAM_REFRESH_TOKEN,
+            PARAM_ID_TOKEN,
+            PARAM_SCOPE
         )
 
         /**
-         * Reads a token response from a JSON string, and associates it with the provided request.
-         * If a request is not provided, its serialized form is expected to be found in the JSON
-         * (as if produced by a prior call to [.jsonSerialize].
-         * @throws JSONException if the JSON is malformed or missing required fields.
+         * Reads a token response from a JSON string.
+         * @throws kotlinx.serialization.SerializationException if the JSON is malformed or missing required
+         *     fields.
          */
-        @Throws(JSONException::class)
-        fun jsonDeserialize(json: JSONObject): TokenResponse {
-            require(json.has(KEY_REQUEST)) { "token request not provided and not found in JSON" }
-            return TokenResponse(
-                TokenRequest.jsonDeserialize(json.getJSONObject(KEY_REQUEST)),
-                json.getStringIfDefined(KEY_TOKEN_TYPE),
-                json.getStringIfDefined(KEY_ACCESS_TOKEN),
-                json.getLongIfDefined(KEY_EXPIRES_AT),
-                json.getStringIfDefined(KEY_ID_TOKEN),
-                json.getStringIfDefined(KEY_REFRESH_TOKEN),
-                json.getStringIfDefined(KEY_SCOPE),
-                json.getStringMap(KEY_ADDITIONAL_PARAMETERS)
-            )
-        }
-
-        /**
-         * Reads a token response from a JSON string, and associates it with the provided request.
-         * If a request is not provided, its serialized form is expected to be found in the JSON
-         * (as if produced by a prior call to [.jsonSerialize].
-         * @throws JSONException if the JSON is malformed or missing required fields.
-         */
-        @JvmStatic
-        @Throws(JSONException::class)
-        fun jsonDeserialize(jsonStr: String): TokenResponse {
-            require(jsonStr.isNotEmpty()) { "jsonStr cannot be empty" }
-            return jsonDeserialize(JSONObject(jsonStr))
-        }
+        fun fromJsonString(json: String) = Json.decodeFromString<TokenResponse>(json)
     }
 }

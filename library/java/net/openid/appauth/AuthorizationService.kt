@@ -26,11 +26,14 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.LifecycleOwner
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.SerializationException
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import net.openid.appauth.AuthorizationException.Companion.PARAM_ERROR
 import net.openid.appauth.AuthorizationException.Companion.PARAM_ERROR_DESCRIPTION
 import net.openid.appauth.AuthorizationException.Companion.PARAM_ERROR_URI
 import net.openid.appauth.AuthorizationException.GeneralErrors
-import net.openid.appauth.AuthorizationException.RegistrationRequestErrors
 import net.openid.appauth.AuthorizationException.TokenRequestErrors
 import net.openid.appauth.IdToken.IdTokenException
 import net.openid.appauth.RegistrationResponse.MissingArgumentException
@@ -40,9 +43,6 @@ import net.openid.appauth.browser.CustomTabManager
 import net.openid.appauth.connectivity.ConnectionBuilder
 import net.openid.appauth.internal.Logger
 import net.openid.appauth.internal.formUrlEncode
-import net.openid.appauth.internal.isActivity
-import org.json.JSONException
-import org.json.JSONObject
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStreamWriter
@@ -381,7 +381,6 @@ class AuthorizationService @JvmOverloads constructor(
         skipIssuerHttpsCheck: Boolean
     ): TokenResponse {
         var `is`: InputStream? = null
-
         val responseJson = withContext(Dispatchers.IO) {
             try {
                 val conn = connectionBuilder.openConnection(request.configuration.tokenEndpoint)
@@ -416,15 +415,14 @@ class AuthorizationService @JvmOverloads constructor(
                     conn.errorStream
                 }
 
-                JSONObject(`is`.readString())
+                Json.parseToJsonElement(`is`.readString()).jsonObject
             } catch (ex: IOException) {
                 Logger.debugWithStack(ex, "Failed to complete exchange request")
                 throw AuthorizationException.fromTemplate(
                     GeneralErrors.NETWORK_ERROR,
                     ex
                 )
-            } catch (ex: JSONException) {
-                Logger.debugWithStack(ex, "Failed to complete exchange request")
+            } catch (ex: IllegalArgumentException) {
                 throw AuthorizationException.fromTemplate(
                     GeneralErrors.JSON_DESERIALIZATION_ERROR,
                     ex
@@ -434,30 +432,38 @@ class AuthorizationService @JvmOverloads constructor(
             }
         }
 
-        if (responseJson.has(PARAM_ERROR)) {
-            val error = responseJson.getString(PARAM_ERROR)
+        if (PARAM_ERROR in responseJson) {
+            val error = responseJson[PARAM_ERROR]!!.jsonPrimitive.content
             throw AuthorizationException.fromOAuthTemplate(
                 TokenRequestErrors.byString(error),
                 error,
-                responseJson.optString(PARAM_ERROR_DESCRIPTION),
-                responseJson.optString(PARAM_ERROR_URI).toUri()
+                responseJson[PARAM_ERROR_DESCRIPTION]?.jsonPrimitive?.content,
+                responseJson[PARAM_ERROR_URI]?.jsonPrimitive?.content?.toUri()
             )
         }
 
-        val tokenResponse = TokenResponse.Builder(request)
-            .fromResponseJson(responseJson)
-            .build()
+        val tokenResponse = try {
+            TokenResponse.Builder(request)
+                .fromResponseJson(responseJson)
+                .build()
+        } catch (ex: SerializationException) {
+            Logger.debugWithStack(ex, "Failed to complete exchange request")
+            throw AuthorizationException.fromTemplate(
+                GeneralErrors.JSON_DESERIALIZATION_ERROR,
+                ex
+            )
+        }
 
-        tokenResponse.idToken?.let { idTokenString ->
+        tokenResponse.idToken?.let {
             try {
-                val idToken = IdToken.from(idTokenString)
+                val idToken = IdToken.from(it)
                 idToken.validate(request, clock, skipIssuerHttpsCheck)
             } catch (ex: IdTokenException) {
                 throw AuthorizationException.fromTemplate(
                     GeneralErrors.ID_TOKEN_PARSING_ERROR,
                     ex
                 )
-            } catch (ex: JSONException) {
+            } catch (ex: SerializationException) {
                 throw AuthorizationException.fromTemplate(
                     GeneralErrors.ID_TOKEN_PARSING_ERROR,
                     ex
@@ -493,7 +499,7 @@ class AuthorizationService @JvmOverloads constructor(
 
         val responseJson = withContext(Dispatchers.IO) {
             try {
-                val postData = request.toJsonString()
+                val postData = request.asRequestJsonString
 
                 val conn = clientConfiguration.connectionBuilder
                     .openConnection(request.configuration.registrationEndpoint!!)
@@ -508,13 +514,12 @@ class AuthorizationService @JvmOverloads constructor(
                     wr.flush()
                 }
 
-                `is` = conn.getInputStream()
-                JSONObject(`is`.readString())
+                `is` = conn.inputStream
+                Json.parseToJsonElement(`is`.readString()).jsonObject
             } catch (ex: IOException) {
                 Logger.debugWithStack(ex, "Failed to complete registration request")
                 throw AuthorizationException.fromTemplate(GeneralErrors.NETWORK_ERROR, ex)
-            } catch (ex: JSONException) {
-                Logger.debugWithStack(ex, "Failed to complete registration request")
+            } catch (ex: IllegalArgumentException) {
                 throw AuthorizationException.fromTemplate(
                     GeneralErrors.JSON_DESERIALIZATION_ERROR,
                     ex
@@ -524,32 +529,24 @@ class AuthorizationService @JvmOverloads constructor(
             }
         }
 
-        if (responseJson.has(PARAM_ERROR)) {
-            try {
-                val error = responseJson.getString(PARAM_ERROR)
-
-                throw AuthorizationException.fromOAuthTemplate(
-                    RegistrationRequestErrors.byString(error),
-                    error,
-                    responseJson.getString(PARAM_ERROR_DESCRIPTION),
-                    responseJson.getString(PARAM_ERROR_URI).toUri()
-                )
-            } catch (jsonEx: JSONException) {
-                throw AuthorizationException.fromTemplate(
-                    GeneralErrors.JSON_DESERIALIZATION_ERROR,
-                    jsonEx
-                )
-            }
+        if (PARAM_ERROR in responseJson) {
+            val error = responseJson[PARAM_ERROR]!!.jsonPrimitive.content
+            throw AuthorizationException.fromOAuthTemplate(
+                TokenRequestErrors.byString(error),
+                error,
+                responseJson[PARAM_ERROR_DESCRIPTION]?.jsonPrimitive?.content,
+                responseJson[PARAM_ERROR_URI]?.jsonPrimitive?.content?.toUri()
+            )
         }
 
         val registrationResponse = try {
             RegistrationResponse.Builder(request)
                 .fromResponseJson(responseJson)
                 .build()
-        } catch (jsonEx: JSONException) {
+        } catch (ex: SerializationException) {
             throw AuthorizationException.fromTemplate(
                 GeneralErrors.JSON_DESERIALIZATION_ERROR,
-                jsonEx
+                ex
             )
         } catch (ex: MissingArgumentException) {
             Logger.errorWithStack(ex, "Malformed registration response")
@@ -603,7 +600,7 @@ class AuthorizationService @JvmOverloads constructor(
         browserDescriptor ?: throw ActivityNotFoundException()
         val requestUri = request.toUri()
 
-        val intent: Intent = if (browserDescriptor.useCustomTab) {
+        val intent = if (browserDescriptor.useCustomTab) {
             customTabsIntent.intent
         } else {
             Intent(Intent.ACTION_VIEW)

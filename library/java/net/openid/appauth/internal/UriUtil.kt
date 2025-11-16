@@ -20,47 +20,40 @@ import java.io.UnsupportedEncodingException
 import java.net.URLDecoder
 import java.net.URLEncoder
 import androidx.core.os.bundleOf
-import net.openid.appauth.internal.UriUtil.formUrlEncodeValue
 
 /**
- * Utility methods for extracting parameters from Uri objects.
+ * Encodes this string into application/x-www-form-urlencoded format using UTF-8 encoding.
+ *
+ * @return the URL-encoded string
+ * @throws IllegalStateException if UTF-8 encoding is not supported
  */
-internal object UriUtil {
-    @JvmStatic
-    fun formUrlEncodeValue(value: String): String {
-        try {
-            return URLEncoder.encode(value, "utf-8")
-        } catch (_: UnsupportedEncodingException) {
-            // utf-8 should always be supported
-            throw IllegalStateException("Unable to encode using UTF-8")
-        }
-    }
-
-    fun formUrlDecode(encoded: String): List<Pair<String, String>> {
-        if (encoded.isEmpty()) return emptyList()
-
-        val params = buildList {
-            encoded.split("&").forEach { parts ->
-                val (param, encodedValue) = parts.split("=")
-
-                try {
-                    add(param to URLDecoder.decode(encodedValue, "utf-8"))
-                } catch (ex: UnsupportedEncodingException) {
-                    Logger.error("Unable to decode parameter, ignoring", ex)
-                }
-            }
-        }
-
-        return params
-    }
-
-    @JvmStatic
-    fun formUrlDecodeUnique(encoded: String): Map<String, String> {
-        val params = formUrlDecode(encoded)
-        return params.toMap()
-    }
+@JvmName("formUrlEncodeValue")
+internal fun String.formUrlEncode() = try {
+    URLEncoder.encode(this, "utf-8")
+} catch (_: UnsupportedEncodingException) {
+    // utf-8 should always be supported
+    throw IllegalStateException("Unable to encode using UTF-8")
 }
 
+internal fun String.formUrlDecode(): List<Pair<String, String>> {
+    if (this.isEmpty()) return emptyList()
+
+    val params = buildList {
+        this@formUrlDecode.split("&").forEach { parts ->
+            val (param, encodedValue) = parts.split("=")
+
+            try {
+                add(param to URLDecoder.decode(encodedValue, "utf-8"))
+            } catch (ex: UnsupportedEncodingException) {
+                Logger.error("Unable to decode parameter, ignoring", ex)
+            }
+        }
+    }
+
+    return params
+}
+
+internal fun String.formUrlDecodeUnique() = this.formUrlDecode().toMap()
 
 internal fun Array<out Uri?>.toCustomTabUriBundle(startIndex: Int = 0): List<Bundle> {
     require(startIndex >= 0) { "startIndex must be positive" }
@@ -73,6 +66,6 @@ internal fun Array<out Uri?>.toCustomTabUriBundle(startIndex: Int = 0): List<Bun
 
 internal fun Map<String, String>?.formUrlEncode(): String {
     return this?.toList()?.joinToString("&") {
-        "${it.first}=${formUrlEncodeValue(it.second)}"
+        "${it.first}=${it.second.formUrlEncode()}"
     } ?: ""
 }

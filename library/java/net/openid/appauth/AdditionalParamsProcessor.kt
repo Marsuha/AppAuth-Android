@@ -14,8 +14,7 @@
 package net.openid.appauth
 
 import android.net.Uri
-import org.json.JSONException
-import org.json.JSONObject
+import kotlinx.serialization.json.JsonObject
 
 /**
  * Validates additional parameters to ensure they do not conflict with built-in parameters.
@@ -24,13 +23,13 @@ import org.json.JSONObject
  * @return A map of validated additional parameters.
  * @throws IllegalArgumentException if any parameter conflicts with a built-in parameter.
  */
-internal fun Map<String, String>?.checkAdditionalParams(
+internal fun JsonObject?.checkAdditionalParams(
     builtInParams: Set<String>
-): Map<String, String> {
-    if (this == null) return emptyMap()
+): JsonObject {
+    this ?: return JsonObject(emptyMap())
 
     keys.onEach {
-        require(!builtInParams.contains(it)) {
+        require(it !in builtInParams) {
             "Parameter $it is directly supported via the authorization request builder, " +
                     "use the builder method instead"
         }
@@ -39,18 +38,9 @@ internal fun Map<String, String>?.checkAdditionalParams(
     return this
 }
 
-/**
- * Extracts additional parameters from a JSON object, excluding built-in parameters.
- *
- * @param builtInParams A set of built-in parameter names.
- * @return A map of additional parameters extracted from the JSON object.
- * @throws JSONException if an error occurs while parsing the JSON object.
- */
-@Throws(JSONException::class)
-internal fun JSONObject.extractAdditionalParams(builtInParams: Set<String>): Map<String, String> =
-    keys().asSequence()
-        .filterNot { builtInParams.contains(it) }
-        .associateWith { get(it).toString() }
+internal fun JsonObject.extractAdditionalParams(
+    builtInParams: Set<String>
+) = JsonObject(filterKeys { it !in builtInParams })
 
 /**
  * Extracts additional parameters from a URI, excluding built-in parameters.
@@ -58,8 +48,9 @@ internal fun JSONObject.extractAdditionalParams(builtInParams: Set<String>): Map
  * @param builtInParams A set of built-in parameter names.
  * @return A map of additional parameters extracted from the URI.
  */
-internal fun Uri.extractAdditionalParams(builtInParams: Set<String>): Map<String, String> =
+internal fun Uri.extractAdditionalParams(builtInParams: Set<String>) = JsonObject(
     getQueryParameterNames().asSequence()
-        .filterNot { builtInParams.contains(it) }
+        .filterNot { it in builtInParams }
         .filter { getQueryParameter(it) != null }
-        .associateWith { getQueryParameter(it)!! }
+        .associateWith { getQueryParameter(it)!!.toJsonElement() }
+)

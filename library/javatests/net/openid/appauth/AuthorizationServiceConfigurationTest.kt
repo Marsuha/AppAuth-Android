@@ -18,11 +18,10 @@ import androidx.core.net.toUri
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
 import net.openid.appauth.AuthorizationServiceConfiguration.Companion.buildConfigurationUriFromIssuer
-import net.openid.appauth.AuthorizationServiceConfiguration.Companion.fromJson
+import net.openid.appauth.AuthorizationServiceConfiguration.Companion.fromJsonString
 import net.openid.appauth.connectivity.ConnectionBuilder
 import org.assertj.core.api.Assertions.assertThat
 import org.json.JSONArray
-import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -63,10 +62,10 @@ class AuthorizationServiceConfigurationTest {
     @Throws(Exception::class)
     fun setUp() {
         configuration = AuthorizationServiceConfiguration(
-            TEST_AUTH_ENDPOINT.toUri(),
-            TEST_TOKEN_ENDPOINT.toUri(),
-            TEST_REGISTRATION_ENDPOINT.toUri(),
-            TEST_END_SESSION_ENDPOINT.toUri()
+            authorizationEndpoint = TEST_AUTH_ENDPOINT.toUri(),
+            tokenEndpoint = TEST_TOKEN_ENDPOINT.toUri(),
+            registrationEndpoint = TEST_REGISTRATION_ENDPOINT.toUri(),
+            endSessionEndpoint = TEST_END_SESSION_ENDPOINT.toUri()
         )
 
         whenever(connectionBuilder.openConnection(any<Uri>()))
@@ -81,7 +80,7 @@ class AuthorizationServiceConfigurationTest {
     @Test
     @Throws(Exception::class)
     fun testSerialization() {
-        val config = fromJson(configuration.toJson())
+        val config = fromJsonString(configuration.asJsonString)
         assertMembers(config)
     }
 
@@ -94,7 +93,7 @@ class AuthorizationServiceConfigurationTest {
             endSessionEndpoint = Uri.parse(TEST_END_SESSION_ENDPOINT)
         )
 
-        val deserialized = fromJson(config.toJson())
+        val deserialized = fromJsonString(config.asJsonString)
 
         assertThat(deserialized.authorizationEndpoint)
             .isEqualTo(config.authorizationEndpoint)
@@ -114,7 +113,7 @@ class AuthorizationServiceConfigurationTest {
             Uri.parse(TEST_TOKEN_ENDPOINT)
         )
 
-        val deserialized = fromJson(config.toJson())
+        val deserialized = fromJsonString(config.asJsonString)
 
         assertThat(deserialized.authorizationEndpoint)
             .isEqualTo(config.authorizationEndpoint)
@@ -127,8 +126,7 @@ class AuthorizationServiceConfigurationTest {
     @Test
     @Throws(Exception::class)
     fun testDiscoveryConstructorWithName() {
-        val json = JSONObject(TEST_JSON)
-        val discovery = AuthorizationServiceDiscovery(json)
+        val discovery = AuthorizationServiceDiscovery.fromJsonString(TEST_JSON)
         val config = AuthorizationServiceConfiguration(discovery)
         assertMembers(config)
     }
@@ -136,8 +134,7 @@ class AuthorizationServiceConfigurationTest {
     @Test
     @Throws(Exception::class)
     fun testDiscoveryConstructorWithoutName() {
-        val json = JSONObject(TEST_JSON)
-        val discovery = AuthorizationServiceDiscovery(json)
+        val discovery = AuthorizationServiceDiscovery.fromJsonString(TEST_JSON)
         val config = AuthorizationServiceConfiguration(discovery)
         assertMembers(config)
     }

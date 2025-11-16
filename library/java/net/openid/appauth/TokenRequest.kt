@@ -15,12 +15,13 @@ package net.openid.appauth
 
 import android.net.Uri
 import androidx.annotation.VisibleForTesting
-import net.openid.appauth.AuthorizationServiceConfiguration.Companion.fromJson
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import net.openid.appauth.CodeVerifierUtil.checkCodeVerifier
 import net.openid.appauth.GrantTypeValues.AUTHORIZATION_CODE
 import net.openid.appauth.GrantTypeValues.REFRESH_TOKEN
-import org.json.JSONException
-import org.json.JSONObject
+import net.openid.appauth.internal.UriSerializer
 
 /**
  * An OAuth2 token request. These are used to exchange codes for tokens, or exchange a refresh
@@ -29,6 +30,7 @@ import org.json.JSONObject
  * @see "The OAuth 2.0 Authorization Framework
  */
 @Suppress("unused")
+@Serializable
 class TokenRequest private constructor(
     /**
      * The service's [configuration][AuthorizationServiceConfiguration].
@@ -37,24 +39,24 @@ class TokenRequest private constructor(
      * [ ][AuthorizationServiceConfiguration], or
      * [ via an OpenID Connect Discovery Document][AuthorizationServiceConfiguration.fetchFromUrl].
      */
-    @JvmField val configuration: AuthorizationServiceConfiguration,
+    val configuration: AuthorizationServiceConfiguration,
     /**
      * The client identifier.
      *
      * @see "The OAuth 2.0 Authorization Framework
      * @see "The OAuth 2.0 Authorization Framework
      */
-    @JvmField val clientId: String,
+    val clientId: String,
     /**
      * The (optional) nonce associated with the current session.
      */
-    @JvmField val nonce: String?,
+    val nonce: String?,
     /**
      * The type of token being sent to the token endpoint.
      *
      * @see "The OAuth 2.0 Authorization Framework
      */
-    @JvmField val grantType: String,
+    val grantType: String,
     /**
      * The client's redirect URI. Required if this token request is to exchange an authorization
      * code for one or more tokens, and must be identical to the value specified in the original
@@ -63,6 +65,7 @@ class TokenRequest private constructor(
      * @see "The OAuth 2.0 Authorization Framework
      * @see "The OAuth 2.0 Authorization Framework
      */
+    @Serializable(with = UriSerializer::class)
     val redirectUri: Uri?,
     /**
      * A space-delimited set of scopes used to determine the scope of any returned tokens.
@@ -70,57 +73,82 @@ class TokenRequest private constructor(
      * @see "The OAuth 2.0 Authorization Framework
      * @see "The OAuth 2.0 Authorization Framework
      */
-    @JvmField val scope: String?,
+    val scope: String?,
     /**
      * An authorization code to be exchanged for one or more tokens.
      *
      * @see "The OAuth 2.0 Authorization Framework
      */
-    @JvmField val authorizationCode: String?,
+    val authorizationCode: String?,
     /**
      * A refresh token to be exchanged for a new token.
      *
      * @see "The OAuth 2.0 Authorization Framework
      */
-    @JvmField val refreshToken: String?,
+    val refreshToken: String?,
     /**
      * The code verifier that was used to generate the challenge in the original authorization
      * request, if one was used.
      *
      * @see "Proof Key for Code Exchange by OAuth Public Clients
      */
-    @JvmField val codeVerifier: String?,
+    val codeVerifier: String?,
     /**
      * Additional parameters to be passed as part of the request.
      */
-    val additionalParameters: Map<String, String>
+    val additionalParameters: JsonObject
 ) {
+    /**
+     * Derives the set of scopes from the consolidated, space-delimited scopes in the
+     * [.scope] field. If no scopes were specified for this request, will return `null`.
+     */
+    val scopeValues: Set<String>?
+        get() = scope?.let { AsciiStringListUtil.stringToSet(it) }
+
+    /**
+     * Produces the set of request parameters for this query, which can be further
+     * processed into a request body.
+     */
+    val requestParameters: Map<String, String>
+        get() = buildMap {
+            put(PARAM_GRANT_TYPE, grantType)
+            redirectUri?.let { put(PARAM_REDIRECT_URI, it.toString()) }
+            authorizationCode?.let { put(PARAM_CODE, it) }
+            refreshToken?.let { put(PARAM_REFRESH_TOKEN, it) }
+            codeVerifier?.let { put(PARAM_CODE_VERIFIER, it) }
+            scope?.let { put(PARAM_SCOPE, it) }
+            additionalParameters.forEach { put(it.key, it.value.toUnquotedString()) }
+        }
+
+    /**
+     * A JSON string representation of the token request, intended for persistent storage or
+     * local transmission (e.g., between activities).
+     */
+    val asJsonString get() = Json.encodeToString(this)
+
     /**
      * Creates instances of [TokenRequest].
      */
     class Builder(
-        configuration: AuthorizationServiceConfiguration,
-        clientId: String
+        private var configuration: AuthorizationServiceConfiguration,
+        private var clientId: String
     ) {
-        private var mConfiguration: AuthorizationServiceConfiguration = configuration
 
-        private var mClientId: String = clientId
+        private var nonce: String? = null
 
-        private var mNonce: String? = null
+        private var grantType: String? = null
 
-        private var mGrantType: String? = null
+        private var redirectUri: Uri? = null
 
-        private var mRedirectUri: Uri? = null
+        private var scope: String? = null
 
-        private var mScope: String? = null
+        private var authorizationCode: String? = null
 
-        private var mAuthorizationCode: String? = null
+        private var refreshToken: String? = null
 
-        private var mRefreshToken: String? = null
+        private var codeVerifier: String? = null
 
-        private var mCodeVerifier: String? = null
-
-        private var mAdditionalParameters: Map<String, String> = emptyMap()
+        private var additionalParameters: JsonObject = JsonObject(emptyMap())
 
         /**
          * Creates a token request builder with the specified mandatory properties.
@@ -133,34 +161,34 @@ class TokenRequest private constructor(
          * Specifies the authorization service configuration for the request, which must not
          * be null or empty.
          */
-        fun setConfiguration(configuration: AuthorizationServiceConfiguration): Builder {
-            mConfiguration = configuration
+        fun setConfiguration(serviceConfig: AuthorizationServiceConfiguration): Builder {
+            configuration = serviceConfig
             return this
         }
 
         /**
          * Specifies the client ID for the token request, which must not be null or empty.
          */
-        fun setClientId(clientId: String): Builder {
-            require(clientId.isNotEmpty()) { "clientId cannot be empty" }
-            mClientId = clientId
+        fun setClientId(clientIdValue: String): Builder {
+            require(clientIdValue.isNotEmpty()) { "clientId cannot be empty" }
+            clientId = clientIdValue
             return this
         }
 
         /**
          * Specifies the (optional) nonce for the current session.
          */
-        fun setNonce(nonce: String?): Builder {
-            mNonce = nonce?.takeIf { it.isNotEmpty() }
+        fun setNonce(nonceValue: String?): Builder {
+            nonce = nonceValue?.takeIf { it.isNotEmpty() }
             return this
         }
 
         /**
          * Specifies the grant type for the request, which must not be null or empty.
          */
-        fun setGrantType(grantType: String): Builder {
-            require(grantType.isNotEmpty()) { "grantType cannot be empty" }
-            mGrantType = grantType
+        fun setGrantType(grantTypeValue: String): Builder {
+            require(grantTypeValue.isNotEmpty()) { "grantType cannot be empty" }
+            grantType = grantTypeValue
             return this
         }
 
@@ -168,9 +196,9 @@ class TokenRequest private constructor(
          * Specifies the redirect URI for the request. This is required for authorization code
          * exchanges, but otherwise optional. If specified, the redirect URI must have a scheme.
          */
-        fun setRedirectUri(redirectUri: Uri?): Builder {
-            redirectUri?.let { checkNotNull(it.scheme) { "redirectUri must have a scheme" } }
-            mRedirectUri = redirectUri
+        fun setRedirectUri(uri: Uri?): Builder {
+            uri?.let { checkNotNull(it.scheme) { "redirectUri must have a scheme" } }
+            redirectUri = uri
             return this
         }
 
@@ -180,10 +208,12 @@ class TokenRequest private constructor(
          *
          * @see "The OAuth 2.0 Authorization Framework
          */
-        fun setScope(scope: String?): Builder {
-            if (!scope.isNullOrEmpty()) {
-                setScopes(*scope.split(" +").dropLastWhile { it.isEmpty() }.toTypedArray())
-            } else mScope = null
+        fun setScope(scopeValue: String?): Builder {
+            if (!scopeValue.isNullOrEmpty()) setScopes(
+                *scopeValue.split(" +")
+                    .dropLastWhile { it.isEmpty() }
+                    .toTypedArray()
+            ) else scope = null
 
             return this
         }
@@ -217,7 +247,7 @@ class TokenRequest private constructor(
          */
         fun setScopes(scopes: Iterable<String>): Builder {
             require(scopes.all { it.isNotBlank() }) { "scopes values must not be empty" }
-            mScope = AsciiStringListUtil.iterableToString(scopes)
+            scope = AsciiStringListUtil.iterableToString(scopes)
             return this
         }
 
@@ -229,9 +259,9 @@ class TokenRequest private constructor(
          * this authorization code for one or more tokens. If this is not intended, the grant type
          * should be explicitly set.
          */
-        fun setAuthorizationCode(authorizationCode: String?): Builder {
-            authorizationCode?.let { require(it.isNotEmpty()) { "authorization code must not be empty" } }
-            mAuthorizationCode = authorizationCode
+        fun setAuthorizationCode(authCode: String?): Builder {
+            authCode?.let { require(it.isNotEmpty()) { "authorization code must not be empty" } }
+            authorizationCode = authCode
             return this
         }
 
@@ -243,9 +273,9 @@ class TokenRequest private constructor(
          * refresh token for a new token. If this is not intended, the grant type should be
          * explicit set.
          */
-        fun setRefreshToken(refreshToken: String?): Builder {
-            refreshToken?.let { require(it.isNotEmpty()) { "refresh token must not be empty" } }
-            mRefreshToken = refreshToken
+        fun setRefreshToken(newRefreshToken: String?): Builder {
+            newRefreshToken?.let { require(it.isNotEmpty()) { "refresh token must not be empty" } }
+            refreshToken = newRefreshToken
             return this
         }
 
@@ -254,17 +284,17 @@ class TokenRequest private constructor(
          * the code verifier that was used to generate the challenge sent in the request that
          * produced the authorization code.
          */
-        fun setCodeVerifier(codeVerifier: String?): Builder {
-            codeVerifier?.let { checkCodeVerifier(it) }
-            mCodeVerifier = codeVerifier
+        fun setCodeVerifier(verifier: String?): Builder {
+            verifier?.let { checkCodeVerifier(it) }
+            codeVerifier = verifier
             return this
         }
 
         /**
          * Specifies an additional set of parameters to be sent as part of the request.
          */
-        fun setAdditionalParameters(additionalParameters: Map<String, String>?): Builder {
-            mAdditionalParameters = additionalParameters.checkAdditionalParams(BUILT_IN_PARAMS)
+        fun setAdditionalParameters(additionalParams: JsonObject): Builder {
+            additionalParameters = additionalParams.checkAdditionalParams(BUILT_IN_PARAMS)
             return this
         }
 
@@ -274,118 +304,42 @@ class TokenRequest private constructor(
         fun build(): TokenRequest {
             val grantType = inferGrantType()
 
-            if (AUTHORIZATION_CODE == grantType) checkNotNull(mAuthorizationCode) {
+            if (AUTHORIZATION_CODE == grantType) checkNotNull(authorizationCode) {
                 "authorization code must be specified for grant_type = $AUTHORIZATION_CODE"
             }
 
-            if (REFRESH_TOKEN == grantType) checkNotNull(mRefreshToken) {
+            if (REFRESH_TOKEN == grantType) checkNotNull(refreshToken) {
                 "refresh token must be specified for grant_type = $REFRESH_TOKEN"
             }
 
 
-            check(!(grantType == AUTHORIZATION_CODE && mRedirectUri == null)) {
+            check(!(grantType == AUTHORIZATION_CODE && redirectUri == null)) {
                 "no redirect URI specified on token request for code exchange"
             }
 
             return TokenRequest(
-                mConfiguration,
-                mClientId,
-                mNonce,
+                configuration,
+                clientId,
+                nonce,
                 grantType,
-                mRedirectUri,
-                mScope,
-                mAuthorizationCode,
-                mRefreshToken,
-                mCodeVerifier,
-                mAdditionalParameters
+                redirectUri,
+                scope,
+                authorizationCode,
+                refreshToken,
+                codeVerifier,
+                additionalParameters
             )
         }
 
         private fun inferGrantType() = when {
-            mGrantType != null -> mGrantType!!
-            mAuthorizationCode != null -> AUTHORIZATION_CODE
-            mRefreshToken != null -> REFRESH_TOKEN
+            grantType != null -> grantType!!
+            authorizationCode != null -> AUTHORIZATION_CODE
+            refreshToken != null -> REFRESH_TOKEN
             else -> throw IllegalStateException("grant type not specified and cannot be inferred")
         }
     }
 
-    /**
-     * Derives the set of scopes from the consolidated, space-delimited scopes in the
-     * [.scope] field. If no scopes were specified for this request, will return `null`.
-     */
-    val scopeSet: Set<String>?
-        get() = scope?.let { AsciiStringListUtil.stringToSet(it) }
-
-    /**
-     * Produces the set of request parameters for this query, which can be further
-     * processed into a request body.
-     */
-    val requestParameters: Map<String, String>
-        get() = buildMap {
-            put(PARAM_GRANT_TYPE, grantType)
-            redirectUri?.let { put(PARAM_REDIRECT_URI, it.toString()) }
-            authorizationCode?.let { put(PARAM_CODE, it) }
-            refreshToken?.let { put(PARAM_REFRESH_TOKEN, it) }
-            codeVerifier?.let { put(PARAM_CODE_VERIFIER, it) }
-            scope?.let { put(PARAM_SCOPE, it) }
-            additionalParameters.forEach { put(it.key, it.value) }
-        }
-
-    /**
-     * Produces a JSON string representation of the token request for persistent storage or
-     * local transmission (e.g. between activities).
-     */
-    fun jsonSerialize() = JSONObject().apply {
-        put(KEY_CONFIGURATION, configuration.toJson())
-        put(KEY_CLIENT_ID, clientId)
-        nonce?.let { put(KEY_NONCE, it) }
-        put(KEY_GRANT_TYPE, grantType)
-        redirectUri?.let { put(KEY_REDIRECT_URI, it.toString()) }
-        scope?.let { put(KEY_SCOPE, it) }
-        authorizationCode?.let { put(KEY_AUTHORIZATION_CODE, it) }
-        refreshToken?.let { put(KEY_REFRESH_TOKEN, it) }
-        codeVerifier?.let { put(KEY_CODE_VERIFIER, it) }
-        put(KEY_ADDITIONAL_PARAMETERS, additionalParameters.toJsonObject())
-    }
-
-    /**
-     * Produces a JSON string representation of the token request for persistent storage or
-     * local transmission (e.g. between activities). This method is just a convenience wrapper
-     * for [.jsonSerialize], converting the JSON object to its string form.
-     */
-    fun jsonSerializeString() = jsonSerialize().toString()
-
     companion object {
-        @VisibleForTesting
-        const val KEY_CONFIGURATION: String = "configuration"
-
-        @VisibleForTesting
-        const val KEY_CLIENT_ID: String = "clientId"
-
-        @VisibleForTesting
-        const val KEY_NONCE: String = "nonce"
-
-        @VisibleForTesting
-        const val KEY_GRANT_TYPE: String = "grantType"
-
-        @VisibleForTesting
-        const val KEY_REDIRECT_URI: String = "redirectUri"
-
-        @VisibleForTesting
-        const val KEY_SCOPE: String = "scope"
-
-        @VisibleForTesting
-        const val KEY_AUTHORIZATION_CODE: String = "authorizationCode"
-
-        @VisibleForTesting
-        const val KEY_REFRESH_TOKEN: String = "refreshToken"
-
-        @VisibleForTesting
-        const val KEY_CODE_VERIFIER: String = "codeVerifier"
-
-        @VisibleForTesting
-        const val KEY_ADDITIONAL_PARAMETERS: String = "additionalParameters"
-
         const val PARAM_CLIENT_ID: String = "client_id"
 
         @VisibleForTesting
@@ -433,33 +387,7 @@ class TokenRequest private constructor(
          */
         const val GRANT_TYPE_CLIENT_CREDENTIALS: String = "client_credentials"
 
-        /**
-         * Reads a token request from a JSON string representation produced by
-         * [.jsonSerialize].
-         * @throws JSONException if the provided JSON does not match the expected structure.
-         */
-        @JvmStatic
-        @Throws(JSONException::class)
-        fun jsonDeserialize(json: JSONObject) = TokenRequest(
-            configuration = fromJson(json.getJSONObject(KEY_CONFIGURATION)),
-            clientId = json.getString(KEY_CLIENT_ID),
-            nonce = json.getStringIfDefined(KEY_NONCE),
-            grantType = json.getString(KEY_GRANT_TYPE),
-            redirectUri = json.getUriIfDefined(KEY_REDIRECT_URI),
-            scope = json.getStringIfDefined(KEY_SCOPE),
-            authorizationCode = json.getStringIfDefined(KEY_AUTHORIZATION_CODE),
-            refreshToken = json.getStringIfDefined(KEY_REFRESH_TOKEN),
-            codeVerifier = json.getStringIfDefined(KEY_CODE_VERIFIER),
-            additionalParameters = json.getStringMap(KEY_ADDITIONAL_PARAMETERS)
-        )
-
-        /**
-         * Reads a token request from a JSON string representation produced by
-         * [.jsonSerializeString]. This method is just a convenience wrapper for
-         * [.jsonDeserialize], converting the JSON string to its JSON object form.
-         * @throws JSONException if the provided JSON does not match the expected structure.
-         */
-        @Throws(JSONException::class)
-        fun jsonDeserialize(json: String) = jsonDeserialize(JSONObject(json))
+        fun fromJsonString(json: String) =
+            Json.decodeFromString<TokenRequest>(json)
     }
 }

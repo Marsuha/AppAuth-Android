@@ -1,3 +1,5 @@
+@file:Suppress("PropertyName")
+
 import org.gradle.api.publish.maven.MavenPublication
 import org.gradle.kotlin.dsl.`maven-publish`
 import org.gradle.kotlin.dsl.signing
@@ -13,10 +15,11 @@ plugins {
     id("javadoc")
     id("testdeps")
     alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 val GROUP: String by project
-val POM_ARTIFACT_ID: String by project//\\
+val POM_ARTIFACT_ID: String by project
 val POM_NAME: String by project
 val POM_DESCRIPTION: String by project
 val POM_PACKAGING: String by project
@@ -55,6 +58,7 @@ dependencies {
     implementation(libs.annotation)
     implementation(libs.appcompat)
     implementation(libs.core.ktx)
+    implementation(libs.serializationJson)
 }
 
 val sourcesJar: Jar by tasks

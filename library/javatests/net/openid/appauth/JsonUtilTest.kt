@@ -14,195 +14,289 @@
 package net.openid.appauth
 
 import android.net.Uri
-import org.json.JSONArray
-import org.json.JSONException
-import org.json.JSONObject
+import androidx.core.net.toUri
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.add
+import kotlinx.serialization.json.boolean
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.double
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.long
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
-import org.junit.Before
-import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.mockito.Mock
-import org.mockito.junit.MockitoJUnit
-import org.mockito.junit.MockitoRule
-import org.mockito.kotlin.any
-import org.mockito.kotlin.eq
-import org.mockito.kotlin.never
-import org.mockito.kotlin.verify
-import org.mockito.kotlin.whenever
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28])
 class JsonUtilTest {
-    @get:Rule
-    val mockitoRule: MockitoRule = MockitoJUnit.rule()
+    @Test
+    fun emptyJsonObject_returnsJsonObjectWithNoElements() {
+        // When
+        val result = emptyJsonObject()
 
-    @Mock
-    private lateinit var json: JSONObject
-
-    private lateinit var realJson: JSONObject
-
-    @Before
-    fun setUp() {
-        realJson = JSONObject()
+        // Then
+        assertEquals(0, result.size)
+        assertEquals("{}", result.toString())
     }
 
     @Test
-    @Throws(Exception::class)
-    fun testPut() {
-        json.put(TEST_KEY, TEST_STRING)
-        verify(json).put(TEST_KEY, TEST_STRING)
+    fun `null string returns JsonNull`() {
+        val result = null.toJsonElement()
+        assertTrue(result is JsonNull)
     }
 
     @Test
-    @Throws(Exception::class)
-    fun testPutArray() {
-        json.put(TEST_KEY, TEST_ARRAY)
-        verify(json).put(TEST_KEY, TEST_ARRAY)
+    fun `empty string returns JsonPrimitive with empty string`() {
+        val result = "".toJsonElement()
+        assertTrue(result is JsonPrimitive)
+        assertEquals("", result.jsonPrimitive.content)
     }
 
     @Test
-    @Throws(Exception::class)
-    fun testPutJsonObject() {
-        realJson.put(TEST_KEY, TEST_JSON)
-        assertTrue(realJson.has(TEST_KEY))
-        assertEquals(TEST_JSON, realJson.get(TEST_KEY))
+    fun `string with whitespace returns JsonPrimitive with whitespace`() {
+        val result = "  \t\n  ".toJsonElement()
+        assertTrue(result is JsonPrimitive)
+        assertEquals("  \t\n  ", result.jsonPrimitive.content)
     }
 
     @Test
-    @Throws(Exception::class)
-    fun testPutIfNotNullString() {
-        json.putIfNotNull(TEST_KEY, TEST_STRING)
-        verify(json).put(TEST_KEY, TEST_STRING)
+    fun `string true returns JsonPrimitive boolean true`() {
+        val result1 = "true".toJsonElement()
+        val result2 = "TRUE".toJsonElement()
+        assertTrue(result1 is JsonPrimitive)
+        assertTrue(result2 is JsonPrimitive)
+        assertEquals(true, result1.jsonPrimitive.boolean)
+        assertEquals(true, result2.jsonPrimitive.boolean)
+        assertEquals(result1.jsonPrimitive.boolean, result2.jsonPrimitive.boolean)
     }
 
     @Test
-    @Throws(Exception::class)
-    fun testPutIfNotNullString_null() {
-        json.putIfNotNull(TEST_KEY, null as String?)
-        verify(json, never()).put(
-            eq(TEST_KEY),
-            any<String>()
+    fun `string false returns JsonPrimitive boolean false`() {
+        val result1 = "false".toJsonElement()
+        val result2 = "FALSE".toJsonElement()
+        assertTrue(result1 is JsonPrimitive)
+        assertTrue(result2 is JsonPrimitive)
+        assertEquals(false, result1.jsonPrimitive.boolean)
+        assertEquals(false, result2.jsonPrimitive.boolean)
+        assertEquals(result1.jsonPrimitive.boolean, result2.jsonPrimitive.boolean)
+    }
+
+    @Test
+    fun `valid integer string returns JsonPrimitive long`() {
+        val result = "123".toJsonElement()
+        assertTrue(result is JsonPrimitive)
+        assertEquals(123L, result.jsonPrimitive.long)
+    }
+
+    @Test
+    fun `valid negative integer string returns JsonPrimitive long`() {
+        val result = "-456".toJsonElement()
+        assertTrue(result is JsonPrimitive)
+        assertEquals(-456L, result.jsonPrimitive.long)
+    }
+
+    @Test
+    fun `valid decimal string returns JsonPrimitive double`() {
+        val result = "3.14".toJsonElement()
+        assertTrue(result is JsonPrimitive)
+        assertEquals(3.14, result.jsonPrimitive.double, 0.001)
+    }
+
+    @Test
+    fun `exponential notation string returns JsonPrimitive double`() {
+        val result = "2.5e3".toJsonElement()
+        assertTrue(result is JsonPrimitive)
+        assertEquals(2500.0, result.jsonPrimitive.double, 0.001)
+    }
+
+    @Test
+    fun `large number string beyond Long range returns JsonPrimitive double`() {
+        val largeNumber = "9999999999999999999"
+        val result = largeNumber.toJsonElement()
+        assertTrue(result is JsonPrimitive)
+        assertTrue(result.jsonPrimitive.double == 1.0E19)
+    }
+
+    @Test
+    fun `valid JSON object string returns JsonObject`() {
+        val json = """{"key": "value", "number": 42}"""
+        val result = json.toJsonElement()
+        assertTrue(result is JsonObject)
+        assertEquals("value", result.jsonObject["key"]?.jsonPrimitive?.content)
+        assertEquals(42L, result.jsonObject["number"]?.jsonPrimitive?.long)
+    }
+
+    @Test
+    fun `valid JSON array string returns JsonArray`() {
+        val json = """[1, 2, 3, "four"]"""
+        val result = json.toJsonElement()
+        assertTrue(result is JsonArray)
+        assertEquals(4, result.jsonArray.size)
+        assertEquals(1L, result.jsonArray[0].jsonPrimitive.long)
+        assertEquals("four", result.jsonArray[3].jsonPrimitive.content)
+    }
+
+    @Test
+    fun `malformed JSON string returns JsonPrimitive with original string`() {
+        val malformed = """{"key": "value", "missing": }"""
+        val result = malformed.toJsonElement()
+        assertTrue(result is JsonPrimitive)
+        assertEquals(malformed, result.jsonPrimitive.content)
+    }
+
+    @Test
+    fun `string with mixed content returns JsonPrimitive with original string`() {
+        val result = "hello123".toJsonElement()
+        assertTrue(result is JsonPrimitive)
+        assertEquals("hello123", result.jsonPrimitive.content)
+    }
+
+    @Test
+    fun `string with special characters returns JsonPrimitive with original string`() {
+        val result = "!@#$%^&*()".toJsonElement()
+        assertTrue(result is JsonPrimitive)
+        assertEquals("!@#$%^&*()", result.jsonPrimitive.content)
+    }
+
+    @Test
+    fun `null string in quotes returns JsonNull`() {
+        val result = "null".toJsonElement()
+        assertTrue(result is JsonNull)
+        assertEquals("null", result.jsonNull.content)
+    }
+
+    // === Tests for List<String>.toJsonArray() ===
+
+    @Test
+    fun `empty String list returns empty JsonArray`() {
+        // Given
+        val stringList = emptyList<String>()
+
+        // When
+        val result = stringList.toJsonArray()
+
+        // Then
+        assertEquals(0, result.size)
+        assertEquals("[]", result.toString())
+    }
+
+    @Test
+    fun `nonEmpty String list returns JsonArray with correct string values`() {
+        // Given
+        val stringList = listOf("first", "second", "third")
+
+        // When
+        val result = stringList.toJsonArray()
+
+        // Then
+        assertEquals(3, result.size)
+        assertEquals("first", result[0].jsonPrimitive.content)
+        assertEquals("second", result[1].jsonPrimitive.content)
+        assertEquals("third", result[2].jsonPrimitive.content)
+        assertEquals("""["first","second","third"]""", result.toString())
+    }
+
+    @Test
+    fun `String list with empty strings returns JsonArray with empty strings`() {
+        // Given
+        val stringList = listOf("", "value", "")
+
+        // When
+        val result = stringList.toJsonArray()
+
+        // Then
+        assertEquals(3, result.size)
+        assertEquals("", result[0].jsonPrimitive.content)
+        assertEquals("value", result[1].jsonPrimitive.content)
+        assertEquals("", result[2].jsonPrimitive.content)
+        assertEquals("""["","value",""]""", result.toString())
+    }
+
+    @Test
+    fun `String list with nulls is not applicable since list STRING cannot contain nulls`() {
+        // Kotlin ensures non-nullability; no test needed for null elements
+        // but validate that the function processes only non-nulls
+        val stringList: List<String?> = listOf("a", null, "c")
+        val filteredNonNull = stringList.filterNotNull()
+        val expected = buildJsonArray { add("a"); add("c") }
+
+        val result = filteredNonNull.toJsonArray()
+
+        assertEquals(expected.toString(), result.toString())
+    }
+
+    // === Tests for List<Uri>.toJsonArray() ===
+
+    @Test
+    fun `empty Uri list returns empty JsonArray`() {
+        // Given
+        val uriList = emptyList<Uri>()
+
+        // When
+        val result = uriList.toJsonArray()
+
+        // Then
+        assertEquals(0, result.size)
+        assertEquals("[]", result.toString())
+    }
+
+    @Test
+    fun `nonEmpty Uri list returns JsonArray with string field URIs`() {
+        // Given
+        val uri1 = "https://example.com".toUri()
+        val uri2 = "mailto:test@example.com".toUri()
+        val uri3 = "custom-scheme://host/path?query=value".toUri()
+        val uriList = listOf(uri1, uri2, uri3)
+
+        // When
+        val result = uriList.toJsonArray()
+
+        // Then
+        assertEquals(3, result.size)
+        assertEquals("https://example.com", result[0].jsonPrimitive.content)
+        assertEquals("mailto:test@example.com", result[1].jsonPrimitive.content)
+        assertEquals("custom-scheme://host/path?query=value", result[2].jsonPrimitive.content)
+        assertEquals(
+            """["https://example.com","mailto:test@example.com","custom-scheme://host/path?query=value"]""",
+            result.toString()
         )
     }
 
-    @Test(expected = RuntimeException::class)
-    @Throws(Exception::class)
-    fun testPutIfNotNullString_JsonException() {
-        whenever(json.put(TEST_KEY, TEST_STRING))
-            .thenThrow(JSONException(null as String?))
+    @Test
+    fun `Uri list with single element returns JsonArray with one string`() {
+        // Given
+        val uri = "https://single.com".toUri()
+        val uriList = listOf(uri)
 
-        json.putIfNotNull(TEST_KEY, TEST_STRING)
+        // When
+        val result = uriList.toJsonArray()
+
+        // Then
+        assertEquals(1, result.size)
+        assertEquals("https://single.com", result[0].jsonPrimitive.content)
     }
 
     @Test
-    @Throws(Exception::class)
-    fun testPutIfNotNullUri() {
-        realJson.putIfNotNull(TEST_KEY, TEST_URI.toString())
-        assertTrue(realJson.has(TEST_KEY))
-        assertEquals(TEST_URI_STRING, realJson.getString(TEST_KEY))
+    fun `Uri list conversion is consistent and repeatable`() {
+        // Given
+        val uriList = listOf("a://1".toUri(), "b://2".toUri())
+
+        // When
+        val result1 = uriList.toJsonArray()
+        val result2 = uriList.toJsonArray()
+
+        // Then
+        assertEquals(result1.toString(), result2.toString())
+        assertEquals("""["a://1","b://2"]""", result1.toString())
     }
 
-    @Test
-    @Throws(Exception::class)
-    fun testPutIfNotNullUri_null() {
-        realJson.putIfNotNull(TEST_KEY, null)
-        assertFalse(realJson.has(TEST_KEY))
-    }
-
-    @Test(expected = RuntimeException::class)
-    @Throws(Exception::class)
-    fun testPutIfNotNullUri_JsonException() {
-        whenever(json.put(TEST_KEY, TEST_URI_STRING))
-            .thenThrow(JSONException(null as String?))
-
-        json.putIfNotNull(TEST_KEY, TEST_URI_STRING)
-    }
-
-    @Test
-    @Throws(Exception::class)
-    fun testPutIfNotNullLong_null() {
-        json.putIfNotNull(TEST_KEY, null as Long?)
-        verify(json, never()).put(eq(TEST_KEY), any<Long>())
-    }
-
-    @Test
-    @Throws(Exception::class)
-    fun testPutIfNotNullJson() {
-        json.putIfNotNull(TEST_KEY, TEST_JSON)
-        verify(json).put(TEST_KEY, TEST_JSON)
-    }
-
-    @Test
-    @Throws(Exception::class)
-    fun testPutIfNotNullJson_null() {
-        json.putIfNotNull(TEST_KEY, null as JSONObject?)
-        verify(json, never()).put(eq(TEST_KEY), any<JSONObject>())
-    }
-
-    @Test(expected = RuntimeException::class)
-    @Throws(Exception::class)
-    fun testPutIfNotNullJson_JsonException() {
-        whenever(json.put(TEST_KEY, TEST_JSON))
-            .thenThrow(JSONException(null as String?))
-
-        json.putIfNotNull(TEST_KEY, TEST_JSON)
-    }
-
-    @Test
-    @Throws(Exception::class)
-    fun testGetString() {
-        whenever(json.has(TEST_KEY)).thenReturn(true)
-        whenever(json.getString(TEST_KEY)).thenReturn(TEST_STRING)
-        assertEquals(TEST_STRING, json.getString(TEST_KEY))
-    }
-
-    @Test(expected = JSONException::class)
-    @Throws(Exception::class)
-    fun testGetStringList_missing() {
-        whenever(json.has(TEST_KEY)).thenReturn(false)
-        json.getStringList(TEST_KEY)
-    }
-
-    @Test
-    @Throws(Exception::class)
-    fun testGetStringMap() {
-        val mapObj = JSONObject().apply {
-            put("a", "1")
-            put("b", "2")
-            put("c", "3")
-        }
-
-        realJson.put(TEST_KEY, mapObj)
-        val map = realJson.getStringMap(TEST_KEY)
-        assertEquals(mapObj.length().toLong(), map.entries.size.toLong())
-        assertTrue(map.containsKey("a"))
-        assertTrue(map.containsKey("b"))
-        assertTrue(map.containsKey("c"))
-        assertEquals("1", map["a"])
-        assertEquals("2", map["b"])
-        assertEquals("3", map["c"])
-    }
-
-    companion object {
-        private const val TEST_KEY = "key"
-        private const val TEST_STRING = "value"
-        private const val TEST_LONG: Long = 123
-        private const val TEST_URI_STRING = "https://openid.net/"
-        private val TEST_URI: Uri? = Uri.parse(TEST_URI_STRING)
-        private val TEST_JSON = JSONObject()
-        private val TEST_ARRAY = JSONArray()
-
-        init {
-            try {
-                TEST_JSON.put("a", "b")
-            } catch (_: JSONException) {
-                throw IllegalStateException("unable to configure test objects")
-            }
-        }
-    }
 }

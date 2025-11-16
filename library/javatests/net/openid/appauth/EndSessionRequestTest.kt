@@ -1,16 +1,16 @@
 package net.openid.appauth
 
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import net.openid.appauth.EndSessionRequest.Companion.PARAM_ID_TOKEN_HINT
 import net.openid.appauth.EndSessionRequest.Companion.PARAM_POST_LOGOUT_REDIRECT_URI
 import net.openid.appauth.EndSessionRequest.Companion.PARAM_STATE
-import net.openid.appauth.EndSessionRequest.Companion.jsonDeserialize
 import net.openid.appauth.TestValues.TEST_APP_REDIRECT_URI
 import net.openid.appauth.TestValues.TEST_ID_TOKEN
 import net.openid.appauth.TestValues.TEST_STATE
 import net.openid.appauth.TestValues.testEndSessionRequest
 import net.openid.appauth.TestValues.testServiceConfig
 import org.assertj.core.api.Assertions.assertThat
-import org.json.JSONException
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -90,7 +90,7 @@ class EndSessionRequestTest {
     fun testUiLocales_unspecified() {
         val request = requestBuilder.build()
         assertThat(request.uiLocales).isNull()
-        assertThat(request.getUiLocales()).isNull()
+        assertThat(request.uiLocalesValues).isNull()
     }
 
     @Test
@@ -100,7 +100,7 @@ class EndSessionRequestTest {
             .build()
 
         assertThat(req.uiLocales).isEqualTo("en de fr-CA")
-        assertThat(req.getUiLocales())
+        assertThat(req.uiLocalesValues)
             .hasSize(3)
             .contains("en")
             .contains("de")
@@ -111,7 +111,7 @@ class EndSessionRequestTest {
     fun testUiLocales_nullValue() {
         val req = requestBuilder.setUiLocales(null).build()
         assertThat(req.uiLocales).isNull()
-        assertThat(req.getUiLocales()).isNull()
+        assertThat(req.uiLocalesValues).isNull()
     }
 
     @Test(expected = IllegalArgumentException::class)
@@ -126,7 +126,7 @@ class EndSessionRequestTest {
             .build()
 
         assertThat(req.uiLocales).isEqualTo("en de fr-CA")
-        assertThat(req.getUiLocales())
+        assertThat(req.uiLocalesValues)
             .hasSize(3)
             .contains("en")
             .contains("de")
@@ -137,7 +137,7 @@ class EndSessionRequestTest {
     fun testUiLocales_withNullVarargsArray() {
         val req: EndSessionRequest = requestBuilder.setUiLocalesValues(null).build()
         assertThat(req.uiLocales).isNull()
-        assertThat(req.getUiLocales()).isNull()
+        assertThat(req.uiLocalesValues).isNull()
     }
 
     @Test(expected = IllegalArgumentException::class)
@@ -153,7 +153,7 @@ class EndSessionRequestTest {
 
         assertThat(req.uiLocales).isEqualTo("en de fr-CA")
 
-        assertThat(req.getUiLocales())
+        assertThat(req.uiLocalesValues)
             .hasSize(3)
             .contains("en")
             .contains("de")
@@ -170,7 +170,7 @@ class EndSessionRequestTest {
     /* ******************************* additionalParams *******************************************/
     @Test(expected = IllegalArgumentException::class)
     fun testBuilder_setAdditionalParams_withBuiltInParam() {
-        val additionalParams = mapOf(PARAM_STATE to TEST_STATE)
+        val additionalParams = buildJsonObject { put(PARAM_STATE, TEST_STATE) }
         requestBuilder.setAdditionalParameters(additionalParams)
     }
 
@@ -188,7 +188,6 @@ class EndSessionRequestTest {
     }
 
     @Test
-    @Throws(Exception::class)
     fun testToUri_noState() {
         val req = requestBuilder.setState(null).build()
 
@@ -211,9 +210,12 @@ class EndSessionRequestTest {
     }
 
     @Test
-    @Throws(Exception::class)
     fun testToUri_additionalParams() {
-        val additionalParams = mapOf("my_param" to "1234", "another_param" to "5678")
+        val additionalParams = buildJsonObject {
+            put("my_param", "1234")
+            put("another_param", "5678")
+        }
+
         val req = requestBuilder
             .setAdditionalParameters(additionalParams)
             .build()
@@ -223,9 +225,8 @@ class EndSessionRequestTest {
         assertThat(uri?.getQueryParameter("another_param")).isEqualTo("5678")
     }
 
-    /* ************************** jsonSerialize() / jsonDeserialize() *****************************/
+    /* ************************** asJsonString / fromJsonString() *****************************/
     @Test
-    @Throws(Exception::class)
     fun testJsonSerialize() {
         val request = testEndSessionRequest
         val copy = serializeDeserialize(request)
@@ -244,15 +245,19 @@ class EndSessionRequestTest {
     @Test
     @Throws(Exception::class)
     fun testJsonSerialize_additionalParams() {
-        val additionalParams = mapOf("my_param" to "1234", "another_param" to "5678")
+        val additionalParams = buildJsonObject {
+            put("my_param", "1234")
+            put("another_param", "5678")
+        }
+
         val copy = serializeDeserialize(
             requestBuilder.setAdditionalParameters(additionalParams).build()
         )
+
         assertThat(copy.additionalParameters).isEqualTo(additionalParams)
     }
 
-    @Throws(JSONException::class)
     private fun serializeDeserialize(request: EndSessionRequest): EndSessionRequest {
-        return jsonDeserialize(request.jsonSerializeString())
+        return EndSessionRequest.fromJsonString(request.asJsonString)
     }
 }

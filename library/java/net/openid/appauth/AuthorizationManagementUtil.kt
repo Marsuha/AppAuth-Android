@@ -17,12 +17,11 @@ import android.annotation.SuppressLint
 import android.content.Intent
 import android.net.Uri
 import android.util.Base64
+import kotlinx.serialization.SerializationException
 import net.openid.appauth.AuthorizationManagementUtil.RequestType.AUTHORIZATION
 import net.openid.appauth.AuthorizationManagementUtil.RequestType.END_SESSION
 import net.openid.appauth.AuthorizationResponse.Companion.containsAuthorizationResponse
 import net.openid.appauth.EndSessionResponse.Companion.containsEndSessionResponse
-import org.json.JSONException
-import org.json.JSONObject
 import java.security.SecureRandom
 
 /**
@@ -64,15 +63,15 @@ internal object AuthorizationManagementUtil {
 
     /**
      * Reads an authorization request from a JSON string representation produced by either
-     * [AuthorizationRequest.jsonSerialize] or [EndSessionRequest.jsonSerialize].
-     * @throws JSONException if the provided JSON does not match the expected structure.
+     * [AuthorizationRequest.asJsonString] or [EndSessionRequest.asJsonString].
+     * @throws kotlinx.serialization.SerializationException if the provided JSON does not match
+     * the expected structure.
      */
-    @Throws(JSONException::class)
+    @Throws(SerializationException::class)
     fun requestFrom(jsonStr: String, type: RequestType): AuthorizationManagementRequest {
-        val json = JSONObject(jsonStr)
         return when (type) {
-            AUTHORIZATION -> AuthorizationRequest.jsonDeserialize(json)
-            END_SESSION -> EndSessionRequest.jsonDeserialize(json)
+            AUTHORIZATION -> AuthorizationRequest.fromJsonString(jsonStr)
+            END_SESSION -> EndSessionRequest.fromJsonString(jsonStr)
         }
     }
 

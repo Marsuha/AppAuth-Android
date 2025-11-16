@@ -13,113 +13,89 @@
  */
 package net.openid.appauth
 
-import android.annotation.SuppressLint
 import android.net.Uri
+import androidx.annotation.VisibleForTesting
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.MissingFieldException
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerializationException
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.encodeToJsonElement
+import kotlinx.serialization.json.jsonObject
 import net.openid.appauth.connectivity.ConnectionBuilder
 import net.openid.appauth.connectivity.DefaultConnectionBuilder
 import net.openid.appauth.internal.Logger
-import org.json.JSONException
-import org.json.JSONObject
+import net.openid.appauth.internal.UriSerializer
 import java.io.IOException
 import java.io.InputStream
 
 /**
  * Configuration details required to interact with an authorization service.
+ * Creates a service configuration for a basic OAuth2 provider.
+ * @param authorizationEndpoint The
+ * [authorization endpoint URI](https://tools.ietf.org/html/rfc6749#section-3.1)
+ * for the service.
+ * @param tokenEndpoint The
+ * [token endpoint URI](https://tools.ietf.org/html/rfc6749#section-3.2)
+ * for the service.
+ * @param registrationEndpoint The optional
+ * [client registration endpoint URI](https://tools.ietf.org/html/rfc7591#section-3)
+ * @param endSessionEndpoint The optional
+ * [end session endpoint URI](https://tools.ietf.org/html/rfc6749#section-2.2)
+ * for the service.
  */
-@Suppress("unused")
-class AuthorizationServiceConfiguration {
+@Serializable
+data class AuthorizationServiceConfiguration(
     /**
      * The authorization service's endpoint.
      */
-    @JvmField
-    val authorizationEndpoint: Uri
-
+    @Serializable(with = UriSerializer::class)
+    val authorizationEndpoint: Uri,
     /**
      * The authorization service's token exchange and refresh endpoint.
      */
-    @JvmField
-    val tokenEndpoint: Uri
-
+    @Serializable(with = UriSerializer::class)
+    val tokenEndpoint: Uri,
     /**
      * The end session service's endpoint;
      */
-    @JvmField
-    val endSessionEndpoint: Uri?
-
+    @Serializable(with = UriSerializer::class)
+    val endSessionEndpoint: Uri? = null,
     /**
      * The authorization service's client registration endpoint.
      */
-    @JvmField
-    val registrationEndpoint: Uri?
-
-
+    @Serializable(with = UriSerializer::class)
+    val registrationEndpoint: Uri? = null,
     /**
      * The discovery document describing the service, if it is an OpenID Connect provider.
      */
-    @JvmField
-    val discoveryDoc: AuthorizationServiceDiscovery?
-
-    /**
-     * Creates a service configuration for a basic OAuth2 provider.
-     * @param authorizationEndpoint The
-     * [authorization endpoint URI](https://tools.ietf.org/html/rfc6749#section-3.1)
-     * for the service.
-     * @param tokenEndpoint The
-     * [token endpoint URI](https://tools.ietf.org/html/rfc6749#section-3.2)
-     * for the service.
-     * @param registrationEndpoint The optional
-     * [client registration endpoint URI](https://tools.ietf.org/html/rfc7591#section-3)
-     * @param endSessionEndpoint The optional
-     * [end session endpoint URI](https://tools.ietf.org/html/rfc6749#section-2.2)
-     * for the service.
-     */
-    @JvmOverloads
-    constructor(
-        authorizationEndpoint: Uri,
-        tokenEndpoint: Uri,
-        registrationEndpoint: Uri? = null,
-        endSessionEndpoint: Uri? = null
-    ) {
-        this.authorizationEndpoint = authorizationEndpoint
-        this.tokenEndpoint = tokenEndpoint
-        this.registrationEndpoint = registrationEndpoint
-        this.endSessionEndpoint = endSessionEndpoint
-        this.discoveryDoc = null
-    }
-
+    val discoveryDoc: AuthorizationServiceDiscovery? = null
+) {
     /**
      * Creates an service configuration for an OpenID Connect provider, based on its
      * [discovery document][AuthorizationServiceDiscovery].
      *
      * @param discoveryDoc The OpenID Connect discovery document which describes this service.
      */
-    constructor(discoveryDoc: AuthorizationServiceDiscovery) {
-        this.discoveryDoc = discoveryDoc
-        this.authorizationEndpoint = discoveryDoc.authorizationEndpoint
-        this.tokenEndpoint = checkNotNull(discoveryDoc.tokenEndpoint)
-        this.registrationEndpoint = discoveryDoc.registrationEndpoint
-        this.endSessionEndpoint = discoveryDoc.endSessionEndpoint
-    }
-
-    /**
-     * Converts the authorization service configuration to JSON for storage or transmission.
-     */
-    @SuppressLint("VisibleForTests")
-    fun toJson() = JSONObject().apply {
-        put(KEY_AUTHORIZATION_ENDPOINT, authorizationEndpoint.toString())
-        put(KEY_TOKEN_ENDPOINT, tokenEndpoint.toString())
-        registrationEndpoint?.let { put(KEY_REGISTRATION_ENDPOINT, it.toString()) }
-        endSessionEndpoint?.let { put(KEY_END_SESSION_ENDPOINT, it.toString()) }
-        discoveryDoc?.let { put(KEY_DISCOVERY_DOC, it.discoveryDoc) }
-    }
+    constructor(discoveryDoc: AuthorizationServiceDiscovery) : this(
+        discoveryDoc = discoveryDoc,
+        authorizationEndpoint = discoveryDoc.authorizationEndpoint,
+        tokenEndpoint = checkNotNull(discoveryDoc.tokenEndpoint),
+        registrationEndpoint = discoveryDoc.registrationEndpoint,
+        endSessionEndpoint = discoveryDoc.endSessionEndpoint
+    )
 
     /**
      * Converts the authorization service configuration to a JSON string for storage or
      * transmission.
      */
-    fun toJsonString() = toJson().toString()
+    val asJsonString get() = Json.encodeToString(this)
+
+    @VisibleForTesting
+    val asJsonObject get() = Json.encodeToJsonElement(this).jsonObject
+
 
     companion object {
         /**
@@ -138,52 +114,23 @@ class AuthorizationServiceConfiguration {
          */
         const val OPENID_CONFIGURATION_RESOURCE: String = "openid-configuration"
 
-        private const val KEY_AUTHORIZATION_ENDPOINT = "authorizationEndpoint"
-        private const val KEY_TOKEN_ENDPOINT = "tokenEndpoint"
-        private const val KEY_REGISTRATION_ENDPOINT = "registrationEndpoint"
-        private const val KEY_DISCOVERY_DOC = "discoveryDoc"
-        private const val KEY_END_SESSION_ENDPOINT = "endSessionEndpoint"
-
         /**
-         * Reads an Authorization service configuration from a JSON representation produced by the
-         * [.toJson] method or some other equivalent producer.
+         * Reads an authorization service configuration from a JSON string, either one produced by
+         * [asJsonString] or a JWKS discovery document. If a discovery document is used, then the
+         * `authorizationEndpoint` and `tokenEndpoint` are required.
          *
-         * @throws JSONException if the provided JSON does not match the expected structure.
+         * @param json The json string to read.
+         * @return The authorization service configuration.
+         * @throws SerializationException if the provided JSON does not match the expected structure.
          */
-        @JvmStatic
-        @Throws(JSONException::class)
-        fun fromJson(json: JSONObject): AuthorizationServiceConfiguration {
-            if (json.has(KEY_DISCOVERY_DOC)) {
-                try {
-                    val discoveryDoc = AuthorizationServiceDiscovery(
-                        discoveryDoc = json.optJSONObject(KEY_DISCOVERY_DOC)!!
-                    )
-
-                    return AuthorizationServiceConfiguration(discoveryDoc)
-                } catch (ex: AuthorizationServiceDiscovery.MissingArgumentException) {
-                    throw JSONException("Missing required field in discovery doc: ${ex.missingField}")
-                }
-            } else {
-                require(json.has(KEY_AUTHORIZATION_ENDPOINT)) { "missing authorizationEndpoint" }
-                require(json.has(KEY_TOKEN_ENDPOINT)) { "missing tokenEndpoint" }
-                return AuthorizationServiceConfiguration(
-                    authorizationEndpoint = json.getUri(KEY_AUTHORIZATION_ENDPOINT),
-                    tokenEndpoint = json.getUri(KEY_TOKEN_ENDPOINT),
-                    registrationEndpoint = json.getUriIfDefined(KEY_REGISTRATION_ENDPOINT),
-                    endSessionEndpoint = json.getUriIfDefined(KEY_END_SESSION_ENDPOINT)
-                )
-            }
+        @Throws(SerializationException::class)
+        fun fromJsonString(json: String): AuthorizationServiceConfiguration {
+            val config = Json.decodeFromString<AuthorizationServiceConfiguration>(json)
+            return config.discoveryDoc?.let { AuthorizationServiceConfiguration(it) }
+                ?: config
         }
 
-        /**
-         * Reads an Authorization service configuration from a JSON representation produced by the
-         * [.toJson] method or some other equivalent producer.
-         *
-         * @throws JSONException if the provided JSON does not match the expected structure.
-         */
-        @Throws(JSONException::class)
-        fun fromJson(jsonStr: String) = fromJson(JSONObject(jsonStr))
-
+        @Suppress("unused")
         @JvmStatic
         suspend fun fetchFromIssuer(
             openIdConnectIssuerUri: Uri,
@@ -214,13 +161,13 @@ class AuthorizationServiceConfiguration {
          * @see <a href="https://openid.net/specs/openid-connect-discovery-1_0.html">
          *     OpenID Connect discovery 1.0</a>
          */
+        @OptIn(ExperimentalSerializationApi::class)
         @JvmStatic
         suspend fun fetchFromUrl(
             openIdConnectDiscoveryUri: Uri,
             connectionBuilder: ConnectionBuilder = DefaultConnectionBuilder
         ): AuthorizationServiceConfiguration {
             var `is`: InputStream? = null
-
             return withContext(Dispatchers.IO) {
                 try {
                     val connection = connectionBuilder.openConnection(openIdConnectDiscoveryUri)
@@ -228,8 +175,8 @@ class AuthorizationServiceConfiguration {
                     connection.doInput = true
                     connection.connect()
                     `is` = connection.inputStream
-                    val json = JSONObject(`is`.readString())
-                    val discovery = AuthorizationServiceDiscovery(json)
+                    val json = `is`.readString()
+                    val discovery = AuthorizationServiceDiscovery.fromJsonString(json)
                     AuthorizationServiceConfiguration(discovery)
                 } catch (ex: IOException) {
                     Logger.errorWithStack(ex, "Network error when retrieving discovery document")
@@ -238,18 +185,18 @@ class AuthorizationServiceConfiguration {
                         AuthorizationException.GeneralErrors.NETWORK_ERROR,
                         ex
                     )
-                } catch (ex: JSONException) {
-                    Logger.errorWithStack(ex, "Error parsing discovery document")
-
-                    throw AuthorizationException.fromTemplate(
-                        AuthorizationException.GeneralErrors.JSON_DESERIALIZATION_ERROR,
-                        ex
-                    )
-                } catch (ex: AuthorizationServiceDiscovery.MissingArgumentException) {
+                } catch (ex: MissingFieldException) {
                     Logger.errorWithStack(ex, "Malformed discovery document")
 
                     throw AuthorizationException.fromTemplate(
                         AuthorizationException.GeneralErrors.INVALID_DISCOVERY_DOCUMENT,
+                        ex
+                    )
+                } catch (ex: SerializationException) {
+                    Logger.errorWithStack(ex, "Error parsing discovery document")
+
+                    throw AuthorizationException.fromTemplate(
+                        AuthorizationException.GeneralErrors.JSON_DESERIALIZATION_ERROR,
                         ex
                     )
                 } finally {

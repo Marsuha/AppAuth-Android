@@ -14,7 +14,9 @@
 package net.openid.appauth
 
 import android.net.Uri
-import net.openid.appauth.AuthorizationResponse.Companion.jsonDeserialize
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import net.openid.appauth.AuthorizationResponse.Companion.KEY_SCOPE
 import net.openid.appauth.TestValues.TEST_ACCESS_TOKEN
 import net.openid.appauth.TestValues.TEST_AUTH_CODE
 import net.openid.appauth.TestValues.TEST_CODE_VERIFIER
@@ -77,7 +79,7 @@ class AuthorizationResponseTest {
     @Test(expected = IllegalArgumentException::class)
     fun testBuild_setAdditionalParams_withBuiltInParam() {
         authorizationResponseBuilder.setAdditionalParameters(
-            mapOf(AuthorizationResponse.KEY_SCOPE to "scope")
+            buildJsonObject { put(KEY_SCOPE, "scope") }
         )
     }
 
@@ -103,8 +105,8 @@ class AuthorizationResponseTest {
     @Test
     @Throws(Exception::class)
     fun testSerialization() {
-        val json = authorizationResponse.jsonSerializeString()
-        val authResponse = jsonDeserialize(json)
+        val json = authorizationResponse.asJsonString
+        val authResponse = AuthorizationResponse.fromJsonString(json)
         checkExpectedFields(authResponse)
     }
 
@@ -135,6 +137,19 @@ class AuthorizationResponseTest {
 
     @Test
     fun testCreateTokenExchangeRequest_failsForImplicitResponse() {
+        val request = getMinimalAuthRequestBuilder(ResponseTypeValues.TOKEN).build()
+        val response = AuthorizationResponse.Builder(request)
+            .setAccessToken("token")
+            .setTokenType(AuthorizationResponse.TOKEN_TYPE_BEARER)
+            .setAccessTokenExpiresIn(TimeUnit.DAYS.toSeconds(30))
+            .setState(request.state)
+            .build()
+
+
+        // as there is no authorization code in the response, this will fail
+        assertThatExceptionOfType(java.lang.IllegalStateException::class.java)
+            .isThrownBy(response::createTokenExchangeRequest)
+            .withMessage("authorizationCode not available for exchange request")
     }
 
     @Test

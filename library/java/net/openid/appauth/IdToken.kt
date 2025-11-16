@@ -15,11 +15,18 @@ package net.openid.appauth
 
 import android.util.Base64
 import androidx.annotation.VisibleForTesting
-import net.openid.appauth.AuthorizationException.Companion.fromTemplate
-import org.json.JSONException
-import org.json.JSONObject
-import kotlin.math.abs
 import androidx.core.net.toUri
+import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerializationException
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonIgnoreUnknownKeys
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonObject
+import net.openid.appauth.AuthorizationException.Companion.fromTemplate
+import net.openid.appauth.internal.AudienceSerializer
+import kotlin.math.abs
 
 /**
  * An OpenID Connect ID Token. Contains claims about the authentication of an End-User by an
@@ -32,75 +39,54 @@ import androidx.core.net.toUri
  * @see "OpenID Connect Core ID Token Validation, Section 3.1.3.7
  * <http:></http:>//openid.net/specs/openid-connect-core-1_0.html.IDTokenValidation>"
  */
-class IdToken internal constructor(
+@OptIn(ExperimentalSerializationApi::class)
+@Serializable
+@JsonIgnoreUnknownKeys
+data class IdToken(
     /**
      * Issuer Identifier for the Issuer of the response.
      */
-    @JvmField val issuer: String,
+    @SerialName(KEY_ISSUER)
+    val issuer: String,
     /**
      * Subject Identifier. A locally unique and never reassigned identifier within the Issuer
      * for the End-User.
      */
-    @JvmField val subject: String,
+    @SerialName(KEY_SUBJECT)
+    val subject: String,
     /**
      * Audience(s) that this ID Token is intended for.
      */
-    @JvmField val audience: List<String>,
+    @SerialName(KEY_AUDIENCE)
+    @Serializable(with = AudienceSerializer::class)
+    val audience: List<String>,
     /**
      * Expiration time on or after which the ID Token MUST NOT be accepted for processing.
      */
+    @SerialName(KEY_EXPIRATION)
     val expiration: Long,
     /**
      * Time at which the JWT was issued.
      */
+    @SerialName(KEY_ISSUED_AT)
     val issuedAt: Long,
     /**
      * String value used to associate a Client session with an ID Token,
      * and to mitigate replay attacks.
      */
-    @JvmField val nonce: String?,
+    @SerialName(KEY_NONCE)
+    val nonce: String? = null,
     /**
      * Authorized party - the party to which the ID Token was issued.
      * If present, it MUST contain the OAuth 2.0 Client ID of this party.
      */
-    val authorizedParty: String?,
+    @SerialName(KEY_AUTHORIZED_PARTY)
+    val authorizedParty: String? = null,
     /**
      * Additional claims present in this ID Token.
      */
-    @JvmField val additionalClaims: Map<String, Any>
+    val additionalClaims: JsonObject = emptyJsonObject()
 ) {
-    @VisibleForTesting
-    internal constructor(
-        issuer: String,
-        subject: String,
-        audience: List<String>,
-        expiration: Long,
-        issuedAt: Long
-    ) : this(
-        issuer,
-        subject,
-        audience,
-        expiration,
-        issuedAt,
-        null,
-        null,
-        emptyMap()
-    )
-
-    @VisibleForTesting
-    internal constructor(
-        issuer: String,
-        subject: String,
-        audience: List<String>,
-        expiration: Long,
-        issuedAt: Long,
-        nonce: String?,
-        authorizedParty: String?
-    ) : this(
-        issuer, subject, audience, expiration, issuedAt,
-        nonce, authorizedParty, emptyMap()
-    )
-
     @VisibleForTesting
     @Throws(AuthorizationException::class)
     fun validate(tokenRequest: TokenRequest, clock: Clock) {
@@ -226,6 +212,7 @@ class IdToken internal constructor(
     }
 
     internal class IdTokenException(message: String) : Exception(message)
+
     companion object {
         private const val KEY_ISSUER = "iss"
         private const val KEY_SUBJECT = "sub"
@@ -247,15 +234,21 @@ class IdToken internal constructor(
             KEY_AUTHORIZED_PARTY
         )
 
-        @Throws(JSONException::class)
-        private fun parseJwtSection(section: String): JSONObject {
-            val decodedSection = Base64.decode(section, Base64.URL_SAFE)
-            val jsonString = String(decodedSection)
-            return JSONObject(jsonString)
+        private fun String.decodeBase64(): String {
+            val decodedSection = Base64.decode(this, Base64.URL_SAFE)
+            return String(decodedSection)
         }
 
+        /**
+         * Parses an ID token from its compact JWT representation.
+         *
+         * @param token The JWT compact serialization representation of the ID token.
+         * @return The parsed ID token.
+         * @throws SerializationException if the token is not a structurally valid JWT.
+         * @throws IdTokenException if the token is missing required claims.
+         */
         @JvmStatic
-        @Throws(JSONException::class, IdTokenException::class)
+        @Throws(SerializationException::class, IdTokenException::class)
         fun from(token: String): IdToken {
             val sections = token.split(".").dropLastWhile { it.isEmpty() }
 
@@ -264,35 +257,14 @@ class IdToken internal constructor(
             }
 
             // We ignore header contents, but parse it to check that it is structurally valid JSON
-            parseJwtSection(sections[0])
-            val claims: JSONObject = parseJwtSection(sections[1])
+            //json.decodeFromString<JwtHeader>(sections[0].decodeBase64())
+            Json.parseToJsonElement(sections[0].decodeBase64())
+            val claimsJsonString = sections[1].decodeBase64()
+            val claims = Json.decodeFromString<IdToken>(claimsJsonString)
+            val additionalClaims = Json.parseToJsonElement(claimsJsonString).jsonObject
+                .filterKeys { it !in BUILT_IN_CLAIMS }
 
-            val issuer: String = claims.getString(KEY_ISSUER)
-            val subject: String = claims.getString(KEY_SUBJECT)
-
-            val audience: List<String> = try {
-                claims.getStringList(KEY_AUDIENCE)
-            } catch (_: JSONException) {
-                listOf(claims.getString(KEY_AUDIENCE))
-            }
-
-            val expiration = claims.getLong(KEY_EXPIRATION)
-            val issuedAt = claims.getLong(KEY_ISSUED_AT)
-            val nonce = claims.getStringIfDefined(KEY_NONCE)
-            val authorizedParty = claims.getStringIfDefined(KEY_AUTHORIZED_PARTY)
-            BUILT_IN_CLAIMS.forEach { claims.remove(it) }
-            val additionalClaims = claims.toMap()
-
-            return IdToken(
-                issuer,
-                subject,
-                audience,
-                expiration,
-                issuedAt,
-                nonce,
-                authorizedParty,
-                additionalClaims
-            )
+            return claims.copy(additionalClaims = JsonObject(additionalClaims))
         }
     }
 }
