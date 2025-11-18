@@ -54,11 +54,9 @@ kotlin {
 
 dependencies {
     api(libs.browser)
-    api(libs.bundles.coroutines)
     implementation(libs.annotation)
-    implementation(libs.appcompat)
     implementation(libs.core.ktx)
-    implementation(libs.serializationJson)
+    api(libs.serializationJson)
 }
 
 val sourcesJar: Jar by tasks

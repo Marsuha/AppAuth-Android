@@ -10,7 +10,7 @@
     <string name="refresh_token_returned">Токен обновления возвращен</string>
     <string name="no_id_token_returned">ID-токен не возвращен</string>
     <string name="id_token_returned">ID-токен возвращен</string>
-    <string name="view_profile">Просмотр информации о пользователе</string>
+    <string name="view_profile">Профиль</string>
     <string name="userinfo_profile_content_description">Изображение профиля пользователя</string>
     <string name="login_hint_value">ID аккаунта (например, test@example.com)</string>
     <string name="account_id_description">ID аккаунта необязателен. Если указан, он передается как параметр login_hint в запросе на авторизацию.</string>

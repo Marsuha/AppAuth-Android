@@ -53,7 +53,6 @@ kotlin {
 
 dependencies {
     implementation(project(":library"))
-    api(libs.bundles.coroutines)
     implementation(libs.appcompat)
     implementation(libs.annotation)
     implementation(libs.material)
