@@ -13,6 +13,7 @@
  */
 package net.openid.appauth
 
+import android.annotation.SuppressLint
 import android.app.PendingIntent
 import android.content.ActivityNotFoundException
 import android.content.Context
@@ -22,7 +23,7 @@ import android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP
 import android.net.Uri
 import android.os.Bundle
 import androidx.annotation.VisibleForTesting
-import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ComponentActivity
 import kotlinx.serialization.SerializationException
 import net.openid.appauth.AuthorizationException.AuthorizationRequestErrors
 import net.openid.appauth.AuthorizationException.Companion.PARAM_ERROR
@@ -139,7 +140,8 @@ import net.openid.appauth.internal.Logger
  * [AuthorizationException] as appropriate.
  * The AuthorizationManagementActivity finishes, removing itself from the back stack.
  */
-class AuthorizationManagementActivity : AppCompatActivity() {
+@SuppressLint("RestrictedApi")
+class AuthorizationManagementActivity : ComponentActivity() {
     /**
      * Indicates whether the authorization process has started.
      * This flag is used to ensure that the authorization intent is only started once.
@@ -190,6 +192,14 @@ class AuthorizationManagementActivity : AppCompatActivity() {
          * stack underneath the authorization activity.
          */
         if (!authorizationStarted) {
+            val intentToStart = authIntent
+            if (intentToStart == null) {
+                Logger.error("Authorization intent is null. Cannot start flow.")
+                handleBrowserNotFound()
+                finish()
+                return
+            }
+
             try {
                 startActivity(authIntent)
                 authorizationStarted = true
@@ -210,8 +220,9 @@ class AuthorizationManagementActivity : AppCompatActivity() {
          * RedirectUriReceiverActivity having been invoked - this can occur when the user presses
          * the back button, or closes the browser tab.
          */
-        if (intent.data != null) {
-            handleAuthorizationComplete()
+        val responseUri = intent.data
+        if (responseUri != null) {
+            handleAuthorizationComplete(responseUri)
         } else {
             handleAuthorizationCanceled()
         }
@@ -226,18 +237,22 @@ class AuthorizationManagementActivity : AppCompatActivity() {
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
+        val request = authRequest
+
         outState.apply {
             putBoolean(KEY_AUTHORIZATION_STARTED, authorizationStarted)
             putParcelable(KEY_AUTH_INTENT, authIntent)
-            putString(KEY_AUTH_REQUEST, authRequest!!.asJsonString)
-            putString(KEY_AUTH_REQUEST_TYPE, requestTypeFor(authRequest!!).name)
             putParcelable(KEY_COMPLETE_INTENT, completeIntent)
             putParcelable(KEY_CANCEL_INTENT, cancelIntent)
         }
+
+        request?.let {
+            outState.putString(KEY_AUTH_REQUEST, it.asJsonString)
+            outState.putString(KEY_AUTH_REQUEST_TYPE, requestTypeFor(it).name)
+        } ?: Logger.error("Cannot save authorization request state, object is missing.")
     }
 
-    private fun handleAuthorizationComplete() {
-        val responseUri: Uri = checkNotNull(intent.data)
+    private fun handleAuthorizationComplete(responseUri: Uri) {
         val responseData = extractResponseData(responseUri)
         responseData.data = responseUri
         sendResult(completeIntent, responseData, RESULT_OK)
@@ -288,7 +303,8 @@ class AuthorizationManagementActivity : AppCompatActivity() {
                     RequestType.valueOf(authRequestType)
                 )
             }
-        } catch (_: SerializationException) {
+        } catch (e: SerializationException) {
+            Logger.error("Failed to deserialize authorization request state.", e)
             sendResult(
                 cancelIntent,
                 AuthorizationRequestErrors.INVALID_REQUEST.toIntent(),
@@ -341,24 +357,22 @@ class AuthorizationManagementActivity : AppCompatActivity() {
         }
 
         // Verify that we have a valid authorization request
-        if (authRequest == null) {
+        val request = authRequest ?: run {
             Logger.error("No authorization request found")
             return AuthorizationRequestErrors.INVALID_REQUEST.toIntent()
         }
 
         // Extract the response using the authorization request and response URI
-        val response = responseWith(authRequest!!, responseUri)
+        val response = responseWith(request, responseUri)
 
         // Validate the state parameter to ensure it matches the original request
-        if (authRequest!!.state == null && response.state != null
-            || (authRequest!!.state != null && (authRequest!!.state != response.state))
-        ) {
+        if (request.state != response.state) {
             // Log a warning if the state does not match and return an error Intent
             Logger.warn(
                 "State returned in authorization response (%s) does not match state "
                         + "from request (%s) - discarding response",
                 response.state,
-                authRequest!!.state
+                request.state
             )
 
             return AuthorizationRequestErrors.STATE_MISMATCH.toIntent()

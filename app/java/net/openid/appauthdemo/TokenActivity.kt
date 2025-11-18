@@ -30,6 +30,11 @@ import com.google.android.material.snackbar.Snackbar
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.SerializationException
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import net.openid.appauth.AuthState
 import net.openid.appauth.AuthState.FreshTokenResult
 import net.openid.appauth.AuthorizationException
@@ -44,8 +49,6 @@ import net.openid.appauth.appAuthConfiguration
 import okio.buffer
 import okio.source
 import org.joda.time.format.DateTimeFormat
-import org.json.JSONException
-import org.json.JSONObject
 import java.io.IOException
 import java.nio.charset.Charset
 import java.util.concurrent.atomic.AtomicReference
@@ -66,8 +69,9 @@ class TokenActivity : AppCompatActivity() {
             }
         )
     }
+
     private val stateManager by lazy { AuthStateManager.getInstance(this) }
-    private val userInfoJsonRef = AtomicReference<JSONObject?>()
+    private val userInfoJsonRef = AtomicReference<JsonObject?>()
 
     private val configuration by lazy { Configuration.getInstance(this) }
 
@@ -90,8 +94,10 @@ class TokenActivity : AppCompatActivity() {
 
         savedInstanceState?.let { state ->
             try {
-                state.getString(KEY_USER_INFO)?.let { userInfoJsonRef.set(JSONObject(it)) }
-            } catch (ex: JSONException) {
+                state.getString(KEY_USER_INFO)?.let {
+                    userInfoJsonRef.set(Json.parseToJsonElement(it).jsonObject)
+                }
+            } catch (ex: SerializationException) {
                 Log.e(TAG, "Failed to parse saved user info JSON, discarding", ex)
             }
         }
@@ -244,23 +250,21 @@ class TokenActivity : AppCompatActivity() {
         if (userInfo == null) {
             userInfoCard.visibility = View.INVISIBLE
         } else {
-            try {
-                var name = "???"
-                if (userInfo.has("name")) name = userInfo.getString("name")
-                findViewById<TextView>(R.id.userinfo_name).text = name
+            val name = userInfo["name"]?.jsonPrimitive?.content ?: "???"
+            findViewById<TextView>(R.id.userinfo_name).text = name
 
-                if (userInfo.has("picture")) {
-                    Glide.with(this@TokenActivity)
-                        .load(userInfo.getString("picture").toUri())
-                        .fitCenter()
-                        .into(findViewById(R.id.userinfo_profile))
-                }
-
-                findViewById<TextView>(R.id.userinfo_json).text = userInfoJsonRef.toString()
-                userInfoCard.visibility = View.VISIBLE
-            } catch (ex: JSONException) {
-                Log.e(TAG, "Failed to read userinfo JSON", ex)
+            userInfo["picture"]?.let {
+                Glide.with(this@TokenActivity)
+                    .load(it.jsonPrimitive.content.toUri())
+                    .fitCenter()
+                    .into(findViewById(R.id.userinfo_profile))
             }
+
+            val prettyJson = Json { prettyPrint = true }
+            findViewById<TextView>(R.id.userinfo_json).text =
+                prettyJson.encodeToString(JsonObject.serializer(), userInfo)
+
+            userInfoCard.visibility = View.VISIBLE
         }
     }
 
@@ -326,7 +330,7 @@ class TokenActivity : AppCompatActivity() {
     private suspend fun handleCodeExchangeResponse(
         tokenResponse: TokenResponse?,
         authException: AuthorizationException?
-    ) = withContext(Dispatchers.IO) {
+    ) {
         stateManager.updateAfterTokenResponse(tokenResponse, authException)
 
         if (!stateManager.getCurrent().isAuthorized) {
@@ -383,11 +387,11 @@ class TokenActivity : AppCompatActivity() {
                             .readString(Charset.forName("UTF-8"))
                     }
 
-                    userInfoJsonRef.set(JSONObject(response))
+                    userInfoJsonRef.set(Json.parseToJsonElement(response).jsonObject)
                 } catch (ioEx: IOException) {
                     Log.e(TAG, "Network error when querying userinfo endpoint", ioEx)
                     showSnackbar("Fetching user info failed")
-                } catch (_: JSONException) {
+                } catch (_: SerializationException) {
                     Log.e(TAG, "Failed to parse userinfo response")
                     showSnackbar("Failed to parse user info")
                 }

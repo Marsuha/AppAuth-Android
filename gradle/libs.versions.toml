@@ -38,8 +38,6 @@ compiler-glide = { group = "com.github.bumptech.glide", name = "compiler", versi
 androidGradlePlugin = { group = "com.android.tools.build", name = "gradle", version.ref = "agp" }
 kotlinGradlePlugin = { group = "org.jetbrains.kotlin", name = "kotlin-gradle-plugin", version.ref = "kotlin" }
 core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "coroutines" }
-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
 serializationJson = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "serializationJson" }
 
 #Tests
@@ -74,6 +72,3 @@ agp-library = { id = "com.android.library" }
 grgit = { id = "org.ajoberstar.grgit", version.ref = "grgit" }
 kotlin-android = { id = "org.jetbrains.kotlin.android" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
-
-[bundles]
-coroutines = ["coroutines-core", "coroutines-android"]

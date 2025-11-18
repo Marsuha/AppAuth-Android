@@ -13,8 +13,9 @@
  */
 package net.openid.appauth
 
+import android.annotation.SuppressLint
+import android.app.Activity
 import android.os.Bundle
-import androidx.appcompat.app.AppCompatActivity
 import net.openid.appauth.AuthorizationManagementActivity.Companion.createResponseHandlingIntent
 
 /**
@@ -40,9 +41,10 @@ import net.openid.appauth.AuthorizationManagementActivity.Companion.createRespon
  *
  * ```
  */
-class RedirectUriReceiverActivity : AppCompatActivity() {
-    public override fun onCreate(savedInstanceBundle: Bundle?) {
-        super.onCreate(savedInstanceBundle)
+@SuppressLint("RestrictedApi")
+class RedirectUriReceiverActivity : Activity() {
+    public override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
 
         // while this does not appear to be achieving much, handling the redirect in this way
         // ensures that we can remove the browser tab from the back stack. See the documentation

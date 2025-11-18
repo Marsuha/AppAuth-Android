@@ -104,22 +104,25 @@
                     android:orientation="horizontal">
                     <Button
                         android:id="@+id/refresh_token"
-                        android:layout_width="wrap_content"
+                        android:layout_width="0dp"
                         android:layout_height="wrap_content"
+                        android:layout_weight="1.0"
                         android:text="@string/refresh_token"
                         style="@style/Widget.AppCompat.Button"/>
 
                     <Button
                         android:id="@+id/view_profile"
-                        android:layout_width="wrap_content"
+                        android:layout_width="0dp"
                         android:layout_height="wrap_content"
+                        android:layout_weight="1.0"
                         android:text="@string/view_profile"
                         style="@style/Widget.AppCompat.Button" />
 
                     <Button
                         android:id="@+id/sign_out"
-                        android:layout_width="wrap_content"
+                        android:layout_width="0dp"
                         android:layout_height="wrap_content"
+                        android:layout_weight="1.0"
                         android:text="@string/sign_out"
                         style="@style/Widget.AppCompat.Button.Colored"/>
                 </LinearLayout>
