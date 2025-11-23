@@ -33,11 +33,18 @@ import net.openid.appauth.TokenResponse
  * This stores the instance in a shared preferences file, and provides thread-safe access and
  * mutation.
  */
-class AuthStateManager private constructor(context: Context) {
-    private val prefs: SharedPreferences =
-        context.getSharedPreferences(STORE_NAME, Context.MODE_PRIVATE)
+object AuthStateManager {
+    private const val TAG = "AuthStateManager"
+    private const val STORE_NAME = "AuthState"
+    private const val KEY_STATE = "state"
+    private lateinit var prefs: SharedPreferences
     private val mutex = Mutex()
     private var currentAuthState: AuthState? = null
+
+    fun init(context: Context): AuthStateManager {
+        prefs = context.applicationContext.getSharedPreferences(STORE_NAME, Context.MODE_PRIVATE)
+        return this
+    }
 
     @AnyThread
     suspend fun getCurrent(): AuthState {
@@ -59,45 +66,41 @@ class AuthStateManager private constructor(context: Context) {
         state
     }
 
+    private suspend fun updateState(action: (AuthState) -> Unit): AuthState {
+        val currentState = getCurrent()
+        action(currentState)
+        return replace(currentState)
+    }
+
     @AnyThread
     suspend fun updateAfterAuthorization(
         response: AuthorizationResponse?,
         ex: AuthorizationException?
-    ): AuthState {
-        val current = getCurrent()
-        current.update(response, ex)
-        return replace(current)
-    }
+    ): AuthState = updateState { it.update(response, ex) }
 
     @AnyThread
     suspend fun updateAfterTokenResponse(
         response: TokenResponse?,
         ex: AuthorizationException?
-    ): AuthState {
-        val current = getCurrent()
-        current.update(response, ex)
-        return replace(current)
-    }
+    ): AuthState = updateState { it.update(response, ex) }
 
     @AnyThread
     suspend fun updateAfterRegistration(
         response: RegistrationResponse?,
         ex: AuthorizationException?
     ): AuthState {
-        val current = getCurrent()
-        if (ex != null) return current
-        current.update(response)
-        return replace(current)
+        if (ex != null) return getCurrent()
+        return updateState { it.update(response) }
     }
 
     private fun readState(): AuthState {
         val currentState = prefs.getString(KEY_STATE, null) ?: return AuthState()
 
-        try {
-            return AuthState.fromJsonString(currentState)
+        return try {
+            AuthState.fromJsonString(currentState)
         } catch (_: IllegalArgumentException) {
             Log.w(TAG, "Failed to deserialize stored auth state - discarding")
-            return AuthState()
+            AuthState()
         }
     }
 
@@ -107,26 +110,6 @@ class AuthStateManager private constructor(context: Context) {
                 remove(KEY_STATE)
             } else {
                 putString(KEY_STATE, state.asJsonString)
-            }
-        }
-    }
-
-    companion object {
-        @Volatile
-        private var INSTANCE: AuthStateManager? = null
-
-        private const val TAG = "AuthStateManager"
-
-        private const val STORE_NAME = "AuthState"
-        private const val KEY_STATE = "state"
-
-        @JvmStatic
-        @AnyThread
-        fun getInstance(context: Context): AuthStateManager {
-            return INSTANCE ?: synchronized(this) {
-                INSTANCE ?: AuthStateManager(context.applicationContext).also {
-                    INSTANCE = it
-                }
             }
         }
     }

@@ -7,6 +7,7 @@ plugins {
     id("android-common")
     id("style")
     alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.compose.compiler)
 }
 
 android {
@@ -18,8 +19,8 @@ android {
         vectorDrawables.useSupportLibrary = true
 
         // Make sure this is consistent with the redirect URI used in res/raw/auth_config.json,
-        // or specify additional redirect URIs in AndroidManifest.xml
-        manifestPlaceholders["appAuthRedirectScheme"] = "net.openid.appauthdemo"
+        // or specify additional redirect URI in AndroidManifest.xml
+        manifestPlaceholders["appAuthRedirectScheme"] = "com.googleusercontent.apps.732040948859-qbcl172b0c688mld30ndsp2csorii8vo"
     }
 
     signingConfigs {
@@ -43,6 +44,14 @@ android {
             signingConfig = signingConfigs.getByName("debugAndRelease")
         }
     }
+
+    buildFeatures {
+        compose = true
+    }
+
+    compileOptions {
+        isCoreLibraryDesugaringEnabled = true
+    }
 }
 
 kotlin {
@@ -52,14 +61,19 @@ kotlin {
 }
 
 dependencies {
+    coreLibraryDesugaring(libs.desugar.jdk.libs)
     implementation(project(":library"))
-    implementation(libs.appcompat)
     implementation(libs.annotation)
-    implementation(libs.material)
-    implementation(libs.glide)
     implementation(libs.okio)
-    implementation(libs.joda.time)
     implementation(libs.core.ktx)
+    implementation(platform(libs.compose.bom))
+    implementation(libs.activity.compose)
+    implementation(libs.compose.material3)
+    implementation(libs.lifecycle.runtime.compose)
+    implementation(libs.lifecycle.viewmodel.compose)
+    debugImplementation(libs.compose.ui.tooling)
+    debugImplementation(libs.compose.ui.tooling.preview)
+    implementation(libs.coil.compose)
 
-    annotationProcessor(libs.compiler.glide)
+    androidTestImplementation(platform(libs.compose.bom))
 }
