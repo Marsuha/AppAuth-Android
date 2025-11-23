@@ -11,7 +11,7 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.openid.appauthdemo
+package net.openid.appauthdemo.ui
 
 import android.annotation.SuppressLint
 import android.app.Application
@@ -60,13 +60,16 @@ import net.openid.appauth.browser.BrowserDescriptor
 import net.openid.appauth.browser.BrowserMatcher
 import net.openid.appauth.browser.BrowserSelector
 import net.openid.appauth.browser.ExactBrowserMatcher
-import net.openid.appauthdemo.LoginActivity.Companion.EXTRA_FAILED
+import net.openid.appauthdemo.AuthStateManager
+import net.openid.appauthdemo.Configuration
+import net.openid.appauthdemo.R
+import net.openid.appauthdemo.ui.AppAuthActivity.Companion.EXTRA_FAILED
 import okio.buffer
 import okio.source
 import java.io.IOException
 import java.nio.charset.Charset
 
-class LoginViewModel(application: Application) : AndroidViewModel(application) {
+class AppAuthViewModel(application: Application) : AndroidViewModel(application) {
     private val authStateManager by lazy { AuthStateManager.init(application) }
     private val configuration by lazy { Configuration.getInstance(application) }
     private val authService: AuthorizationService by lazy {
@@ -240,10 +243,10 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
             _uiState.update { MainState.Loading("Making authorization request") }
 
             if (currentState.isPendingIntentMode) {
-                val completionIntent = Intent(context, LoginActivity::class.java).apply {
+                val completionIntent = Intent(context, AppAuthActivity::class.java).apply {
                     addFlags(FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
                 }
-                val cancelIntent = Intent(context, LoginActivity::class.java).apply {
+                val cancelIntent = Intent(context, AppAuthActivity::class.java).apply {
                     putExtra(EXTRA_FAILED, true)
                     addFlags(FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
                 }

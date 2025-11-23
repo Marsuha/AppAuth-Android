@@ -11,7 +11,7 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.openid.appauthdemo
+package net.openid.appauthdemo.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -39,6 +39,7 @@ import coil.compose.AsyncImage
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import net.openid.appauthdemo.R
 import net.openid.appauthdemo.ui.theme.AppAuthDemoTheme
 import java.time.Instant
 import java.time.ZoneId

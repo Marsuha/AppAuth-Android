@@ -11,7 +11,7 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.openid.appauthdemo
+package net.openid.appauthdemo.ui
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
@@ -45,6 +45,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import net.openid.appauth.browser.AnyBrowserMatcher
+import net.openid.appauthdemo.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

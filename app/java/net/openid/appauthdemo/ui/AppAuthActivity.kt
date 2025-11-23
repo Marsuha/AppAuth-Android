@@ -11,7 +11,7 @@
  * express or implied. See the License for the 'specific language governing permissions and
  * limitations under the License.
  */
-package net.openid.appauthdemo
+package net.openid.appauthdemo.ui
 
 import android.content.Intent
 import android.os.Bundle
@@ -47,11 +47,12 @@ import androidx.compose.ui.unit.dp
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import net.openid.appauth.browser.AnyBrowserMatcher
+import net.openid.appauthdemo.R
 import net.openid.appauthdemo.ui.theme.AppAuthDemoTheme
 
-class LoginActivity : ComponentActivity() {
+class AppAuthActivity : ComponentActivity() {
 
-    private val viewModel: LoginViewModel by viewModels()
+    private val viewModel: AppAuthViewModel by viewModels()
 
     private val authResultLauncher = registerForActivityResult(StartActivityForResult()) { result ->
         result.data?.let {
