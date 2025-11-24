@@ -1,21 +1,34 @@
-# AppAuth for Android
+![AppAuth for Android](https://rawgit.com/openid/AppAuth-Android/master/appauth_lockup.svg)
 
-[![Build Status](https://github.com/openid/AppAuth-Android/workflows/Android%20CI/badge.svg)](https://github.com/openid/AppAuth-Android/actions)
-[![Maven Central](https://img.shields.io/maven-central/v/net.openid/appauth.svg?label=maven-central)](https://search.maven.org/search?q=g:net.openid%20a:appauth)
+[![Download](https://img.shields.io/maven-central/v/net.openid/appauth)](https://search.maven.org/search?q=g:net.openid%20appauth)
+[![Javadocs](http://javadoc.io/badge/net.openid/appauth.svg)](http://javadoc.io/doc/net.openid/appauth)
+[![Build Status](https://github.com/openid/AppAuth-Android/actions/workflows/build.yml/badge.svg)](https://github.com/openid/AppAuth-Android/actions/workflows/build.yml)
+[![codecov.io](https://codecov.io/github/openid/AppAuth-Android/coverage.svg?branch=master)](https://codecov.io/github/openid/AppAuth-Android?branch=master)
 
-AppAuth for Android is a client SDK for communicating with OAuth 2.0 and
-OpenID Connect providers. It strives to directly map the requests and responses
-of those specifications, while following the idiomatic style of the implementation
-language. In addition to mapping the raw protocol flows, convenience methods are
-available to assist with common tasks like performing an action with fresh tokens.
+AppAuth for Android is a client SDK for communicating with
+[OAuth 2.0](https://tools.ietf.org/html/rfc6749) and
+[OpenID Connect](http://openid.net/specs/openid-connect-core-1_0.html) providers.
+It strives to
+directly map the requests and responses of those specifications, while following
+the idiomatic style of the implementation language. In addition to mapping the
+raw protocol flows, convenience methods are available to assist with common
+tasks like performing an action with fresh tokens.
 
-It follows the best practices set out in [RFC 8252 - OAuth 2.0 for Native
-Apps](https://tools.ietf.org/html/rfc8252) including using
+The library follows the best practices set out in
+[RFC 8252 - OAuth 2.0 for Native Apps](https://tools.ietf.org/html/rfc8252),
+including using
 [Custom Tabs](https://developer.chrome.com/multidevice/android/customtabs)
-for the auth request. The library is also supported for
-[Enterprise use on ChromeOS](https://developer.android.com/topic/arc/sso-for-enterprise-in-chromeos).
-A talk by one of the authors of AppAuth (at Google, for Google employees, but
-made public) can be found here:
+for authorization requests. For this reason,
+`WebView` is explicitly *not* supported due to usability and security reasons.
+
+The library also supports the [PKCE](https://tools.ietf.org/html/rfc7636)
+extension to OAuth which was created to secure authorization codes in public
+clients when custom URI scheme redirects are used. The library is friendly to
+other extensions (standard or otherwise) with the ability to handle additional
+parameters in all protocol requests and responses.
+
+A talk providing an overview of using the library for enterprise single sign-on (produced by
+Google) can be found here:
 [Enterprise SSO with Chrome Custom Tabs](https://www.youtube.com/watch?v=DdQTXrk6YTk).
 
 ## Download
@@ -48,9 +61,9 @@ build and configure this app, see the
 ## Conceptual overview
 
 AppAuth encapsulates the authorization state of the user in the
-[net.openid.appauth.AuthState](https://github.com/openid/AppAuth-Android/blob/master/library/java/net/openid/appauth/AuthState.java)
+[net.openid.appauth.AuthState](https://github.com/openid/AppAuth-Android/blob/master/library/java/net/openid/appauth/AuthState.kt)
 class, and communicates with an authorization server through the use of the
-[net.openid.appauth.AuthorizationService](https://github.com/openid/AppAuth-Android/blob/master/library/java/net/openid/appauth/AuthorizationService.java)
+[net.openid.appauth.AuthorizationService](https://github.com/openid/AppAuth-Android/blob/master/library/java/net/openid/appauth/AuthorizationService.kt)
 class. AuthState is designed to be easily persistable as a JSON string, using
 the storage mechanism of your choice (e.g.
 [SharedPreferences](https://developer.android.com/training/basics/data-storage/shared-preferences.html),
@@ -64,24 +77,24 @@ in interacting with a wide variety of OAuth2 and OpenID Connect implementations.
 
 Authorizing the user occurs via the user's web browser, and the request
 is described using instances of
-[AuthorizationRequest](https://github.com/openid/AppAuth-Android/blob/master/library/java/net/openid/appauth/AuthorizationRequest.java).
+[AuthorizationRequest](https://github.com/openid/AppAuth-Android/blob/master/library/java/net/openid/appauth/AuthorizationRequest.kt).
 The request is dispatched using
-`performAuthorizationRequest()` on an AuthorizationService instance, and the response (an
-[AuthorizationResponse](https://github.com/openid/AppAuth-Android/blob/master/library/java/net/openid/appauth/AuthorizationResponse.java) instance) will be dispatched to the activity of your choice,
+[performAuthorizationRequest()](https://github.com/openid/AppAuth-Android/blob/master/library/java/net/openid/appauth/AuthorizationService.kt#L159) on an AuthorizationService instance, and the response (an
+[AuthorizationResponse](https://github.com/openid/AppAuth-Android/blob/master/library/java/net/openid/appauth/AuthorizationResponse.kt) instance) will be dispatched to the activity of your choice,
 expressed via an Intent.
 
 Token requests, such as obtaining a new access token using a refresh token,
 follow a similar pattern:
-[TokenRequest](https://github.com/openid/AppAuth-Android/blob/master/library/java/net/openid/appauth/TokenRequest.java) instances are dispatched using
-`performTokenRequest()` on an AuthorizationService instance, and a
-[TokenResponse](https://github.com/openid/AppAuth-Android/blob/master/library/java/net/openid/appauth/TokenResponse.java)
+[TokenRequest](https://github.com/openid/AppAuth-Android/blob/master/library/java/net/openid/appauth/TokenRequest.kt) instances are dispatched using
+[performTokenRequest()](https://github.com/openid/AppAuth-Android/blob/master/library/java/net/openid/appauth/AuthorizationService.kt#L252) on an AuthorizationService instance, and a
+[TokenResponse](https://github.com/openid/AppAuth-Android/blob/master/library/java/net/openid/appauth/TokenResponse.kt)
 instance is returned via a callback.
 
 Responses can be provided to the
-`update()`
+[update()](https://github.com/openid/AppAuth-Android/blob/master/library/java/net/openid/appauth/AuthState.kt#L367)
 methods on AuthState in order to track and persist changes to the authorization
 state. Once in an authorized state, the
-`performActionWithFreshTokens()`
+[performActionWithFreshTokens()](https://github.com/openid/AppAuth-Android/blob/master/library/java/net/openid/appauth/AuthState.kt#L449)
 method on AuthState can be used to automatically refresh access tokens
 as necessary before performing actions that require valid tokens.
 
@@ -110,7 +123,7 @@ with the result to help with tracking the state of the flow.
 
 First, AppAuth must be instructed how to interact with the authorization
 service. This can be done either by directly creating an
-[AuthorizationServiceConfiguration](https://github.com/openid/AppAuth-Android/blob/master/library/java/net/openid/appauth/AuthorizationServiceConfiguration.java#L102)
+[AuthorizationServiceConfiguration](https://github.com/openid/AppAuth-Android/blob/master/library/java/net/openid/appauth/AuthorizationServiceConfiguration.kt#L102)
 instance, or by retrieving an OpenID Connect discovery document.
 
 Directly specifying an AuthorizationServiceConfiguration involves
@@ -120,24 +133,23 @@ registration" for more info):
 
 ```kotlin
 val serviceConfig = AuthorizationServiceConfiguration(
-    Uri.parse("https://idp.example.com/auth"), // authorization endpoint
-    Uri.parse("https://idp.example.com/token")  // token endpoint
+    "https://idp.example.com/auth".toUri(), // authorization endpoint
+    "https://idp.example.com/token".toUri() // token endpoint
 )
 ```
 
 Where available, using an OpenID Connect discovery document is preferable:
 
 ```kotlin
-AuthorizationServiceConfiguration.fetchFromIssuer(
-    Uri.parse("https://idp.example.com")
-) { serviceConfiguration, ex ->
-    if (ex != null) {
-        Log.e(TAG, "failed to fetch configuration")
-        return@fetchFromIssuer
-    }
-
-    // use serviceConfiguration as needed
+val authServiceConfig = try {
+    AuthorizationServiceConfiguration.fetchFromIssuer(
+        "https://idp.example.com".toUri()
+    )
+} catch (ex: AuthorizationException) {
+    Log.e(TAG, "failed to fetch configuration", ex)
 }
+
+// use serviceConfiguration as needed
 ```
 
 This will attempt to download a discovery document from the standard location
@@ -147,11 +159,15 @@ document for your IDP is in some other non-standard location, you can instead
 provide the full URI as follows:
 
 ```kotlin
-AuthorizationServiceConfiguration.fetchFromUrl(
-    Uri.parse("https://idp.example.com/exampletenant/openid-config")
-) { serviceConfiguration, ex ->
-    // ...
+val authServiceConfig = try {
+    AuthorizationServiceConfiguration.fetchFromUrl(
+        "https://idp.example.com/exampletenant/openid-config".toUri()
+    )
+} catch (ex: AuthorizationException) {
+    Log.e(TAG, "failed to fetch configuration", ex)
 }
+
+// use serviceConfiguration as needed
 ```
 
 If desired, this configuration can be used to seed an AuthState instance,
@@ -192,57 +208,43 @@ val authRequest = authRequestBuilder
 
 This request can then be dispatched using one of two approaches.
 
-The recommended approach is to use Android's
-[`ActivityResultLauncher`](https://developer.android.com/training/basics/intents/result),
-which is the modern replacement for `startActivityForResult`. First, register a
-launcher in your Activity or Fragment:
+a `startActivityForResult` call using an Intent returned from the
+`AuthorizationService`, or by calling `performAuthorizationRequest` and
+providing pending intent for completion and cancelation handling activities.
+
+The **`registerForActivityResult`** approach is modern and recommended. This usually involves registering a launcher in your Activity/Fragment scope:
 
 ```kotlin
-val authorizationLauncher = registerForActivityResult(
-    ActivityResultContracts.StartActivityForResult()
-) { result ->
-    val data = result.data
-    if (result.resultCode == Activity.RESULT_OK && data != null) {
-        val response = AuthorizationResponse.fromIntent(data)
-        val ex = AuthorizationException.fromIntent(data)
-        // process the response or exception
-        if (response != null) {
-            // authorization succeeded
-            updateAuthState(response, ex)
-        }
-    } else {
-        // Authorization flow failed or was canceled by the user
-    }
-}
-```
+// Example registration in your Activity/Fragment:
+// val authLauncher = registerForActivityResult(StartActivityForResult()) { result ->
+//     val data = result.data
+//     if (result.resultCode == Activity.RESULT_OK && data != null) {
+//         val resp = AuthorizationResponse.fromIntent(data)
+//         val ex = AuthorizationException.fromIntent(data)
+//         // ... process resp or ex ...
+//     } else {
+//         // ... handle cancelation/failure ...
+//     }
+// }
 
-Then, create an `AuthorizationService` and use it to launch the authorization intent:
-
-```kotlin
-fun doAuthorization() {
-    val authService = AuthorizationService(this)
-    val authIntent = authService.getAuthorizationRequestIntent(authRequest)
-    authorizationLauncher.launch(authIntent)
+// To launch the request:
+private fun doAuthorization() {
+  val authService = AuthorizationService(this)
+  val authIntent = authService.getAuthorizationRequestIntent(authRequest)
+  authLauncher.launch(authIntent)
 }
 ```
 
 If instead you wish to directly transition to another activity on completion
-or cancellation, you can use `performAuthorizationRequest` with `PendingIntent`s:
+or cancelation, you can use `performAuthorizationRequest`:
 
 ```kotlin
 val authService = AuthorizationService(this)
 
-val completionIntent = Intent(this, MyAuthCompleteActivity::class.java)
-val cancelIntent = Intent(this, MyAuthCanceledActivity::class.java)
-
-val completionPendingIntent = PendingIntent.getActivity(this, 0, completionIntent, PendingIntent.FLAG_IMMUTABLE)
-val cancelPendingIntent = PendingIntent.getActivity(this, 0, cancelIntent, PendingIntent.FLAG_IMMUTABLE)
-
-
 authService.performAuthorizationRequest(
     authRequest,
-    completionPendingIntent,
-    cancelPendingIntent
+    PendingIntent.getActivity(this, 0, Intent(this, MyAuthCompleteActivity::class.java), 0),
+    PendingIntent.getActivity(this, 0, Intent(this, MyAuthCanceledActivity::class.java), 0)
 )
 ```
 
@@ -269,8 +271,7 @@ or if you already have another handler for that scheme - so just use something
 else.
 
 When a custom scheme is used, AppAuth can be easily configured to capture
-all redirects using this custom scheme through a manifest placeholder in your
-`build.gradle` file:
+all redirects using this custom scheme through a manifest placeholder:
 
 ```groovy
 android.defaultConfig.manifestPlaceholders = [
@@ -285,8 +286,7 @@ AndroidManifest.xml:
 ```xml
 <activity
         android:name="net.openid.appauth.RedirectUriReceiverActivity"
-        tools:node="replace"
-        android:exported="true">
+        tools:node="replace">
     <intent-filter>
         <action android:name="android.intent.action.VIEW"/>
         <category android:name="android.intent.category.DEFAULT"/>
@@ -301,8 +301,8 @@ approach (modifying your AndroidManifest.xml) is used:
 
 ```xml
 <activity
-        android:name=".ui.login.LoginActivity"
-        android:exported="true">
+        android:name="net.openid.appauth.RedirectUriReceiverActivity"
+        tools:node="replace">
     <intent-filter>
         <action android:name="android.intent.action.VIEW"/>
         <category android:name="android.intent.category.DEFAULT"/>
@@ -314,141 +314,421 @@ approach (modifying your AndroidManifest.xml) is used:
 </activity>
 ```
 
-In this case, you will also need to configure the activity's launch mode to
-be `singleTask` in your `AndroidManifest.xml`, to ensure that a new instance of
-the activity is not created for every authorization response.
+HTTPS redirects can be secured by configuring the redirect URI as an
+[app link](https://developer.android.com/training/app-links/index.html) in
+Android M and above. We recommend that a fallback page be configured at
+the same address to forward authorization responses to your app via a custom
+scheme, for older Android devices.
 
-```xml
-<activity
-    android:name=".ui.login.LoginActivity"
-    android:launchMode="singleTask">
-    ...
-</activity>
-```
+#### Handling the authorization response
 
-Finally, you need to forward the intent to AppAuth in your activity:
+Upon completion of the authorization flow, the completion Intent provided to
+performAuthorizationRequest will be triggered. The authorization response
+is provided to this activity via Intent extra data, which can be extracted
+using the `fromIntent()` methods on AuthorizationResponse and
+AuthorizationException respectively:
 
 ```kotlin
-override fun onNewIntent(intent: Intent) {
-    super.onNewIntent(intent)
-    // forward the intent to your authorization handling code
+override fun onCreate(b: Bundle?) {
+  super.onCreate(b)
+
+  val resp = AuthorizationResponse.fromIntent(intent)
+  val ex = AuthorizationException.fromIntent(intent)
+  if (resp != null) {
+    // authorization completed
+  } else {
+    // authorization failed, check ex for more details
+  }
+  // ...
 }
 ```
 
-### Handling the authorization response
-
-This response contains the authorization code, and optionally the original
-request and an error. The authorization state can be updated with this response:
+The response can be provided to the AuthState instance for easy persistence
+and further processing:
 
 ```kotlin
-fun updateAuthState(response: AuthorizationResponse, ex: AuthorizationException?) {
-    authState.update(response, ex)
-    if (response != null) {
-        // authorization successful
-        exchangeAuthorizationCode(response)
-    }
-}
+authState.update(resp, ex)
 ```
 
-If `performAuthorizationRequest` with a `PendingIntent` was used instead of an `ActivityResultLauncher`, then
-the `Intent` that is delivered to the completion handler activity will contain the
-response. The response and exception can be extracted from this intent as follows:
+If the full redirect URI is required in order to extract additional information
+that AppAuth does not provide, this is also provided to your activity:
 
 ```kotlin
-override fun onCreate(savedInstanceState: Bundle?) {
-    super.onCreate(savedInstanceState)
-    val response = AuthorizationResponse.fromIntent(intent)
-    val ex = AuthorizationException.fromIntent(intent)
-
-    if (response != null) {
-      // authorization succeeded, exchange the auth code for the token
-      authState.update(response, ex)
-      exchangeAuthorizationCode(response)
-    }
+override fun onCreate(b: Bundle?) {
+  super.onCreate(b)
+  // ...
+  val redirectUri = intent.data
+  // ...
 }
 ```
 
 ### Exchanging the authorization code
 
-Given a successful authorization response, a token request can be made to
-exchange the authorization code for a refresh and/or access token.
+Given a successful authorization response carrying an authorization code,
+a token request can be made to exchange the code for a refresh token:
 
 ```kotlin
-fun exchangeAuthorizationCode(authorizationResponse: AuthorizationResponse) {
-    val clientAuthentication: ClientAuthentication
-    try {
-        clientAuthentication = authState.clientAuthentication
-    } catch (e: ClientAuthentication.UnsupportedAuthenticationMethod) {
-        // This method is not supported by the authorization server
-        return
-    }
+val tokenResponse = try {
+    authService.performTokenRequest(resp.createTokenExchangeRequest())
+} catch (ex: AuthorizationException) {
+    // authorization failed, check ex for more details
+}
+// exchange succeeded
+```
 
-    authService.performTokenRequest(
-        authorizationResponse.createTokenExchangeRequest(),
-        clientAuthentication
-    ) { response, ex ->
-        if (response != null) {
-            // exchange succeeded
-            authState.update(response, ex)
-        } else {
-            // authorization failed, check ex for more details
+The token response can also be used to update an AuthState instance:
+
+```kotlin
+authState.update(resp, ex)
+```
+
+### Using access tokens
+
+Finally, the retrieved access token can be used to interact with a resource
+server. This can be done directly, by extracting the access token from a
+token response. However, in most cases, it is simpler to use the
+`performActionWithFreshTokens` utility method provided by AuthState:
+
+```kotlin
+authState.performActionWithFreshTokens(service) { result ->
+    when (result) {
+        is AuthState.FreshTokenResult.Success -> {
+            // use the access token to do something ...
+            val accessToken = result.accessToken
+            val idToken = result.idToken
+        }
+        is AuthState.FreshTokenResult.Failure -> {
+            // negotiation for fresh tokens failed, check result.exception for more details
         }
     }
 }
 ```
 
-A `ClientAuthentication` instance can be created through a variety of
-methods defined in the `net.openid.appauth.ClientAuthentication` class.
-This class is used to specify how a client will authenticate to the token
-endpoint. RFC 6749 defines
-[two types of clients](https://tools.ietf.org/html/rfc6749#section-2.1):
-confidential and public. Public clients cannot securely keep a secret, whereas
-confidential clients can. The simplest and most common form of authentication
-for public clients is to not authenticate at all, but some providers require
-a pre-registered client ID:
+This also updates the AuthState object with current access, id, and refresh tokens.
+If you are storing your AuthState in persistent storage, you should write the updated
+copy in the callback to this method.
+
+### Ending current session
+
+Given you have a logged in session and you want to end it. In that case you need to get:
+- `AuthorizationServiceConfiguration`
+- valid Open Id Token that you should get after authentication
+- End of session URI that should be provided within you OpenId service config
+
+First you have to build EndSessionRequest
 
 ```kotlin
-// No client secret, but client ID is sent
-val clientAuth: ClientAuthentication = NoClientAuthentication.INSTANCE
+val endSessionRequest = EndSessionRequest.Builder(authorizationServiceConfiguration)
+    .setIdTokenHint(idToken)
+    .setPostLogoutRedirectUri(endSessionRedirectUri)
+    .build()
+```
+This request can then be dispatched using one of two approaches.
+
+The **`registerForActivityResult`** approach is modern and recommended. This usually involves registering a launcher in your Activity/Fragment scope:
+
+```kotlin
+// Example registration in your Activity/Fragment:
+// val endSessionLauncher = registerForActivityResult(StartActivityForResult()) { result ->
+//     val data = result.data
+//     if (result.resultCode == Activity.RESULT_OK && data != null) {
+//         val resp = EndSessionResponse.fromIntent(data)
+//         val ex = AuthorizationException.fromIntent(data)
+//         // ... process resp or ex ...
+//     } else {
+//         // ... handle cancelation/failure ...
+//     }
+// }
+
+// To launch the request:
+private fun endSession() {
+  val authService = AuthorizationService(this)
+  val endSessionIntent = authService.getEndSessionRequestIntent(endSessionRequest)
+  endSessionLauncher.launch(endSessionIntent)
+}
+```
+If instead you wish to directly transition to another activity on completion or cancelation,
+you can use `performEndSessionRequest`:
+
+```kotlin
+val authService = AuthorizationService(this)
+
+authService.performEndSessionRequest(
+    endSessionRequest,
+    PendingIntent.getActivity(this, 0, Intent(this, MyAuthCompleteActivity::class.java), 0),
+    PendingIntent.getActivity(this, 0, Intent(this, MyAuthCanceledActivity::class.java), 0)
+)
 ```
 
-If a client secret must be used, then this is also possible, though this is
-**not recommended** for native apps as it requires shipping a secret inside your app, which can be extracted.
-If you must use a client secret, you should take steps to obfuscate it as much
-as possible (e.g. using ProGuard and runtime encryption). A better
-alternative is to use dynamic client registration to create a new client, with
-a unique secret, for each app instance.
+End session flow will also work involving browser mechanism that is described in authorization
+mechanism session.
+Handling response mechanism with transition to another activity should be as follows:
 
-```kotlin
-val clientAuth = ClientSecretBasic(MY_CLIENT_SECRET)
-```
+ ```kotlin
+override fun onCreate(b: Bundle?) {
+  super.onCreate(b)
 
-### Making requests with fresh tokens
-
-`AuthState` can be used to perform actions with a fresh (non-expired) access
-token. This will transparently refresh the access token if it has expired,
-without any additional effort. The result of any refresh requests will be
-persisted to the `AuthState` instance automatically.
-
-```kotlin
-authState.performActionWithFreshTokens(authService) { accessToken, idToken, ex ->
-    if (ex != null) {
-        // negotiation for fresh tokens failed, check ex for more details
-        return@performActionWithFreshTokens
-    }
-
-    // use the access token to do something useful, e.g.
-    // making a request to a resource server
+  val resp = EndSessionResponse.fromIntent(intent)
+  val ex = AuthorizationException.fromIntent(intent)
+  if (resp != null) {
+    // authorization completed
+  } else {
+    // authorization failed, check ex for more details
+  }
+  // ...
 }
 ```
 
-This action can be simplified further through the use of an `AuthState.AuthStateAction`,
-which can be implemented and passed to `performActionWithFreshTokens`.
+### AuthState persistence
 
-## More information
+Instances of `AuthState` keep track of the authorization and token
+requests and responses. This is the only object that you need to persist to
+retain the authorization state of the session. Typically, one would do this by
+storing the authorization state in SharedPreferences or some other persistent
+store private to the app:
 
-- The [demo app](https://github.com/openid/AppAuth-Android/tree/master/app)
-- [Javadoc](https://openid.github.io/AppAuth-Android/)
-- [RFC 8252 - OAuth 2.0 for Native Apps](https://tools.ietf.org/html/rfc8252)
-- [Building secure Android apps with AppAuth (Curity)
-  ](https://curity.io/resources/learn/android-appauth-guide/)
+```kotlin
+fun readAuthState(): AuthState {
+  val authPrefs = getSharedPreferences("auth", MODE_PRIVATE)
+  val stateJson = authPrefs.getString("stateJson", null)
+  return if (stateJson != null) {
+    AuthState.fromJsonString(stateJson)
+  } else {
+    AuthState()
+  }
+}
+
+fun writeAuthState(state: AuthState) {
+  getSharedPreferences("auth", MODE_PRIVATE).edit()
+      .putString("stateJson", state.asJsonString)
+      .apply()
+}
+```
+
+The demo app has an [AuthStateManager](https://github.com/openid/AppAuth-Android/blob/master/app/java/net/openid/appauthdemo/AuthStateManager.kt)
+type which demonstrates this in more detail.
+
+## Advanced configuration
+
+AppAuth provides some advanced configuration options via
+[AppAuthConfiguration](https://github.com/openid/AppAuth-Android/blob/master/library/java/net/openid/appauth/AppAuthConfiguration.kt)
+instances, which can be provided to
+[AuthorizationService](https://github.com/openid/AppAuth-Android/blob/master/library/java/net/openid/appauth/AuthorizationService.kt)
+during construction.
+
+### Controlling which browser is used for authorization
+
+Some applications require explicit control over which browsers can be used
+for authorization - for example, to require that Chrome be used for
+second factor authentication to work, or require that some custom browser
+is used for authentication in an enterprise environment.
+
+Control over which browsers can be used can be achieved by defining a
+[BrowserMatcher](https://github.com/openid/AppAuth-Android/blob/master/library/java/net/openid/appauth/browser/BrowserMatcher.kt), and supplying this to the builder of AppAuthConfiguration.
+A BrowserMatcher is suppled with a
+[BrowserDescriptor](https://github.com/openid/AppAuth-Android/blob/master/library/java/net/openid/appauth/browser/BrowserDescriptor.kt)
+instance, and must decide whether this browser is permitted for the
+authorization flow.
+
+By default, [AnyBrowserMatcher](https://github.com/openid/AppAuth-Android/blob/master/library/java/net/openid/appauth/browser/AnyBrowserMatcher.kt)
+is used.
+
+For your convenience, utility classes to help define a browser matcher are
+provided, such as:
+
+- [Browsers](https://github.com/openid/AppAuth-Android/blob/master/library/java/net/openid/appauth/browser/Browsers.kt):
+  contains a set of constants for the official package names and signatures
+  of Chrome, Firefox and Samsung SBrowser.
+- [VersionedBrowserMatcher](https://github.com/openid/AppAuth-Android/blob/master/library/java/net/openid/appauth/browser/VersionedBrowserMatcher.kt):
+  will match a browser if it has a matching package name and signature, and
+  a version number within a defined
+  [VersionRange](https://github.com/openid/AppAuth-Android/blob/master/library/java/net/openid/appauth/browser/VersionRange.kt). This class also provides some static instances for matching
+  Chrome, Firefox and Samsung SBrowser.
+- [BrowserAllowList](https://github.com/openid/AppAuth-Android/blob/master/library/java/net/openid/appauth/browser/BrowserAllowList.kt):
+  takes a list of BrowserMatcher instances, and will match a browser if any
+  of these child BrowserMatcher instances signals a match.
+- [BrowserDenyList](https://github.com/openid/AppAuth-Android/blob/master/library/java/net/openid/appauth/browser/BrowserDenyList.kt):
+  the inverse of BrowserAllowList - takes a list of browser matcher instances,
+  and will match a browser if it _does not_ match any of these child
+  BrowserMatcher instances.
+
+For instance, in order to restrict the authorization flow to using Chrome
+or SBrowser as a custom tab:
+
+```kotlin
+val appAuthConfig = appAuthConfiguration {
+    browserMatcher = BrowserAllowList(
+        VersionedBrowserMatcher.CHROME_CUSTOM_TAB,
+        VersionedBrowserMatcher.SAMSUNG_CUSTOM_TAB
+    )
+}
+
+val authService = AuthorizationService(context, appAuthConfig)
+```
+
+Or, to prevent the use of a buggy version of the custom tabs in
+Samsung SBrowser:
+
+```kotlin
+val appAuthConfig = appAuthConfiguration {
+    browserMatcher = BrowserDenyList(
+        VersionedBrowserMatcher(
+            Browsers.SBrowser.PACKAGE_NAME,
+            Browsers.SBrowser.SIGNATURE_SET,
+            true, // when this browser is used via a custom tab
+            VersionRange.atMost("5.3")
+        )
+    )
+}
+
+val authService = AuthorizationService(context, appAuthConfig)
+```
+
+### Customizing the connection builder for HTTP requests
+
+It can be desirable to customize how HTTP connections are made when performing
+token requests, for instance to use
+[certificate pinning](https://www.owasp.org/index.php/Certificate_and_Public_Key_Pinning)
+or to add additional trusted certificate authorities for an enterprise
+environment. This can be achieved in AppAuth by providing a custom
+[ConnectionBuilder](https://github.com/openid/AppAuth-Android/blob/master/library/java/net/openid/appauth/connectivity/ConnectionBuilder.kt)
+instance.
+
+For example, to custom the SSL socket factory used, one could do the following:
+
+```kotlin
+val appAuthConfig = appAuthConfiguration {
+    connectionBuilder = ConnectionBuilder { uri ->
+        val url = URL(uri.toString())
+        val connection = url.openConnection() as HttpURLConnection
+        (connection as? HttpsURLConnection)?.sslSocketFactory = MySocketFactory.getInstance()
+        connection
+    }
+}
+```
+
+### Issues with [ID Token](https://github.com/openid/AppAuth-Android/blob/master/library/java/net/openid/appauth/IdToken.kt#L118) validation
+
+ID Token validation was introduced in `0.8.0` but not all authorization servers or configurations support it correctly.
+
+- For testing environments [setSkipIssuerHttpsCheck](https://github.com/openid/AppAuth-Android/blob/master/library/java/net/openid/appauth/AppAuthConfiguration.kt#L129) can be used to bypass the fact the issuer needs to be HTTPS.
+
+```kotlin
+val appAuthConfig = appAuthConfiguration {
+    skipIssuerHttpsCheck = true
+}
+```
+
+- For services that don't support nonce[s] resulting in **IdTokenException** `Nonce mismatch` just set nonce to `null` on the `AuthorizationRequest`. Please consider **raising an issue** with your Identity Provider and removing this once it is fixed.
+
+```kotlin
+val authRequest = authRequestBuilder
+    .setNonce(null)
+    .build()
+```
+
+## Dynamic client registration
+
+AppAuth supports the
+[OAuth2 dynamic client registration protocol](https://tools.ietf.org/html/rfc7591).
+In order to dynamically register a client, create a
+[RegistrationRequest](https://github.com/openid/AppAuth-Android/blob/master/library/java/net/openid/appauth/RegistrationRequest.kt) and dispatch it using
+[performRegistrationRequest](https://github.com/openid/AppAuth-Android/blob/master/library/java/net/openid/appauth/AuthorizationService.kt#L278)
+on your AuthorizationService instance.
+
+The registration endpoint can either
+be defined directly as part of your
+[AuthorizationServiceConfiguration](https://github.com/openid/AppAuth-Android/blob/master/library/java/net/openid/appauth/AuthorizationServiceConfiguration.kt),
+or discovered from an OpenID Connect discovery document.
+
+```kotlin
+val registrationRequest = RegistrationRequest.Builder(
+    serviceConfig,
+    listOf(redirectUri))
+    .build()
+```
+
+Requests are dispatched with the help of `AuthorizationService`. As this
+request is asynchronous the response is passed to a callback:
+
+```kotlin
+val registrationResponse = try {
+    service.performRegistrationRequest(registrationRequest)
+} catch (ex: AuthorizationException) {
+    // registration failed, check ex for more details
+}
+
+val state = AuthState(registrationResponse)
+```
+
+## Utilizing client secrets (DANGEROUS)
+
+We _strongly recommend_ you avoid using static client secrets in your
+native applications whenever possible. Client secrets derived via a dynamic
+client registration are safe to use, but static client secrets can be easily
+extracted from your apps and allow others to impersonate your app and steal
+user data. If client secrets must be used by the OAuth2 provider you are
+integrating with, we strongly recommend performing the code exchange step
+on your backend, where the client secret can be kept hidden.
+
+Having said this, in some cases using client secrets is unavoidable. In these
+cases, a [ClientAuthentication](https://github.com/openid/AppAuth-Android/blob/master/library/java/net/openid/appauth/ClientAuthentication.kt)
+instance can be provided to AppAuth when performing a token request. This
+allows additional parameters (both HTTP headers and request body parameters) to
+be added to token requests. Two standard implementations of
+ClientAuthentication are provided:
+
+- [ClientSecretBasic](https://github.com/openid/AppAuth-Android/blob/master/library/java/net/openid/appauth/ClientSecretBasic.kt):
+  includes a client ID and client secret as an HTTP Basic Authorization header.
+- [ClientSecretPost](https://github.com/openid/AppAuth-Android/blob/master/library/java/net/openid/appauth/ClientSecretPost.kt):
+  includes a client ID and client secret as additional request parameters.
+
+So, in order to send a token request using HTTP basic authorization, one would
+write:
+
+```kotlin
+val clientAuth = ClientSecretBasic(MY_CLIENT_SECRET)
+val req: TokenRequest = /* ... */
+
+val tokenResponse = try {
+    authService.performTokenRequest(req, clientAuth)
+} catch (ex: AuthorizationException) {
+    // authorization failed, check ex for more details
+}
+```
+
+This can also be done when using `performActionWithFreshTokens` on AuthState:
+
+```kotlin
+val clientAuth = ClientSecretPost(MY_CLIENT_SECRET)
+authState.performActionWithFreshTokens(
+    authService,
+    clientAuth
+) { result ->
+    /* ... result handling ... */
+}
+```
+
+## Modifying or contributing to AppAuth
+
+This project requires the Android SDK for API level 25 (Nougat) to build,
+though the produced binaries only require API level 16 (Jellybean) to be
+used. We recommend that you fork and/or clone this repository to make
+modifications; downloading the source has been known to cause some developers
+problems.
+
+For contributors, see the additional instructions in
+[CONTRIBUTING.md](https://github.com/openid/AppAuth-Android/blob/master/CONTRIBUTING.md).
+
+### Building from the Command line
+
+AppAuth for Android uses Gradle as its build system. In order to build
+the library and app binaries, run `./gradlew assemble`.
+The library AAR files are output to `library/build/outputs/aar`, while the
+demo app is output to `app/build/outputs/apk`.
+In order to run the tests and code analysis, run `./gradlew check`.
+
+### Building from Android Studio
+
+In AndroidStudio, File -> New -> Import project. Select the root folder
+(the one with the `build.gradle` file).
