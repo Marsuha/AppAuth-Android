@@ -208,7 +208,7 @@ val authRequest = authRequestBuilder
 
 This request can then be dispatched using one of two approaches.
 
-a `startActivityForResult` call using an Intent returned from the
+a `registerForActivityResult` approach using an Intent returned from the
 `AuthorizationService`, or by calling `performAuthorizationRequest` and
 providing pending intent for completion and cancelation handling activities.
 
@@ -216,16 +216,16 @@ The **`registerForActivityResult`** approach is modern and recommended. This usu
 
 ```kotlin
 // Example registration in your Activity/Fragment:
-// val authLauncher = registerForActivityResult(StartActivityForResult()) { result ->
-//     val data = result.data
-//     if (result.resultCode == Activity.RESULT_OK && data != null) {
-//         val resp = AuthorizationResponse.fromIntent(data)
-//         val ex = AuthorizationException.fromIntent(data)
-//         // ... process resp or ex ...
-//     } else {
-//         // ... handle cancelation/failure ...
-//     }
-// }
+val authLauncher = registerForActivityResult(StartActivityForResult()) { result ->
+    val data = result.data
+    if (result.resultCode == Activity.RESULT_OK && data != null) {
+        val resp = AuthorizationResponse.fromIntent(data)
+        val ex = AuthorizationException.fromIntent(data)
+        // ... process resp or ex ...
+    } else {
+        // ... handle cancelation/failure ...
+    }
+}
 
 // To launch the request:
 private fun doAuthorization() {

@@ -24,7 +24,7 @@
         <!-- Main activity -->
         <!-- android:launchMode="singleTask" -->
         <activity
-            android:name=".ui.AppAuthActivity"
+            android:name=".AppAuthActivity"
             android:exported="true"
             android:theme="@style/AppTheme"
             android:windowSoftInputMode="stateHidden">

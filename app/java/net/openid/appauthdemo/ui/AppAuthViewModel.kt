@@ -60,10 +60,11 @@ import net.openid.appauth.browser.BrowserDescriptor
 import net.openid.appauth.browser.BrowserMatcher
 import net.openid.appauth.browser.BrowserSelector
 import net.openid.appauth.browser.ExactBrowserMatcher
+import net.openid.appauthdemo.AppAuthActivity
 import net.openid.appauthdemo.AuthStateManager
 import net.openid.appauthdemo.Configuration
 import net.openid.appauthdemo.R
-import net.openid.appauthdemo.ui.AppAuthActivity.Companion.EXTRA_FAILED
+import net.openid.appauthdemo.AppAuthActivity.Companion.EXTRA_FAILED
 import okio.buffer
 import okio.source
 import java.io.IOException
