@@ -21,7 +21,7 @@ runCatching {
 }
 
 project.extra.apply {
-    set("minSdkVersion", 21)
+    set("minSdkVersion", 23)
     set("compileSdkVersion", 36)
 }
 

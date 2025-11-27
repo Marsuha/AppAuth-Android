@@ -7,15 +7,16 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     alias(libs.plugins.agp.library)
-    `maven-publish`
-    signing
     id("android-common")
-    id("style")
+    //id("style")
     id("coverage")
-    id("javadoc")
     id("testdeps")
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.dokka)
+    id("dokka")
+    `maven-publish`
+    signing
 }
 
 val GROUP: String by project
@@ -36,13 +37,17 @@ val POM_DEVELOPER_URL: String by project
 
 group = GROUP
 version = rootProject.extra["versionName"] as String
-extra["archivesBaseName"] = "appauth"
+base.archivesName = "appauth"
 
 android {
     testOptions {
         unitTests {
             isIncludeAndroidResources = true
         }
+    }
+
+    publishing {
+        singleVariant("release")
     }
 }
 
@@ -67,10 +72,33 @@ artifacts {
     add("archives", javadocJar)
 }
 
-val archivesBaseName: String = extra["archivesBaseName"] as String
-
 publishing {
+    repositories {
+        maven {
+            name = "GitHubPackages"
+            url = uri("https://maven.pkg.github.com/Marsuha/AppAuth-Android")
+            credentials {
+                username = project.findProperty("gpr.user") as String? ?: System.getenv("USERNAME")
+                password = project.findProperty("gpr.key") as String? ?: System.getenv("TOKEN")
+            }
+        }
+    }
     publications {
+        register<MavenPublication>("GitHubPackagesRelease") {
+            groupId = GROUP
+            artifactId = POM_ARTIFACT_ID
+            version = rootProject.extra["versionName"] as String
+
+            //artifact("${layout.buildDirectory}/outputs/aar/appauth-release.aar")
+            artifact(sourcesJar)
+            artifact(javadocJar)
+
+            afterEvaluate {
+                from(components["release"])
+            }
+        }
+    }
+    /*publications {
         create<MavenPublication>("release") {
             groupId = GROUP
             artifactId = POM_ARTIFACT_ID
@@ -128,7 +156,7 @@ publishing {
                     if (project.hasProperty("ossrhPassword")) project.property("ossrhPassword") as String else ""
             }
         }
-    }
+    }*/
 }
 
 signing {

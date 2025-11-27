@@ -69,11 +69,7 @@ object BrowserSelector {
         val defaultBrowser = pm.resolveActivity(BROWSER_INTENT, 0)
             ?.activityInfo?.packageName
 
-        val queryFlag = if (Build.VERSION.SDK_INT >= VERSION_CODES.M) {
-            PackageManager.GET_RESOLVED_FILTER or PackageManager.MATCH_ALL
-        } else {
-            PackageManager.GET_RESOLVED_FILTER
-        }
+        val queryFlag = PackageManager.GET_RESOLVED_FILTER or PackageManager.MATCH_ALL
 
         // When requesting all matching activities for an intent from the package manager,
         // the user's preferred browser is not guaranteed to be at the head of this list.

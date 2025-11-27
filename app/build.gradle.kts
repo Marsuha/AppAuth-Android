@@ -5,7 +5,7 @@ plugins {
     alias(libs.plugins.agp.application)
     id("checkstyle")
     id("android-common")
-    id("style")
+    //id("style")
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.compose.compiler)
 }
@@ -72,7 +72,7 @@ dependencies {
     implementation(libs.lifecycle.runtime.compose)
     implementation(libs.lifecycle.viewmodel.compose)
     debugImplementation(libs.compose.ui.tooling)
-    debugImplementation(libs.compose.ui.tooling.preview)
+    implementation(libs.compose.ui.tooling.preview)
     implementation(libs.coil.compose)
 
     androidTestImplementation(platform(libs.compose.bom))

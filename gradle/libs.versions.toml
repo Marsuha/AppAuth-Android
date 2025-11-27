@@ -4,15 +4,16 @@ agp = "8.13.1"
 grgit = "5.3.3"
 annotation = "1.9.1"
 browser = "1.9.0"
-okio = "3.16.2"
+okio = "3.16.4"
 coreKtx = "1.17.0"
 coroutines = "1.10.2"
 serializationJson = "1.9.0"
-compose-bom = "2025.11.00"
-activity-compose = "1.11.0"
-lifecycle = "2.9.4"
+compose-bom = "2025.11.01"
+activity-compose = "1.12.0"
+lifecycle = "2.10.0"
 coil = "2.7.0"
-desugar = "2.0.4"
+desugar = "2.1.5"
+dokka = "1.9.20"
 
 #Tests
 junit = "4.13.2"
@@ -25,7 +26,7 @@ assertjCore = "3.27.6"
 junitExt = "1.3.0"
 truthExt = "1.7.0"
 truth = "1.4.5"
-testParameterInjector = "1.19"
+testParameterInjector = "1.20"
 xmlpull = "1.1.3.1"
 
 [libraries]
@@ -34,6 +35,7 @@ annotation = { group = "androidx.annotation", name = "annotation", version.ref =
 okio = { group = "com.squareup.okio", name = "okio", version.ref = "okio" }
 androidGradlePlugin = { group = "com.android.tools.build", name = "gradle", version.ref = "agp" }
 kotlinGradlePlugin = { group = "org.jetbrains.kotlin", name = "kotlin-gradle-plugin", version.ref = "kotlin" }
+dokkaPlugin = { group = "org.jetbrains.dokka", name = "dokka-gradle-plugin", version.ref = "dokka" }
 core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 serializationJson = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "serializationJson" }
 compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "compose-bom" }
@@ -79,3 +81,4 @@ grgit = { id = "org.ajoberstar.grgit", version.ref = "grgit" }
 kotlin-android = { id = "org.jetbrains.kotlin.android" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+dokka = { id = "org.jetbrains.dokka" }
