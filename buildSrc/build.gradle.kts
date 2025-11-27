@@ -11,4 +11,5 @@ repositories {
 dependencies {
     implementation(libs.androidGradlePlugin)
     implementation(libs.kotlinGradlePlugin)
+    api(libs.dokkaPlugin)
 }

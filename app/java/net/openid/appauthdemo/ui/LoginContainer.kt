@@ -106,7 +106,7 @@ fun LoginContainer(
                         selectedBrowser?.let {
                             AsyncImage(
                                 model = it.icon,
-                                contentDescription = null,
+                                contentDescription = stringResource(R.string.browser_icon_contentDescription),
                                 modifier = Modifier.size(24.dp)
                             )
                         } ?: Image(
@@ -147,7 +147,7 @@ fun LoginContainer(
                             leadingIcon = {
                                 AsyncImage(
                                     model = browserInfo.icon,
-                                    contentDescription = null,
+                                    contentDescription = stringResource(R.string.browser_icon_contentDescription),
                                     modifier = Modifier.size(24.dp)
                                 )
                             },

@@ -1,10 +1,11 @@
 pluginManagement {
     repositories {
-        google()  // Добавляем репозиторий Google для AGP
-        gradlePluginPortal()  // Основной репозиторий Gradle
-        mavenCentral()  // Дополнительный репозиторий для других зависимостей
+        google()
+        gradlePluginPortal()
+        mavenCentral()
     }
 }
+
 
 dependencyResolutionManagement {
     @Suppress("UnstableApiUsage")
@@ -14,6 +15,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "AppAuth-Android"  // Замените на имя вашего проекта
-include(":app")  // Добавьте модули вашего проекта, если они есть (например, :library)
+rootProject.name = "AppAuth-Android"
+include(":app")
 include(":library")

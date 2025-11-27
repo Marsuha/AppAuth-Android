@@ -5,7 +5,6 @@ plugins {
     alias(libs.plugins.agp.application)
     id("checkstyle")
     id("android-common")
-    id("style")
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.compose.compiler)
 }
@@ -20,7 +19,7 @@ android {
 
         // Make sure this is consistent with the redirect URI used in res/raw/auth_config.json,
         // or specify additional redirect URI in AndroidManifest.xml
-        manifestPlaceholders["appAuthRedirectScheme"] = "com.googleusercontent.apps.732040948859-qbcl172b0c688mld30ndsp2csorii8vo"
+        manifestPlaceholders["appAuthRedirectScheme"] = "net.openid.appauthdemo"
     }
 
     signingConfigs {
@@ -72,7 +71,7 @@ dependencies {
     implementation(libs.lifecycle.runtime.compose)
     implementation(libs.lifecycle.viewmodel.compose)
     debugImplementation(libs.compose.ui.tooling)
-    debugImplementation(libs.compose.ui.tooling.preview)
+    implementation(libs.compose.ui.tooling.preview)
     implementation(libs.coil.compose)
 
     androidTestImplementation(platform(libs.compose.bom))

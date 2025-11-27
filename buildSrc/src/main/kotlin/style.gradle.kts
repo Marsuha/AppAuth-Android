@@ -9,12 +9,12 @@ checkstyle {
 }
 
 tasks.register<Checkstyle>("checkAllSource") {
-    afterEvaluate {
-        // Источник: все Java-файлы из main sourceSet
-        source = (project.extensions.getByType<SourceSetContainer>().getByName(SourceSet.MAIN_SOURCE_SET_NAME).allJava)
-        include("**/*.java")
-        classpath = files() // Пустой classpath, так как проверяется только стиль
-    }
+    source = project.extensions.getByType<SourceSetContainer>()
+        .getByName(SourceSet.MAIN_SOURCE_SET_NAME)
+        .allJava
+
+    include("**/*.java")
+    classpath = files() // Пустой classpath, так как проверяется только стиль
 
     reports {
         xml.apply {
