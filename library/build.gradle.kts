@@ -64,15 +64,15 @@ publishing {
             name = "GitHubPackages"
             url = uri("https://maven.pkg.github.com/Marsuha/AppAuth-Android")
             credentials {
-                username = project.findProperty("gpr.user") as String? ?: System.getenv("USERNAME")
-                password = project.findProperty("gpr.key") as String? ?: System.getenv("TOKEN")
+                username = project.findProperty("gpr.user") as String
+                password = project.findProperty("gpr.key") as String
             }
         }
     }
 
     publications {
         register<MavenPublication>("GitHubPackagesRelease") {
-            groupId = GROUP
+            groupId = "marsuha"
             artifactId = POM_ARTIFACT_ID
             version = rootProject.extra["versionName"] as String
 
